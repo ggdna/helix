@@ -27,12 +27,14 @@ class ResolvedTag {
 
 /// Picks the highest tag of [tags] (name -> SHA, `v` prefix and plain both
 /// accepted, plain wins ties, non-semver ignored) that satisfies
-/// [constraint]; `null` when none does.
+/// [constraint]; stable versions win over prereleases like in pub, `null`
+/// when nothing satisfies.
 ResolvedTag? resolveTagForConstraint(
   Map<String, String> tags,
   VersionConstraint constraint,
 ) {
-  ResolvedTag? best;
+  ResolvedTag? stable;
+  ResolvedTag? prerelease;
   for (final entry in tags.entries) {
     final version = _parseTagVersion(entry.key);
     if (version == null || !constraint.allows(version)) continue;
@@ -41,15 +43,13 @@ ResolvedTag? resolveTagForConstraint(
       tag: entry.key,
       sha: entry.value,
     );
-    if (best == null ||
-        version > best.version ||
-        (version == best.version &&
-            best.tag.startsWith('v') &&
-            !candidate.tag.startsWith('v'))) {
-      best = candidate;
+    if (version.isPreRelease) {
+      prerelease = _better(prerelease, candidate);
+    } else {
+      stable = _better(stable, candidate);
     }
   }
-  return best;
+  return stable ?? prerelease;
 }
 
 /// Returns the semver versions of [tags], sorted ascending, for messages.
@@ -87,6 +87,19 @@ Map<String, String> parseLsRemoteTags(String output) {
     for (final entry in tags.entries)
       entry.key: peeled[entry.key] ?? entry.value,
   };
+}
+
+// ...........................................................................
+/// The higher of both candidates (plain tag names win version ties).
+ResolvedTag _better(ResolvedTag? best, ResolvedTag candidate) {
+  if (best == null ||
+      candidate.version > best.version ||
+      (candidate.version == best.version &&
+          best.tag.startsWith('v') &&
+          !candidate.tag.startsWith('v'))) {
+    return candidate;
+  }
+  return best;
 }
 
 // ...........................................................................

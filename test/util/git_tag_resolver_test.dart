@@ -63,6 +63,36 @@ void main() {
       );
     });
 
+    test('prefers stable versions over higher prereleases (pub semantics)', () {
+      final resolved = resolveTagForConstraint(
+        {'1.4.0': 'a', '1.5.0-beta.1': 'b'},
+        VersionConstraint.parse('^1.4.0'),
+      );
+      expect(resolved!.tag, '1.4.0');
+
+      // A prerelease is used when nothing stable satisfies.
+      final onlyPre = resolveTagForConstraint(
+        {'1.5.0-beta.1': 'b', '1.5.0-beta.2': 'c'},
+        VersionConstraint.parse('^1.4.0'),
+      );
+      expect(onlyPre!.tag, '1.5.0-beta.2');
+
+      // Constraints targeting a prerelease resolve to it.
+      final targeted = resolveTagForConstraint(
+        {'1.4.0': 'a', '2.0.0-beta.1': 'b'},
+        VersionConstraint.parse('^2.0.0-beta'),
+      );
+      expect(targeted!.tag, '2.0.0-beta.1');
+    });
+
+    test('supports range constraints', () {
+      final resolved = resolveTagForConstraint(
+        {'1.4.0': 'a', '1.5.0': 'b', '2.0.0': 'c'},
+        VersionConstraint.parse('>=1.0.0 <1.5.0'),
+      );
+      expect(resolved!.tag, '1.4.0');
+    });
+
     test('prefers the plain name when v-prefixed duplicate exists', () {
       for (final tags in [
         {'v1.4.0': 'a', '1.4.0': 'b'},

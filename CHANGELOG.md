@@ -28,6 +28,7 @@ in-dna override layers like `dna/_override`); interrupted swaps are
 recovered from the backup folder on the next run
 - Remove duplicate changelog entry
 - Simplify: shared copy and layer helpers, parallel resolution, terse doc comments
+- Prefer stable tags over prereleases in semver resolution
 
 ### Fixed
 
