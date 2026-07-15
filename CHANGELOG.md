@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Support dna config via dna.yaml and package.json for non-Dart repos
+
 ## [2.0.0] - 2026-07-15
 
 ### Added
@@ -65,5 +71,6 @@ failing the sync; `--check` agrees
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 
+[Unreleased]: https://github.com/ggsuite/gg_dna/compare/2.0.0...HEAD
 [2.0.0]: https://github.com/ggsuite/gg_dna/compare/1.1.0...2.0.0
 [1.1.0]: https://github.com/ggsuite/gg_dna/tag/%tag
