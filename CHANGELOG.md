@@ -10,6 +10,10 @@
 - Add dna layer config parsing from pubspec with yaml and pub\_semver
 - Add markdown tag override engine (md\_tags)
 
+### Changed
+
+- BREAKING: pubspec-driven multi-layer sync with tag overrides and manifest v2
+
 ## [1.1.0] - 2026-05-26
 
 ### Added
