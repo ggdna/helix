@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:gg_hash/gg_hash.dart';
 import 'package:path/path.dart' as p;
@@ -13,16 +14,16 @@ import 'package:path/path.dart' as p;
 /// Filename that holds the sync manifest inside `<target>/dna/`.
 const String dnaManifestFilename = '.dna.json';
 
-/// Computes a stable content hash for the directory tree at [dir].
-///
-/// The hash combines, for every regular file under [dir] (recursive, sorted
-/// by relative path with forward slashes), the relative path bytes and the
-/// file bytes via [fnv1].
-///
-/// The manifest file [dnaManifestFilename] at the root of [dir] is **always
-/// excluded** so the manifest can store the hash without becoming circular.
-///
-/// Returns `null` when [dir] does not exist.
+// .............................................................................
+/// Whether the relative posix path [rel] counts as dna content — the root
+/// manifest and `.git/` never do, so hashing and copying agree on scope.
+bool isDnaContent(String rel) =>
+    rel != dnaManifestFilename && rel != '.git' && !rel.startsWith('.git/');
+
+// .............................................................................
+/// Stable [fnv1] hash over paths and bytes of all dna content files in
+/// [dir] — sorted, EOL-normalized (`\r\n` == `\n`), `null` if [dir] is
+/// missing. Only content per [isDnaContent] enters the hash.
 String? hashDnaDirectory(Directory dir) {
   if (!dir.existsSync()) return null;
   final base = dir.absolute.path;
@@ -30,7 +31,7 @@ String? hashDnaDirectory(Directory dir) {
   for (final entity in dir.listSync(recursive: true, followLinks: false)) {
     if (entity is! File) continue;
     final rel = p.relative(entity.path, from: base).replaceAll('\\', '/');
-    if (rel == dnaManifestFilename) continue;
+    if (!isDnaContent(rel)) continue;
     entries.add((rel, entity));
   }
   entries.sort((a, b) => a.$1.compareTo(b.$1));
@@ -38,16 +39,36 @@ String? hashDnaDirectory(Directory dir) {
   final perFile = <int>[];
   for (final (rel, file) in entries) {
     final pathHash = fnv1(utf8.encode(rel));
-    final contentHash = fnv1(file.readAsBytesSync());
+    final contentHash = fnv1(_normalizeEol(file.readAsBytesSync()));
     perFile.add(pathHash);
     perFile.add(contentHash);
   }
   final folded = fnv1(perFile);
-  return _toHex(folded);
+  return toHex64(folded);
 }
 
-String _toHex(int value) {
-  // Dart ints are 64 bit on the VM; mask to 64 bit before printing.
-  final masked = value.toUnsigned(64);
-  return '0x${masked.toRadixString(16).padLeft(16, '0')}';
+// .............................................................................
+/// Replaces every `\r\n` byte pair with `\n` ([fnv1] hashes [Uint8List]
+/// chunked, so both paths must return the same representation).
+Uint8List _normalizeEol(Uint8List bytes) {
+  if (!bytes.contains(13)) return bytes;
+  final result = <int>[];
+  for (var i = 0; i < bytes.length; i++) {
+    if (bytes[i] == 13 && i + 1 < bytes.length && bytes[i + 1] == 10) {
+      continue;
+    }
+    result.add(bytes[i]);
+  }
+  return Uint8List.fromList(result);
+}
+
+// .............................................................................
+/// Formats [value] as unsigned 64-bit hex (`0x` + 16 digits, never signed).
+String toHex64(int value) {
+  // toRadixString renders high-bit values with a minus sign — format the
+  // two 32-bit halves separately instead.
+  final hi = (value >> 32) & 0xFFFFFFFF;
+  final lo = value & 0xFFFFFFFF;
+  return '0x${hi.toRadixString(16).padLeft(8, '0')}'
+      '${lo.toRadixString(16).padLeft(8, '0')}';
 }

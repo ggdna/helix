@@ -65,10 +65,9 @@ Stil konsistent halten — **nicht weglassen**, nicht durch eigene Varianten ers
 ## 7. Dokumentation in Code
 
 - **Jeder Public Member** hat einen `///`-Doc-Comment (Lint `public_member_api_docs` ist aktiv).
+- **Dichte-Limit**: maximal **3 `///`-Zeilen vor einer Klasse**, maximal **1 `///`-Zeile pro Methode, Getter, Konstruktor oder Attribut**. Leere `///`-Zeilen zählen mit. Längere Erklärungen (Grammatiken, Formate, Pipelines) gehören in einen Library-Header, ins README oder als `//`-Kommentar in den Code.
 - **Erste Zeile**: kurze, vollständige Aussage in 3rd-Person-Indikativ ("Run the operation and display the status").
-- **Parameter** dokumentieren mit `- [name] <Beschreibung>`-Syntax in Folgezeilen.
 - **Aufzählungen** mit `-` einrücken; verschachtelte Aufzählungen mit `  -`.
-- Beispiele als ` ```dart ` Block in Doc-Comment möglich, wenn nicht-trivial.
 
 ## 8. Linter-Regeln (Pflicht-Set)
 

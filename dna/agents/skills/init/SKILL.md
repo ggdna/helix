@@ -123,4 +123,4 @@ Do not push, commit, or run any further tooling unless explicitly asked.
 - **Never** write `CLAUDE.md` or `PROJECT_STRUCTURE.md` without showing the proposed content to the user first when an existing file would be overwritten.
 - **Never** invent guide content — only fold in what actually exists at `dna/agents/guides/<name>.md`.
 - **Never** add generic boilerplate ("use unit tests", "don't commit secrets", etc.) that this skill explicitly forbids.
-- The `dna/_override/` folder is the canonical place for project-local overrides — do not write project-specific notes anywhere else.
+- The `dna/_override/` folder is the canonical place for project-local overrides — do not write project-specific notes anywhere else. When it is listed as a layer in the `dna:` block of the project's pubspec.yaml, `gg_dna sync` merges it over the base DNA and preserves the folder itself verbatim.

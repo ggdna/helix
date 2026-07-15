@@ -10,6 +10,8 @@ import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:path/path.dart' as p;
 
+import 'install_skills.dart' show CwdResolver;
+
 /// Copies the convention documents shipped under
 /// `<target>/dna/agents/conventions/` into `<target>/.claude/conventions/`
 /// and ensures the target's `CLAUDE.md` references them through
@@ -20,7 +22,8 @@ import 'package:path/path.dart' as p;
 /// root is used as the target instead of the current directory.
 class ApplyConventions extends Command<dynamic> {
   /// Constructor.
-  ApplyConventions({required this.ggLog}) {
+  ApplyConventions({required this.ggLog, CwdResolver? cwdResolver})
+      : _cwdResolver = cwdResolver ?? _defaultCwd {
     argParser
       ..addOption(
         'source',
@@ -52,6 +55,8 @@ class ApplyConventions extends Command<dynamic> {
 
   /// The log function.
   final GgLog ggLog;
+
+  final CwdResolver _cwdResolver;
 
   /// Marker that opens the managed `CLAUDE.md` block.
   static const String startMarker = '<!-- gg_dna:conventions:start';
@@ -224,10 +229,16 @@ class ApplyConventions extends Command<dynamic> {
     if (raw != null && raw.isNotEmpty) {
       return Directory(raw);
     }
-    final cwd = Directory.current;
+    final cwd = Directory(_cwdResolver());
     final workspace = findWorkspaceRoot(cwd);
     return workspace ?? cwd;
   }
+
+  // coverage:ignore-start
+  /// Default cwd resolver. Injectable so tests never mutate the global
+  /// (process-wide) working directory — parallel suites share it.
+  static String _defaultCwd() => Directory.current.path;
+  // coverage:ignore-end
 
   bool _writeBlock(File claudeMd, String block) {
     final existing = claudeMd.existsSync() ? claudeMd.readAsStringSync() : '';

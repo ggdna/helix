@@ -9,35 +9,118 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'dna_config.dart';
 import 'dna_hash.dart';
 
-/// Sync manifest written to `<target>/dna/.dna.json` after every successful
-/// `gg_dna sync`. Stores enough information for a later `--check` to verify
-/// the target is still in sync with the source without re-doing the full
-/// file walk.
+/// One layer entry in the sync manifest: the raw pubspec config values (for
+/// machine-independent drift detection via [matchesConfig]) plus the
+/// resolution results of the last sync.
+class DnaManifestLayer {
+  /// Constructor.
+  const DnaManifestLayer({
+    required this.name,
+    this.git,
+    this.path,
+    this.versionConstraint,
+    this.resolvedVersion,
+    this.resolvedTag,
+    this.commit,
+    this.hash,
+  });
+
+  /// Creates the entry for [config] plus its resolution results.
+  factory DnaManifestLayer.fromConfig(
+    DnaLayerConfig config, {
+    String? resolvedVersion,
+    String? resolvedTag,
+    String? commit,
+    String? hash,
+  }) =>
+      DnaManifestLayer(
+        name: config.name,
+        git: config.git,
+        path: config.path,
+        versionConstraint: config.rawVersionConstraint,
+        resolvedVersion: resolvedVersion,
+        resolvedTag: resolvedTag,
+        commit: commit,
+        hash: hash,
+      );
+
+  /// Restores a layer from [toJson]; fields of unexpected type are absent.
+  factory DnaManifestLayer.fromJson(Map<String, dynamic> data) =>
+      DnaManifestLayer(
+        name: _string(data, 'name') ?? '',
+        git: _string(data, 'git'),
+        path: _string(data, 'path'),
+        versionConstraint: _string(data, 'versionConstraint'),
+        resolvedVersion: _string(data, 'resolvedVersion'),
+        resolvedTag: _string(data, 'resolvedTag'),
+        commit: _string(data, 'commit'),
+        hash: _string(data, 'hash'),
+      );
+
+  /// Layer name as listed in `dna: order:`.
+  final String name;
+
+  /// Raw `git:` value from the pubspec. `null` for path layers.
+  final String? git;
+
+  /// Raw `path:` value from the pubspec. `null` for git layers.
+  final String? path;
+
+  /// Raw `version:` constraint from the pubspec. `null` when unconstrained.
+  final String? versionConstraint;
+
+  /// The version the constraint resolved to at sync time, e.g. `1.5.0`.
+  final String? resolvedVersion;
+
+  /// The git tag [resolvedVersion] came from, e.g. `v1.5.0`.
+  final String? resolvedTag;
+
+  /// Commit SHA of the cloned layer. `null` for path layers.
+  final String? commit;
+
+  /// Content hash of the layer's dna root at sync time.
+  final String? hash;
+
+  /// Whether this entry was produced by [config] (drift detection).
+  bool matchesConfig(DnaLayerConfig config) =>
+      name == config.name &&
+      git == config.git &&
+      path == config.path &&
+      versionConstraint == config.rawVersionConstraint;
+
+  /// JSON representation used by [DnaManifest.write] and tests.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'name': name,
+        'git': git,
+        'path': path,
+        'versionConstraint': versionConstraint,
+        'resolvedVersion': resolvedVersion,
+        'resolvedTag': resolvedTag,
+        'commit': commit,
+        'hash': hash,
+      };
+}
+
+/// Sync manifest at `<target>/dna/.dna.json` — everything a later `--check`
+/// needs to verify the target is still in sync (base and result hashes plus
+/// per-layer config and resolution data).
 class DnaManifest {
   /// Constructor.
   const DnaManifest({
-    this.overlay,
-    this.overlayCommit,
-    this.overlayHash,
+    this.layers = const [],
     this.baseVersion,
     this.baseHash,
     this.hash,
   });
 
-  /// The overlay argument (git URL, gg_* shorthand, or local path) that was
-  /// used during the last sync. `null` if no overlay was applied.
-  final String? overlay;
+  /// Manifest format version; [read] rejects all others (e.g. pre-2.0).
+  static const int formatVersion = 2;
 
-  /// Commit SHA of the overlay that was cloned during the last sync. `null`
-  /// for local-path overlays or when no overlay was applied.
-  final String? overlayCommit;
-
-  /// Content hash of the overlay's `dna/` folder at sync time. Used to detect
-  /// changes when the overlay is a local path (where no commit SHA exists).
-  /// `null` when no overlay was applied.
-  final String? overlayHash;
+  /// The layers that were merged during the last sync, in order.
+  final List<DnaManifestLayer> layers;
 
   /// `version:` field of the gg_dna package that produced the last sync.
   final String? baseVersion;
@@ -45,27 +128,35 @@ class DnaManifest {
   /// Content hash of the gg_dna package's `dna/` folder at sync time.
   final String? baseHash;
 
-  /// Content hash of `<target>/dna/` after the sync (overlay merged in).
+  /// Content hash of `<target>/dna/` after the completed sync.
   final String? hash;
 
-  /// Reads the manifest at `<dnaDir>/.dna.json`. Returns `null` when the
-  /// file does not exist or cannot be parsed as JSON.
+  /// Reads `<dnaDir>/.dna.json`; `null` when missing, invalid, or not v2.
   static DnaManifest? read(Directory dnaDir) {
     final file = File(p.join(dnaDir.path, dnaManifestFilename));
     if (!file.existsSync()) return null;
+    final Object? data;
     try {
-      final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      return DnaManifest(
-        overlay: data['overlay'] as String?,
-        overlayCommit: data['overlayCommit'] as String?,
-        overlayHash: data['overlayHash'] as String?,
-        baseVersion: data['baseVersion'] as String?,
-        baseHash: data['baseHash'] as String?,
-        hash: data['hash'] as String?,
-      );
+      data = jsonDecode(file.readAsStringSync());
     } on FormatException {
       return null;
     }
+    if (data is! Map<String, dynamic>) return null;
+    if (data['version'] != formatVersion) return null;
+    final rawLayers = data['layers'];
+    final layers = <DnaManifestLayer>[];
+    if (rawLayers is List) {
+      for (final layer in rawLayers) {
+        if (layer is! Map<String, dynamic>) return null;
+        layers.add(DnaManifestLayer.fromJson(layer));
+      }
+    }
+    return DnaManifest(
+      layers: layers,
+      baseVersion: _string(data, 'baseVersion'),
+      baseHash: _string(data, 'baseHash'),
+      hash: _string(data, 'hash'),
+    );
   }
 
   /// Writes `this` to `<dnaDir>/.dna.json` as pretty-printed JSON.
@@ -78,20 +169,21 @@ class DnaManifest {
 
   /// JSON representation used by [write] and tests.
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'overlay': overlay,
-        'overlayCommit': overlayCommit,
-        'overlayHash': overlayHash,
+        'version': formatVersion,
+        'layers': [for (final layer in layers) layer.toJson()],
         'baseVersion': baseVersion,
         'baseHash': baseHash,
         'hash': hash,
       };
 }
 
-/// Returns the `version:` field from the `pubspec.yaml` at [packageRoot], or
-/// `null` when the file does not exist or no version line is present.
-///
-/// Uses a simple regex so the package does not need a yaml dependency just
-/// for this read.
+/// Returns [key] from [data] when it is a string, `null` otherwise.
+String? _string(Map<String, dynamic> data, String key) {
+  final value = data[key];
+  return value is String ? value : null;
+}
+
+/// Returns the pubspec `version:` at [packageRoot], `null` when absent.
 String? readPackageVersion(String packageRoot) {
   final file = File(p.join(packageRoot, 'pubspec.yaml'));
   if (!file.existsSync()) return null;
