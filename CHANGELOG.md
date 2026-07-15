@@ -26,7 +26,7 @@ reports pre-2.0 manifests as outdated)
 renames — errors can no longer destroy the existing `dna/` (in particular
 in-dna override layers like `dna/_override`); interrupted swaps are
 recovered from the backup folder on the next run
-- Make sync atomic via staging swap with crash recovery
+- Remove duplicate changelog entry
 
 ### Fixed
 
