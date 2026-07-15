@@ -29,17 +29,18 @@ class DnaManifestLayer {
     this.hash,
   });
 
-  /// Restores a layer from its [toJson] representation.
+  /// Restores a layer from its [toJson] representation. Fields of an
+  /// unexpected type are treated as absent.
   factory DnaManifestLayer.fromJson(Map<String, dynamic> data) =>
       DnaManifestLayer(
-        name: data['name'] as String? ?? '',
-        git: data['git'] as String?,
-        path: data['path'] as String?,
-        versionConstraint: data['versionConstraint'] as String?,
-        resolvedVersion: data['resolvedVersion'] as String?,
-        resolvedTag: data['resolvedTag'] as String?,
-        commit: data['commit'] as String?,
-        hash: data['hash'] as String?,
+        name: _string(data, 'name') ?? '',
+        git: _string(data, 'git'),
+        path: _string(data, 'path'),
+        versionConstraint: _string(data, 'versionConstraint'),
+        resolvedVersion: _string(data, 'resolvedVersion'),
+        resolvedTag: _string(data, 'resolvedTag'),
+        commit: _string(data, 'commit'),
+        hash: _string(data, 'hash'),
       );
 
   /// Layer name as listed in `dna: order:`.
@@ -110,27 +111,34 @@ class DnaManifest {
   final String? hash;
 
   /// Reads the manifest at `<dnaDir>/.dna.json`. Returns `null` when the
-  /// file does not exist, cannot be parsed as JSON, or has a different
-  /// format version (e.g. was written by gg_dna 1.x).
+  /// file does not exist, cannot be parsed as JSON, is structurally not a
+  /// manifest, or has a different format version (e.g. was written by
+  /// gg_dna 1.x).
   static DnaManifest? read(Directory dnaDir) {
     final file = File(p.join(dnaDir.path, dnaManifestFilename));
     if (!file.existsSync()) return null;
+    final Object? data;
     try {
-      final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      if (data['version'] != formatVersion) return null;
-      final layers = data['layers'] as List<dynamic>? ?? const [];
-      return DnaManifest(
-        layers: [
-          for (final layer in layers)
-            DnaManifestLayer.fromJson(layer as Map<String, dynamic>),
-        ],
-        baseVersion: data['baseVersion'] as String?,
-        baseHash: data['baseHash'] as String?,
-        hash: data['hash'] as String?,
-      );
+      data = jsonDecode(file.readAsStringSync());
     } on FormatException {
       return null;
     }
+    if (data is! Map<String, dynamic>) return null;
+    if (data['version'] != formatVersion) return null;
+    final rawLayers = data['layers'];
+    final layers = <DnaManifestLayer>[];
+    if (rawLayers is List) {
+      for (final layer in rawLayers) {
+        if (layer is! Map<String, dynamic>) return null;
+        layers.add(DnaManifestLayer.fromJson(layer));
+      }
+    }
+    return DnaManifest(
+      layers: layers,
+      baseVersion: _string(data, 'baseVersion'),
+      baseHash: _string(data, 'baseHash'),
+      hash: _string(data, 'hash'),
+    );
   }
 
   /// Writes `this` to `<dnaDir>/.dna.json` as pretty-printed JSON.
@@ -149,6 +157,12 @@ class DnaManifest {
         'baseHash': baseHash,
         'hash': hash,
       };
+}
+
+/// Returns [key] from [data] when it is a string, `null` otherwise.
+String? _string(Map<String, dynamic> data, String key) {
+  final value = data[key];
+  return value is String ? value : null;
 }
 
 /// Returns the `version:` field from the `pubspec.yaml` at [packageRoot], or

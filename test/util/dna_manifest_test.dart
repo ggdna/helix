@@ -112,6 +112,36 @@ void main() {
         tmp.deleteSync(recursive: true);
       }
     });
+
+    test('read returns null on structurally malformed manifests', () {
+      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
+      try {
+        final file = File('${tmp.path}/.dna.json');
+
+        // Valid JSON, but not an object.
+        file.writeAsStringSync('[1, 2, 3]');
+        expect(DnaManifest.read(tmp), isNull);
+
+        // A layers element that is not an object.
+        file.writeAsStringSync('{"version": 2, "layers": [42]}');
+        expect(DnaManifest.read(tmp), isNull);
+
+        // A non-list layers value is treated as absent.
+        file.writeAsStringSync('{"version": 2, "layers": "nope"}');
+        expect(DnaManifest.read(tmp)!.layers, isEmpty);
+
+        // Non-string fields are treated as absent.
+        file.writeAsStringSync(
+          '{"version": 2, "hash": 42, "layers": [{"name": 7, "git": []}]}',
+        );
+        final manifest = DnaManifest.read(tmp);
+        expect(manifest!.hash, isNull);
+        expect(manifest.layers.single.name, '');
+        expect(manifest.layers.single.git, isNull);
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
   });
 
   group('readPackageVersion', () {

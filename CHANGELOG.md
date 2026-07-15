@@ -22,6 +22,7 @@ configure layers via the `dna:` block in the target pubspec.yaml
 - BREAKING: `.dna.json` manifest format v2 (ordered layer list; `--check`
 reports pre-2.0 manifests as outdated)
 - Release 2.0.0 docs: changelog, readme, dna config example
+- Harden manifest read against malformed JSON and make dna hash git and EOL agnostic
 
 ### Fixed
 

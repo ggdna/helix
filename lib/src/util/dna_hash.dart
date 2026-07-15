@@ -19,8 +19,13 @@ const String dnaManifestFilename = '.dna.json';
 /// by relative path with forward slashes), the relative path bytes and the
 /// file bytes via [fnv1].
 ///
-/// The manifest file [dnaManifestFilename] at the root of [dir] is **always
-/// excluded** so the manifest can store the hash without becoming circular.
+/// The manifest file [dnaManifestFilename] at the root of [dir] and a root
+/// `.git/` folder are **always excluded** — the manifest so it can store
+/// the hash without becoming circular, `.git/` because it never becomes
+/// part of a sync but changes with every git operation.
+///
+/// File bytes are hashed with `\r\n` normalized to `\n`, so checkouts with
+/// differing line-ending configs (git autocrlf) do not drift apart.
 ///
 /// Returns `null` when [dir] does not exist.
 String? hashDnaDirectory(Directory dir) {
@@ -31,6 +36,7 @@ String? hashDnaDirectory(Directory dir) {
     if (entity is! File) continue;
     final rel = p.relative(entity.path, from: base).replaceAll('\\', '/');
     if (rel == dnaManifestFilename) continue;
+    if (rel.startsWith('.git/')) continue;
     entries.add((rel, entity));
   }
   entries.sort((a, b) => a.$1.compareTo(b.$1));
@@ -38,12 +44,24 @@ String? hashDnaDirectory(Directory dir) {
   final perFile = <int>[];
   for (final (rel, file) in entries) {
     final pathHash = fnv1(utf8.encode(rel));
-    final contentHash = fnv1(file.readAsBytesSync());
+    final contentHash = fnv1(_normalizeEol(file.readAsBytesSync()));
     perFile.add(pathHash);
     perFile.add(contentHash);
   }
   final folded = fnv1(perFile);
   return _toHex(folded);
+}
+
+/// Replaces every `\r\n` byte pair with `\n`.
+List<int> _normalizeEol(List<int> bytes) {
+  final result = <int>[];
+  for (var i = 0; i < bytes.length; i++) {
+    if (bytes[i] == 13 && i + 1 < bytes.length && bytes[i + 1] == 10) {
+      continue;
+    }
+    result.add(bytes[i]);
+  }
+  return result;
 }
 
 String _toHex(int value) {

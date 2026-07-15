@@ -45,5 +45,40 @@ void main() {
         tmp.deleteSync(recursive: true);
       }
     });
+
+    test('ignores a root .git folder', () {
+      final tmp = Directory.systemTemp.createTempSync('gg_dna_hash_');
+      try {
+        File('${tmp.path}/a.txt').writeAsStringSync('hello');
+        final before = hashDnaDirectory(tmp);
+        final git = Directory('${tmp.path}/.git')..createSync();
+        File('${git.path}/index').writeAsStringSync('git state');
+        expect(hashDnaDirectory(tmp), equals(before));
+        File('${git.path}/index').writeAsStringSync('changed git state');
+        expect(hashDnaDirectory(tmp), equals(before));
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
+
+    test('is line-ending agnostic', () {
+      final lfDir = Directory.systemTemp.createTempSync('gg_dna_hash_');
+      final crlfDir = Directory.systemTemp.createTempSync('gg_dna_hash_');
+      try {
+        File('${lfDir.path}/a.md').writeAsStringSync('line1\nline2\n');
+        File('${crlfDir.path}/a.md').writeAsStringSync('line1\r\nline2\r\n');
+        expect(hashDnaDirectory(lfDir), equals(hashDnaDirectory(crlfDir)));
+
+        // Real content differences still change the hash.
+        File('${crlfDir.path}/a.md').writeAsStringSync('line1\r\nother\r\n');
+        expect(
+          hashDnaDirectory(lfDir),
+          isNot(equals(hashDnaDirectory(crlfDir))),
+        );
+      } finally {
+        lfDir.deleteSync(recursive: true);
+        crlfDir.deleteSync(recursive: true);
+      }
+    });
   });
 }
