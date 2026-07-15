@@ -1,0 +1,26 @@
+# Guide
+
+Intro mit Acme-Projekt.
+
+## Setup (überschrieben)
+
+Nutze die Firmen-Toolchain.
+
+#### Tieferer Unterschritt
+
+Auch Teil der Ersetzung.
+
+## Verwendung
+
+Starte mit `run`.
+
+## Schluss
+
+Deps via pnpm.
+
+```markdown
+## [setup] Beispiel im Fence
+{{package_manager|bleibt}}
+```
+
+Ende Acme-Projekt.
