@@ -22,11 +22,22 @@ configure layers via the `dna:` block in the target pubspec.yaml
 - BREAKING: `.dna.json` manifest format v2 (ordered layer list; `--check`
 reports pre-2.0 manifests as outdated)
 - Release 2.0.0 docs: changelog, readme, dna config example
-- Harden manifest read against malformed JSON and make dna hash git and EOL agnostic
+- Sync builds the new dna tree in a staging folder and swaps it in via
+renames — errors can no longer destroy the existing `dna/` (in particular
+in-dna override layers like `dna/_override`); interrupted swaps are
+recovered from the backup folder on the next run
+- Make sync atomic via staging swap with crash recovery
 
 ### Fixed
 
-- Fix md\_tags: nested same-tag regions, fence nesting, foreign tags, dominant EOL
+- Crash (`RangeError`) when the same section tag appeared on nested headings
+- Crash (`TypeError`) in `--check` on structurally malformed `.dna.json`
+- Longer code fences now nest shorter ones (CommonMark closing rule), so
+fenced markdown examples inside fences stay untouched
+- Layer hashes ignore `.git/` and are line-ending agnostic — no more false
+`--check` drift after git activity in a layer folder or CRLF checkouts
+- A foreign `[tag]` in a replacement heading is replaced instead of
+double-prefixed; mixed line endings normalize to the dominant one
 
 ## [1.1.0] - 2026-05-26
 

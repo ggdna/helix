@@ -203,6 +203,15 @@ class Sync extends Command<dynamic> {
     }
 
     final dnaDir = Directory(p.join(target.path, 'dna'));
+    final staging = Directory(p.join(target.path, '.gg_dna_staging'));
+    final backup = Directory(p.join(target.path, '.gg_dna_backup'));
+
+    // Crash recovery: a previous sync was interrupted between the two swap
+    // renames — bring the backup back before doing anything else.
+    if (!dnaDir.existsSync() && backup.existsSync()) {
+      ggLog('Recovering ${dnaDir.path} from an interrupted sync.');
+      backup.renameSync(dnaDir.path);
+    }
 
     if (checkOnly) {
       await _check(sourceDna, dnaDir, config);
@@ -213,35 +222,39 @@ class Sync extends Command<dynamic> {
       ggLog('No dna: config found in pubspec.yaml — base sync only.');
     }
 
-    // Resolve ALL layers before wiping the target, so that any error
-    // (unreachable remote, unsatisfiable constraint, missing path) leaves
-    // the target untouched.
+    // Resolve ALL layers first, then build the complete new dna tree in a
+    // staging folder. The target dna/ stays untouched until the final
+    // rename swap, so no error along the way can destroy existing content —
+    // in particular not an in-dna override layer like dna/_override.
     final resolved = <_ResolvedLayer>[];
     try {
       for (final layer in config?.layers ?? const <DnaLayerConfig>[]) {
         resolved.add(await _resolveLayer(layer, target, dnaDir));
       }
 
-      // Base sync: wipe <target>/dna and copy <source>/dna fresh. The base
-      // is layer 0 and follows the same rules as every other layer.
-      if (dnaDir.existsSync()) {
-        dnaDir.deleteSync(recursive: true);
+      // Leftovers of an earlier interrupted sync.
+      if (staging.existsSync()) {
+        staging.deleteSync(recursive: true);
       }
-      _applyLayerContent('base', sourceDna, dnaDir);
-      ggLog('Synced ${sourceDna.path} -> ${dnaDir.path}.');
+      if (backup.existsSync()) {
+        backup.deleteSync(recursive: true);
+      }
+
+      // The base is layer 0 and follows the same rules as every layer.
+      _applyLayerContent('base', sourceDna, staging);
       final baseHash = hashDnaDirectory(sourceDna);
 
       for (final layer in resolved) {
-        _applyLayerContent(layer.config.name, layer.contentRoot, dnaDir);
+        _applyLayerContent(layer.config.name, layer.contentRoot, staging);
         ggLog('Applied layer "${layer.config.name}".');
       }
 
       // Render all markers away, then restore in-dna layer sources
       // verbatim — their markers must survive for the next sync.
-      _renderAll(dnaDir);
+      _renderAll(staging);
       for (final layer in resolved) {
-        if (layer.restoreTo == null) continue;
-        final dest = Directory(layer.restoreTo!);
+        if (layer.restoreRel == null) continue;
+        final dest = Directory(p.join(staging.path, layer.restoreRel!));
         if (dest.existsSync()) {
           dest.deleteSync(recursive: true);
         }
@@ -249,7 +262,9 @@ class Sync extends Command<dynamic> {
       }
 
       // The final hash MUST be computed after the snapshot restore —
-      // otherwise the very next `--check` would report a mismatch.
+      // otherwise the very next `--check` would report a mismatch. It is
+      // computed on staging, but only relative paths enter the hash, so it
+      // equals the post-swap hash of <target>/dna.
       final manifest = DnaManifest(
         layers: [
           for (final layer in resolved)
@@ -266,9 +281,21 @@ class Sync extends Command<dynamic> {
         ],
         baseVersion: readPackageVersion(packageRoot),
         baseHash: baseHash,
-        hash: hashDnaDirectory(dnaDir),
+        hash: hashDnaDirectory(staging),
       );
-      manifest.write(dnaDir);
+      manifest.write(staging);
+
+      // Swap the fully built tree into place. The two renames are the only
+      // destructive moment; if the second one fails, the previous dna/
+      // still exists as the backup folder — nothing is ever lost.
+      if (dnaDir.existsSync()) {
+        dnaDir.renameSync(backup.path);
+      }
+      staging.renameSync(dnaDir.path);
+      if (backup.existsSync()) {
+        backup.deleteSync(recursive: true);
+      }
+      ggLog('Synced ${sourceDna.path} -> ${dnaDir.path}.');
       ggLog('Wrote ${p.join(dnaDir.path, dnaManifestFilename)}.');
     } finally {
       for (final layer in resolved) {
@@ -276,6 +303,11 @@ class Sync extends Command<dynamic> {
         if (cleanup != null && cleanup.existsSync()) {
           cleanup.deleteSync(recursive: true);
         }
+      }
+      // A failed build leaves the staging folder behind — remove it. After
+      // a successful swap it no longer exists.
+      if (staging.existsSync()) {
+        staging.deleteSync(recursive: true);
       }
     }
 
@@ -294,20 +326,10 @@ class Sync extends Command<dynamic> {
   /// Recursively copies the contents of [source] into [target]. Existing
   /// files in [target] at colliding relative paths are overwritten; files
   /// that exist only in [target] are kept (overlay semantics).
-  ///
-  /// [filter] receives the relative path with forward slashes and may
-  /// return `false` to skip an entry (a skipped directory only skips the
-  /// directory entry itself, so filters must also match its children).
-  static void copyDirectory(
-    Directory source,
-    Directory target, {
-    bool Function(String relPosixPath)? filter,
-  }) {
+  static void copyDirectory(Directory source, Directory target) {
     target.createSync(recursive: true);
     for (final entity in source.listSync(recursive: true, followLinks: false)) {
       final relative = p.relative(entity.path, from: source.path);
-      final rel = relative.replaceAll('\\', '/');
-      if (filter != null && !filter(rel)) continue;
       final targetPath = p.join(target.path, relative);
       if (entity is Directory) {
         Directory(targetPath).createSync(recursive: true);
@@ -354,9 +376,9 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Resolves a configured layer to a local content root — BEFORE the target
-  /// is wiped. Git layers are cloned to a temp dir; local path layers inside
-  /// `<target>/dna` are snapshotted to a temp dir so they survive the wipe.
+  /// Resolves a configured layer to a local content root. Git layers are
+  /// cloned to a temp dir; local path layers inside `<target>/dna` are
+  /// snapshotted to a temp dir so the swap can restore them verbatim.
   Future<_ResolvedLayer> _resolveLayer(
     DnaLayerConfig config,
     Directory target,
@@ -382,8 +404,8 @@ class Sync extends Command<dynamic> {
     }
 
     if (p.isWithin(dnaDir.path, abs.path)) {
-      // The layer source lives inside the folder that gets wiped —
-      // snapshot it now and restore it verbatim after the sync.
+      // The layer source lives inside the folder that gets replaced —
+      // snapshot it now so the new tree can carry it over verbatim.
       final tmp = Directory.systemTemp.createTempSync('gg_dna_layer_');
       copyDirectory(abs, tmp);
       final tmpContent =
@@ -393,7 +415,7 @@ class Sync extends Command<dynamic> {
         contentRoot: tmpContent,
         cleanup: tmp,
         snapshotRoot: tmp,
-        restoreTo: abs.path,
+        restoreRel: p.relative(abs.path, from: dnaDir.path),
         hash: hashDnaDirectory(contentSource),
       );
     }
@@ -474,23 +496,24 @@ class Sync extends Command<dynamic> {
   /// (`.tag.md` files, a layer-root `.dna.json`, and `.git/` are skipped),
   /// then the layer's `.tag.md` files patch the current merged state.
   void _applyLayerContent(String name, Directory root, Directory dnaDir) {
-    copyDirectory(
-      root,
-      dnaDir,
-      filter: (rel) =>
-          rel != dnaManifestFilename &&
-          rel != '.git' &&
-          !rel.startsWith('.git/') &&
-          !rel.endsWith(tagFileSuffix),
-    );
-
+    dnaDir.createSync(recursive: true);
     final tagFiles = <String>[];
     for (final entity in root.listSync(recursive: true, followLinks: false)) {
-      if (entity is! File) continue;
-      final rel =
-          p.relative(entity.path, from: root.path).replaceAll('\\', '/');
-      if (!rel.endsWith(tagFileSuffix) || rel.startsWith('.git/')) continue;
-      tagFiles.add(rel);
+      final relative = p.relative(entity.path, from: root.path);
+      final rel = relative.replaceAll('\\', '/');
+      if (rel == '.git' || rel.startsWith('.git/')) continue;
+      if (entity is Directory) {
+        Directory(p.join(dnaDir.path, relative)).createSync(recursive: true);
+      } else if (entity is File) {
+        if (rel == dnaManifestFilename) continue;
+        if (rel.endsWith(tagFileSuffix)) {
+          tagFiles.add(rel);
+          continue;
+        }
+        final targetPath = p.join(dnaDir.path, relative);
+        Directory(p.dirname(targetPath)).createSync(recursive: true);
+        entity.copySync(targetPath);
+      }
     }
     tagFiles.sort();
 
@@ -869,7 +892,7 @@ class _ResolvedLayer {
     required this.contentRoot,
     this.cleanup,
     this.snapshotRoot,
-    this.restoreTo,
+    this.restoreRel,
     this.commit,
     this.resolvedTag,
     this.hash,
@@ -884,12 +907,13 @@ class _ResolvedLayer {
   /// Temp folder (clone or snapshot) to delete after the sync.
   final Directory? cleanup;
 
-  /// Snapshot of the original layer folder — restored to [restoreTo]
-  /// verbatim after the sync (for layers living inside `<target>/dna`).
+  /// Snapshot of the original layer folder — carried over verbatim to
+  /// [restoreRel] in the new tree (for layers living inside `<target>/dna`).
   final Directory? snapshotRoot;
 
-  /// Absolute path the snapshot gets restored to, or `null`.
-  final String? restoreTo;
+  /// Path relative to `<target>/dna` the snapshot gets restored to, or
+  /// `null`.
+  final String? restoreRel;
 
   /// Commit SHA of the cloned layer. `null` for path layers.
   final String? commit;

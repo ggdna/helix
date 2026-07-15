@@ -399,6 +399,127 @@ void main() {
         expect(manifest!.layers.single.name, 'layer');
       });
 
+      test('removes stale staging and backup folders of interrupted syncs',
+          () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
+        writeFile(p.join(target.path, 'dna', 'guides', 'old.md'), 'old');
+        writeFile(p.join(target.path, '.gg_dna_staging', 'junk.md'), 'junk');
+        writeFile(p.join(target.path, '.gg_dna_backup', 'junk.md'), 'junk');
+
+        await runSync(makeCmd());
+
+        expect(
+          Directory(p.join(target.path, '.gg_dna_staging')).existsSync(),
+          isFalse,
+        );
+        expect(
+          Directory(p.join(target.path, '.gg_dna_backup')).existsSync(),
+          isFalse,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).existsSync(),
+          isTrue,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'old.md')).existsSync(),
+          isFalse,
+        );
+      });
+
+      test('recovers the dna backup of an interrupted swap', () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), '## [s] Alt\n\nx\n');
+        // Simulate a sync that was killed between the two swap renames:
+        // dna/ is gone, the old tree (with the user's override layer)
+        // lives in the backup folder.
+        writeFile(
+          p.join(
+            target.path,
+            '.gg_dna_backup',
+            '_override',
+            'guides',
+            'a.tag.md',
+          ),
+          '## [s] Neu\n\nInhalt.\n',
+        );
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - repo\n'
+          '  repo:\n'
+          '    path: dna/_override\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(messages.any((m) => m.contains('Recovering')), isTrue);
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          '## Neu\n\nInhalt.\n',
+        );
+        expect(
+          File(
+            p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          ).existsSync(),
+          isTrue,
+        );
+        expect(
+          Directory(p.join(target.path, '.gg_dna_backup')).existsSync(),
+          isFalse,
+        );
+      });
+
+      test('a failure while building leaves the target untouched', () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
+        const tagFile = '## [s] Neu\n';
+        writeFile(
+          p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          tagFile,
+        );
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - repo\n'
+          '  repo:\n'
+          '    path: dna/_override\n',
+        );
+        await runSync(makeCmd());
+        final before = File(p.join(target.path, 'dna', 'guides', 'a.md'))
+            .readAsStringSync();
+
+        // A base .md with invalid UTF-8 makes the render pass throw —
+        // after the staging tree was already populated.
+        File(p.join(pkgDna.path, 'guides', 'bad.md'))
+            .writeAsBytesSync([0xC3, 0x28]);
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(isA<Exception>()),
+        );
+
+        // Target untouched, override source intact, no leftovers.
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          before,
+        );
+        expect(
+          File(
+            p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          ).readAsStringSync(),
+          tagFile,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'bad.md')).existsSync(),
+          isFalse,
+        );
+        expect(
+          Directory(p.join(target.path, '.gg_dna_staging')).existsSync(),
+          isFalse,
+        );
+        expect(
+          Directory(p.join(target.path, '.gg_dna_backup')).existsSync(),
+          isFalse,
+        );
+      });
+
       test(
           'in-dna layers survive the wipe verbatim and do not inherit '
           'base content', () async {
