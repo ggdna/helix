@@ -5,6 +5,7 @@
 ### Changed
 
 - Support dna config via dna.yaml and package.json for non-Dart repos
+- Harden dna config discovery: require dna block in dna.yaml, tolerate foreign package.json dna fields and undecodable sibling files
 
 ## [2.0.0] - 2026-07-15
 

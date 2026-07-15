@@ -116,8 +116,9 @@ class Sync extends Command<dynamic> {
       'win. Then offer to install Claude Code skills and conventions into '
       "the project's .claude folder.\n"
       '\n'
-      'Layers are configured in exactly one of dna.yaml, package.json\n'
-      '(`"dna"` key), or pubspec.yaml in the target root:\n'
+      'Layers are configured in exactly one of '
+      '${dnaConfigFilenames.join(', ')}\n'
+      '(in package.json under the `"dna"` key) in the target root:\n'
       '\n'
       '  dna:\n'
       '    order:\n'
@@ -144,7 +145,7 @@ class Sync extends Command<dynamic> {
       throw UsageException(
         'Positional overlay arguments were removed in gg_dna 2.0. '
         'Configure DNA layers via the `dna:` block in the target repo '
-        '(dna.yaml, package.json, or pubspec.yaml).',
+        '(${dnaConfigFilenames.join(', ')}).',
         usage,
       );
     }
@@ -193,7 +194,7 @@ class Sync extends Command<dynamic> {
 
     if (config == null) {
       ggLog(
-        'No dna: config found (dna.yaml, package.json, pubspec.yaml) '
+        'No dna: config found (${dnaConfigFilenames.join(', ')}) '
         '— base sync only.',
       );
     }
@@ -851,7 +852,7 @@ class _ResolvedLayer {
     this.hash,
   });
 
-  /// The pubspec config this layer was resolved from.
+  /// The dna: config this layer was resolved from.
   final DnaLayerConfig config;
 
   /// The folder whose content gets merged into `<target>/dna`.

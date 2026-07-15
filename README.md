@@ -16,6 +16,13 @@ Dateien in der Repo-Wurzel liegen (mehrere gleichzeitig sind ein Fehler):
 2. `package.json` — `"dna"`-Key, fuer TypeScript-/JavaScript-Repos
 3. `pubspec.yaml` — fuer Dart-/Flutter-Repos
 
+Eine vorhandene `dna.yaml` ohne `dna:`-Block ist ein harter Fehler (statt
+eines stillen Basis-Syncs, der lokale Schichten loeschen wuerde). Ein
+`"dna"`-Feld in der package.json zaehlt nur, wenn es ein Objekt ist —
+Fremdfelder anderer Tools werden ignoriert. Nicht parsebare Dateien
+blockieren den Sync nur, wenn keine andere Datei die Konfiguration
+liefert; sonst gibt es eine Warnung.
+
 ```yaml
 dna:
   order:

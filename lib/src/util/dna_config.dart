@@ -11,8 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
 import 'package:yaml/yaml.dart';
 
-/// Files searched for the `dna:` config in the target root, in this
-/// order — the block may live in exactly one of them.
+/// Files searched for the `dna:` config — exactly one may contain it.
 const List<String> dnaConfigFilenames = [
   'dna.yaml',
   'package.json',
@@ -80,17 +79,33 @@ class DnaConfig {
   /// Non-fatal findings, e.g. configured layers missing from `order`.
   final List<String> warnings;
 
-  /// Reads the `dna:` block from the first of [dnaConfigFilenames] found
-  /// in [targetRoot]; more than one file with a block is a hard error.
+  /// Reads the `dna:` block from [dnaConfigFilenames] in [targetRoot].
   static DnaConfig? read(String targetRoot) {
     final found = <String, DnaConfig>{};
+    final broken = <String>[];
     for (final name in dnaConfigFilenames) {
       final file = File(p.join(targetRoot, name));
       if (!file.existsSync()) continue;
       final content = file.readAsStringSync();
-      final config = name.endsWith('.json')
-          ? parseJson(content, source: name)
-          : parse(content, source: name);
+      final DnaConfig? config;
+      try {
+        // A foreign top-level "dna" field of another npm tool must not be
+        // mistaken for gg_dna config — non-map values are ignored there.
+        config = name == 'package.json'
+            ? parseJson(content, source: name, ignoreNonMapDna: true)
+            : parse(content, source: name);
+      } on _DecodeException catch (e) {
+        // Undecodable files only fail the sync when no other file
+        // provides the config — they may belong to another toolchain.
+        broken.add(e.message);
+        continue;
+      }
+      if (name == 'dna.yaml' && config == null) {
+        throw const FormatException(
+          'dna.yaml contains no top-level `dna:` block — use the same '
+          '`dna:` syntax as in pubspec.yaml.',
+        );
+      }
       if (config != null) found[name] = config;
     }
     if (found.length > 1) {
@@ -99,45 +114,68 @@ class DnaConfig {
         '(${found.keys.join(', ')}) — keep exactly one config source.',
       );
     }
-    return found.isEmpty ? null : found.values.single;
+    if (found.isEmpty) {
+      if (broken.isNotEmpty) throw FormatException(broken.join('\n'));
+      return null;
+    }
+    final config = found.values.single;
+    if (broken.isEmpty) return config;
+    return DnaConfig(
+      layers: config.layers,
+      warnings: [
+        ...config.warnings,
+        for (final message in broken)
+          '$message — ignored, dna: config found in ${found.keys.single}.',
+      ],
+    );
   }
 
-  /// Parses a YAML config string — `null` without `dna:`, [FormatException]
-  /// on any invalid config (types, duplicates, git/path/version rules).
+  /// Parses YAML config — `null` without `dna:`, throws on invalid config.
   static DnaConfig? parse(
     String yamlContent, {
     String source = 'pubspec.yaml',
-  }) {
-    final Object? doc;
-    try {
-      doc = loadYaml(yamlContent);
-    } on YamlException catch (e) {
-      throw FormatException('$source is not valid YAML: ${e.message}');
-    }
-    return _parseDoc(doc, source);
-  }
+  }) =>
+      _parseDoc(_decode(() => loadYaml(yamlContent), 'YAML', source), source);
 
-  /// Parses a JSON config string (package.json style, `"dna"` key) with
-  /// the same validation rules as [parse].
+  /// Parses JSON config (package.json style) with the same rules as [parse].
   static DnaConfig? parseJson(
     String jsonContent, {
     String source = 'package.json',
-  }) {
-    final Object? doc;
+    bool ignoreNonMapDna = false,
+  }) =>
+      _parseDoc(
+        _decode(() => jsonDecode(jsonContent), 'JSON', source),
+        source,
+        ignoreNonMapDna: ignoreNonMapDna,
+      );
+
+  // ...........................................................................
+  /// Runs [decode], converting YAML/JSON errors to a [_DecodeException].
+  static Object? _decode(
+    Object? Function() decode,
+    String kind,
+    String source,
+  ) {
     try {
-      doc = jsonDecode(jsonContent);
+      return decode();
+    } on YamlException catch (e) {
+      throw _DecodeException('$source is not valid $kind: ${e.message}');
     } on FormatException catch (e) {
-      throw FormatException('$source is not valid JSON: ${e.message}');
+      throw _DecodeException('$source is not valid $kind: ${e.message}');
     }
-    return _parseDoc(doc, source);
   }
 
   // ...........................................................................
-  static DnaConfig? _parseDoc(Object? doc, String source) {
+  static DnaConfig? _parseDoc(
+    Object? doc,
+    String source, {
+    bool ignoreNonMapDna = false,
+  }) {
     if (doc is! Map) return null;
     final dna = doc['dna'];
     if (dna == null) return null;
     if (dna is! Map) {
+      if (ignoreNonMapDna) return null;
       throw FormatException(
         '`dna:` in $source must be a map.',
       );
@@ -264,4 +302,10 @@ class DnaConfig {
       'expected a non-empty string.',
     );
   }
+}
+
+// .............................................................................
+/// A config file that could not be decoded at all (vs. invalid dna config).
+class _DecodeException extends FormatException {
+  _DecodeException(super.message);
 }

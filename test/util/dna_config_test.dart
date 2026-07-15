@@ -91,6 +91,83 @@ void main() {
         }
       });
 
+      test('throws when dna.yaml exists without a dna: block', () {
+        final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
+        try {
+          File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
+            'order:\n  - a\na:\n  path: ../a\n',
+          );
+          expect(
+            () => DnaConfig.read(tmp.path),
+            throwsA(
+              isA<FormatException>().having(
+                (e) => e.message,
+                'message',
+                contains('no top-level `dna:` block'),
+              ),
+            ),
+          );
+        } finally {
+          tmp.deleteSync(recursive: true);
+        }
+      });
+
+      test('ignores a foreign non-map dna field in package.json', () {
+        final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
+        try {
+          File(p.join(tmp.path, 'package.json'))
+              .writeAsStringSync('{"name": "x", "dna": "some-npm-thing"}');
+          expect(DnaConfig.read(tmp.path), isNull);
+
+          // It also does not conflict with the real config source.
+          File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
+            'dna:\n  order:\n    - a\n  a:\n    path: ../a\n',
+          );
+          final config = DnaConfig.read(tmp.path);
+          expect(config!.layers.single.name, 'a');
+          expect(config.warnings, isEmpty);
+        } finally {
+          tmp.deleteSync(recursive: true);
+        }
+      });
+
+      test('defers undecodable files when another file has the config', () {
+        final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
+        try {
+          File(p.join(tmp.path, 'package.json')).writeAsStringSync('{broken,}');
+          File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
+            'dna:\n  order:\n    - a\n  a:\n    path: ../a\n',
+          );
+          final config = DnaConfig.read(tmp.path);
+          expect(config!.layers.single.name, 'a');
+          expect(
+            config.warnings.single,
+            allOf(contains('not valid JSON'), contains('ignored')),
+          );
+        } finally {
+          tmp.deleteSync(recursive: true);
+        }
+      });
+
+      test('throws for undecodable files when no config is found', () {
+        final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
+        try {
+          File(p.join(tmp.path, 'package.json')).writeAsStringSync('{broken,}');
+          expect(
+            () => DnaConfig.read(tmp.path),
+            throwsA(
+              isA<FormatException>().having(
+                (e) => e.message,
+                'message',
+                contains('not valid JSON'),
+              ),
+            ),
+          );
+        } finally {
+          tmp.deleteSync(recursive: true);
+        }
+      });
+
       test('throws when more than one file configures dna', () {
         final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
         try {
@@ -391,6 +468,23 @@ void main() {
       test('parseJson returns null without dna key or non-map doc', () {
         expect(DnaConfig.parseJson('{"name": "x"}'), isNull);
         expect(DnaConfig.parseJson('[1, 2]'), isNull);
+      });
+
+      test('parseJson throws on a non-map dna value unless told to ignore', () {
+        expect(
+          () => DnaConfig.parseJson('{"dna": "x"}'),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('must be a map'),
+            ),
+          ),
+        );
+        expect(
+          DnaConfig.parseJson('{"dna": "x"}', ignoreNonMapDna: true),
+          isNull,
+        );
       });
 
       test('parseJson throws on invalid JSON with the source name', () {
