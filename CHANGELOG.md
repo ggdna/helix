@@ -23,6 +23,10 @@ configure layers via the `dna:` block in the target pubspec.yaml
 reports pre-2.0 manifests as outdated)
 - Release 2.0.0 docs: changelog, readme, dna config example
 
+### Fixed
+
+- Fix md\_tags: nested same-tag regions, fence nesting, foreign tags, dominant EOL
+
 ## [1.1.0] - 2026-05-26
 
 ### Added

@@ -170,6 +170,33 @@ void main() {
       expect(result.content, '### [a] Neu\nz\n\n## Höher\ny\n');
     });
 
+    test('nested same-tag headings do not crash — outer section wins', () {
+      final result = applyTagBlocks(
+        '## [x] Outer\n\ntext\n\n### [x] Inner\n\nmore text\n\nlong tail\n',
+        const [TagBlock(tag: 'x', content: '## [x] Neu')],
+        fileLabel: 'x.md',
+      );
+      expect(result.content, '## [x] Neu\n');
+      expect(result.warnings, isEmpty);
+    });
+
+    test('replaces a foreign tag in the replacement heading', () {
+      final result = applyTagBlocks(
+        '## [setup] Alt\nx\n',
+        const [TagBlock(tag: 'setup', content: '## [greeting] Neu\nz')],
+        fileLabel: 'x.md',
+      );
+      expect(result.content, '## [setup] Neu\nz\n');
+
+      // Also for foreign-tagged headings without a title text.
+      final bare = applyTagBlocks(
+        '## [setup] Alt\nx\n',
+        const [TagBlock(tag: 'setup', content: '## [greeting]\nz')],
+        fileLabel: 'x.md',
+      );
+      expect(bare.content, '## [setup]\nz\n');
+    });
+
     test('re-attaches the tag when the replacement heading lacks it', () {
       final result = applyTagBlocks(
         '## [a] Alt\nx\n',
@@ -292,11 +319,25 @@ void main() {
       expect(renderMarkers(source), source);
     });
 
+    test('longer fences nest shorter ones (CommonMark closing rule)', () {
+      const source = '````markdown\n```\n{{a|x}}\n```\n````\n';
+      expect(renderMarkers(source), source);
+
+      // A tilde run inside a backtick fence is content, not a closer.
+      const mixed = '```\n~~~\n{{a|x}}\n```\n';
+      expect(renderMarkers(mixed), mixed);
+    });
+
     test('preserves CRLF line endings', () {
       expect(
         renderMarkers('## [a] T\r\n{{b|c}}\r\n'),
         '## T\r\nc\r\n',
       );
+    });
+
+    test('normalizes mixed line endings to the dominant one', () {
+      expect(renderMarkers('{{a|x}}\r\nb\nc\nd\n'), 'x\nb\nc\nd\n');
+      expect(renderMarkers('{{a|x}}\r\nb\r\nc\n'), 'x\r\nb\r\nc\r\n');
     });
   });
 }

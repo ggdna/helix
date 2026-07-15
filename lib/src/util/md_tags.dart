@@ -229,9 +229,14 @@ TagApplyResult applyTagBlocks(
     // Collect all tagged-section occurrences with their boundaries before
     // mutating anything — the replacement re-attaches the same tag, so a
     // rescan after mutation would find the freshly inserted heading again.
+    // A same-tag heading nested inside an already collected region (deeper
+    // level) is skipped: it is part of the outer section and gets replaced
+    // with it — collecting it would create overlapping regions and corrupt
+    // the reverse replacement below.
     final regions = <({int start, int end})>[];
     for (var i = 0; i < lines.length; i++) {
       if (fenced[i]) continue;
+      if (regions.isNotEmpty && i < regions.last.end) continue;
       final tagged = _taggedHeadingRe.firstMatch(lines[i]);
       if (tagged == null || tagged.group(2) != block.tag) continue;
       final level = tagged.group(1)!.length;
@@ -334,7 +339,7 @@ final RegExp _headingRe = RegExp(r'^(#{1,6})(?:[ \t]+(.*))?$');
 final RegExp _commentMarkerRe = RegExp(r'<!--\s*([A-Za-z0-9_-]+)\s*-->');
 final RegExp _anyPlaceholderRe =
     RegExp(r'\{\{([A-Za-z0-9_-]+)(?:\|(.*?))?\}\}');
-final RegExp _fenceRe = RegExp(r'^\s{0,3}(```|~~~)');
+final RegExp _fenceRe = RegExp(r'^\s{0,3}(`{3,}|~{3,})');
 final RegExp _inlineCodeRe = RegExp(r'`[^`]*`');
 
 RegExp _placeholderRe(String tag) =>
@@ -346,7 +351,7 @@ RegExp _placeholderRe(String tag) =>
 /// sources on user machines may be CRLF even though this repo is LF-only.
 class _Doc {
   _Doc(String content)
-      : eol = content.contains('\r\n') ? '\r\n' : '\n',
+      : eol = _dominantEol(content),
         endsWithNewline = content.endsWith('\n') {
     final raw = content.split('\n');
     if (content.endsWith('\n')) raw.removeLast();
@@ -354,6 +359,14 @@ class _Doc {
       for (final line in raw)
         line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
     ]);
+  }
+
+  /// The line ending the majority of lines use. Mixed files get normalized
+  /// to their dominant ending on render.
+  static String _dominantEol(String content) {
+    final crlf = '\r\n'.allMatches(content).length;
+    final lf = '\n'.allMatches(content).length - crlf;
+    return crlf > lf ? '\r\n' : '\n';
   }
 
   final List<String> lines = [];
@@ -366,6 +379,11 @@ class _Doc {
 // .............................................................................
 /// Returns a mask marking every line that belongs to a code fence (including
 /// the fence delimiter lines themselves).
+///
+/// Follows the CommonMark closing rule: a fence only closes on a run of the
+/// same character that is at least as long as the opener — so a 3-backtick
+/// line inside a 4-backtick fence is content, which lets documentation nest
+/// literal fenced examples.
 List<bool> _fenceMask(List<String> lines) {
   final mask = List<bool>.filled(lines.length, false);
   String? fence;
@@ -376,7 +394,7 @@ List<bool> _fenceMask(List<String> lines) {
       mask[i] = true;
       if (fence == null) {
         fence = delimiter;
-      } else if (fence == delimiter) {
+      } else if (delimiter[0] == fence[0] && delimiter.length >= fence.length) {
         fence = null;
       }
       continue;
@@ -388,8 +406,9 @@ List<bool> _fenceMask(List<String> lines) {
 
 // .............................................................................
 /// Validates and prepares the section replacement of [block]: must start
-/// with a heading; the block's tag is re-attached when missing. Returns
-/// `null` (with a warning) for invalid replacements.
+/// with a heading; the block's tag occupies the heading's marker slot — a
+/// missing tag is attached, a foreign tag is replaced. Returns `null` (with
+/// a warning) for invalid replacements.
 List<String>? _sectionReplacement(
   TagBlock block,
   List<String> warnings,
@@ -405,12 +424,17 @@ List<String>? _sectionReplacement(
     return null;
   }
   final tagged = _taggedHeadingRe.firstMatch(lines.first);
-  if (tagged == null || tagged.group(2) != block.tag) {
+  if (tagged == null) {
     final hashes = heading.group(1)!;
     final rest = (heading.group(2) ?? '').trim();
     lines[0] = rest.isEmpty
         ? '$hashes [${block.tag}]'
         : '$hashes [${block.tag}] $rest';
+  } else if (tagged.group(2) != block.tag) {
+    final rest = tagged.group(3)!.trim();
+    lines[0] = rest.isEmpty
+        ? '${tagged.group(1)} [${block.tag}]'
+        : '${tagged.group(1)} [${block.tag}] $rest';
   }
   return lines;
 }
