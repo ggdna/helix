@@ -283,6 +283,16 @@ void main() {
         );
       });
 
+      test('resolvePathLayer normalizes backslash paths', () {
+        const layer = DnaLayerConfig(name: 'repo', path: r'dna\_override');
+        final resolved = resolvePathLayer(
+          p.join(sampleRoot(), 'target'),
+          layer,
+        );
+        expect(p.basename(resolved.folder.path), '_override');
+        expect(p.basename(p.dirname(resolved.folder.path)), 'dna');
+      });
+
       test('resolvePathLayer prefers the dna/ subfolder when present', () {
         final config = DnaConfig.read(p.join(sampleRoot(), 'target'))!;
         final project = config.layers[1];

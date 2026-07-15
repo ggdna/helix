@@ -29,6 +29,7 @@ recovered from the backup folder on the next run
 - Remove duplicate changelog entry
 - Simplify: shared copy and layer helpers, parallel resolution, terse doc comments
 - Prefer stable tags over prereleases in semver resolution
+- Skip missing in-dna layers as empty and normalize backslash layer paths
 
 ### Fixed
 
@@ -40,6 +41,10 @@ fenced markdown examples inside fences stay untouched
 `--check` drift after git activity in a layer folder or CRLF checkouts
 - A foreign `[tag]` in a replacement heading is replaced instead of
 double-prefixed; mixed line endings normalize to the dominant one
+- A configured but missing in-dna layer (e.g. `dna/_override` on a fresh
+clone — git does not track empty folders) is skipped as empty instead of
+failing the sync; `--check` agrees
+- Backslash `path:` values in the pubspec work on every platform
 
 ## [1.1.0] - 2026-05-26
 

@@ -45,12 +45,15 @@ class DnaLayerConfig {
 // .............................................................................
 /// The folder and content root of a path layer: content is `<path>/dna`
 /// when that subfolder exists, else the folder itself — shared by sync and
-/// `--check` so both always hash and copy the same tree.
+/// `--check` so both always hash and copy the same tree. Backslashes in the
+/// configured path are normalized so committed Windows-style paths work on
+/// every platform.
 ({Directory folder, Directory content}) resolvePathLayer(
   String targetRoot,
   DnaLayerConfig layer,
 ) {
-  final folder = Directory(p.normalize(p.join(targetRoot, layer.path!)));
+  final raw = layer.path!.replaceAll('\\', '/');
+  final folder = Directory(p.normalize(p.join(targetRoot, raw)));
   final dnaSub = Directory(p.join(folder.path, 'dna'));
   return (folder: folder, content: dnaSub.existsSync() ? dnaSub : folder);
 }

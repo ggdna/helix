@@ -357,6 +357,15 @@ class Sync extends Command<dynamic> {
     final resolved = resolvePathLayer(target.path, config);
     final folder = resolved.folder;
     if (!folder.existsSync()) {
+      // In-dna override layers may not exist yet — git does not track empty
+      // folders, so fresh clones of a consumer repo must still sync.
+      if (p.isWithin(dnaDir.path, folder.path)) {
+        ggLog(
+          'Layer "${config.name}": ${config.path} does not exist yet '
+          '— skipped.',
+        );
+        return _ResolvedLayer(config: config, contentRoot: folder);
+      }
       throw Exception(
         'Layer "${config.name}": path does not exist: ${folder.path}',
       );
@@ -473,6 +482,8 @@ class Sync extends Command<dynamic> {
   // ...........................................................................
   /// Copies one layer into [dnaDir], then applies its `.tag.md` patches.
   void _applyLayerContent(String name, Directory root, Directory dnaDir) {
+    if (!root.existsSync()) return;
+
     // Copy all dna content; collect the tag files instead of copying them.
     final tagFiles = <String>[];
     copyDirectory(
@@ -640,9 +651,12 @@ class Sync extends Command<dynamic> {
     }
 
     final resolved = resolvePathLayer(dest.parent.path, config);
-    if (!resolved.folder.existsSync()) {
+    if (!resolved.folder.existsSync() &&
+        !p.isWithin(dest.path, resolved.folder.path)) {
       return ['layer "${config.name}" path no longer exists: ${config.path}'];
     }
+    // Missing in-dna layers hash to null — consistent with a sync that
+    // skipped them as empty.
     final hashNow = hashDnaDirectory(resolved.content);
     if (hashNow != stored.hash) {
       return [

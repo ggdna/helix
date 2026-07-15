@@ -115,6 +115,12 @@ void main() {
       expect(result.warnings.single, contains('Ambiguous'));
     });
 
+    test('tolerates a UTF-8 BOM before the first marker', () {
+      final result = parseTagFile('﻿<!-- t --> Wert <!-- t -->\n');
+      expect(result.blocks.single.content, 'Wert');
+      expect(result.warnings, isEmpty);
+    });
+
     test('handles empty input', () {
       final result = parseTagFile('');
       expect(result.blocks, isEmpty);

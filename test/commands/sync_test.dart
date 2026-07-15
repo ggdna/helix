@@ -400,6 +400,89 @@ void main() {
         expect(manifest!.layers.single.name, 'layer');
       });
 
+      test(
+          'a configured but missing in-dna layer is skipped as empty '
+          '(fresh clones: git does not track empty folders)', () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - repo\n'
+          '  repo:\n'
+          '    path: dna/_override\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          messages.any((m) => m.contains('does not exist yet')),
+          isTrue,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).existsSync(),
+          isTrue,
+        );
+
+        // The immediate check agrees with the sync.
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+
+        // Creating the override later is reported as layer change …
+        writeFile(
+          p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          '<!-- s --> x <!-- s -->\n',
+        );
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('layer "repo" has changed')),
+          isTrue,
+        );
+
+        // … and the next sync picks it up.
+        await runSync(makeCmd());
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+      });
+
+      test('a later full-file override resets earlier tag patches', () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          '## [s] Basis\n\nx\n',
+        );
+        writeFile(
+          p.join(tmp.path, 'layer1', 'dna', 'guides', 'a.tag.md'),
+          '## [s] Gepatcht\n\ny\n',
+        );
+        writeFile(
+          p.join(tmp.path, 'layer2', 'dna', 'guides', 'a.md'),
+          '# Komplett neu\n',
+        );
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - one\n'
+          '    - two\n'
+          '  one:\n'
+          '    path: ../layer1\n'
+          '  two:\n'
+          '    path: ../layer2\n',
+        );
+
+        await runSync(makeCmd());
+
+        // The full file of the later layer wins over the earlier patch.
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          '# Komplett neu\n',
+        );
+      });
+
       test('in-dna layers may use a repo-style dna/ subfolder', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
         writeFile(
