@@ -4,15 +4,24 @@
 
 ### Added
 
-- add init-architecture skill that creates/updates README.architecture.md
-- add dna sync manifest with hash/check support and overlay tracking
 - Add init-architecture skill that creates/updates README.architecture.md
-- Add dna layer config parsing from pubspec with yaml and pub\_semver
-- Add markdown tag override engine (md\_tags)
+- Add dna sync manifest with hash/check support and overlay tracking
+- Multi-layer DNA: layers are configured in the target pubspec.yaml `dna:`
+block — git layers (optionally pinned via a semver `version:` constraint
+resolved against the repo tags), local path layers, and repo-local layers
+like `dna/_override` that survive the sync verbatim
+- Markdown tag overrides: `### [tag]` sections and `{{tag|default}}` strings
+can be overridden per layer via `X.tag.md` files; all markers are rendered
+away in the synced output
 
 ### Changed
 
-- BREAKING: pubspec-driven multi-layer sync with tag overrides and manifest v2
+- BREAKING: `gg_dna sync` no longer accepts a positional overlay argument —
+configure layers via the `dna:` block in the target pubspec.yaml
+- BREAKING: the overlay stored in `.dna.json` is no longer auto-reused
+- BREAKING: `.dna.json` manifest format v2 (ordered layer list; `--check`
+reports pre-2.0 manifests as outdated)
+- Release 2.0.0 docs: changelog, readme, dna config example
 
 ## [1.1.0] - 2026-05-26
 
