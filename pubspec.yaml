@@ -1,6 +1,6 @@
 name: gg_dna
 description: Die DNA fuer Programmierprojekte - synchronisiert Anleitungen, Skills und Konventionen fuer KI-Agenten aus mehrschichtigen DNA-Repos in Zielprojekte.
-version: 2.0.0
+version: 2.1.0
 repository: https://github.com/ggsuite/gg_dna.git
 
 environment:

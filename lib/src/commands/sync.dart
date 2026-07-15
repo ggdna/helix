@@ -44,7 +44,7 @@ typedef GitLsRemote = Future<String?> Function(String url);
 typedef GitLsRemoteTags = Future<Map<String, String>?> Function(String url);
 
 /// Mirrors the gg_dna `dna/` folder into the target, merges the DNA layers
-/// of the target pubspec's `dna:` block on top (later layers win, `X.tag.md`
+/// of the target repo's `dna:` config on top (later layers win, `X.tag.md`
 /// files patch sections/strings), then offers to install the synced skills
 /// and conventions. All git and prompt access is injectable for tests.
 class Sync extends Command<dynamic> {
@@ -112,11 +112,13 @@ class Sync extends Command<dynamic> {
   @override
   final description =
       'Mirror the gg_dna `dna/` folder into <target>/dna and merge the DNA '
-      'layers configured in the target pubspec.yaml on top — later layers '
+      'layers configured in the target repo on top — later layers '
       'win. Then offer to install Claude Code skills and conventions into '
       "the project's .claude folder.\n"
       '\n'
-      'Layers are configured in the target pubspec.yaml:\n'
+      'Layers are configured in exactly one of '
+      '${dnaConfigFilenames.join(', ')}\n'
+      '(in package.json under the `"dna"` key) in the target root:\n'
       '\n'
       '  dna:\n'
       '    order:\n'
@@ -142,8 +144,8 @@ class Sync extends Command<dynamic> {
     if (argResults!.rest.isNotEmpty) {
       throw UsageException(
         'Positional overlay arguments were removed in gg_dna 2.0. '
-        'Configure DNA layers via the `dna:` block in the target '
-        'pubspec.yaml.',
+        'Configure DNA layers via the `dna:` block in the target repo '
+        '(${dnaConfigFilenames.join(', ')}).',
         usage,
       );
     }
@@ -191,7 +193,10 @@ class Sync extends Command<dynamic> {
     }
 
     if (config == null) {
-      ggLog('No dna: config found in pubspec.yaml — base sync only.');
+      ggLog(
+        'No dna: config found (${dnaConfigFilenames.join(', ')}) '
+        '— base sync only.',
+      );
     }
 
     // Resolve all layers up front and in parallel — any error (unreachable
@@ -588,7 +593,7 @@ class Sync extends Command<dynamic> {
       );
     }
 
-    // 3) Config drift: the pubspec dna: block must match the manifest.
+    // 3) Config drift: the configured dna: block must match the manifest.
     final layers = config?.layers ?? const <DnaLayerConfig>[];
     final drifted = layers.length != manifest.layers.length ||
         [
@@ -597,7 +602,7 @@ class Sync extends Command<dynamic> {
         ].contains(false);
     if (drifted) {
       problems.add(
-        'dna: config in pubspec.yaml changed since last sync',
+        'dna: config changed since last sync',
       );
     } else {
       // 4) Per-layer freshness, checked in parallel.
@@ -847,7 +852,7 @@ class _ResolvedLayer {
     this.hash,
   });
 
-  /// The pubspec config this layer was resolved from.
+  /// The dna: config this layer was resolved from.
   final DnaLayerConfig config;
 
   /// The folder whose content gets merged into `<target>/dna`.

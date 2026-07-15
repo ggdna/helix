@@ -1132,6 +1132,123 @@ void main() {
     });
 
     // =========================================================================
+    group('non-Dart config sources (dna.yaml / package.json)', () {
+      const expectedCoding = '# Coding Guide\n'
+          '\n'
+          '## Repo-Begrüßung\n'
+          '\n'
+          'Dieses Repo grüßt besonders.\n'
+          '\n'
+          '## Werkzeuge\n'
+          '\n'
+          'Nutze pnpm für Dependencies.\n'
+          '\n'
+          '### Beispiel\n'
+          '\n'
+          '```markdown\n'
+          '### [example] So bleibt ein Beispiel erhalten\n'
+          '{{example|unberührt}}\n'
+          '```\n';
+
+      test('syncs a TypeScript repo configured via package.json', () async {
+        copyDirectory(Directory(p.join(sampleRoot(), 'base_pkg')), pkgRoot);
+        copySampleTo('dna_project', tmp);
+        copyDirectory(Directory(p.join(sampleRoot(), 'target_ts')), target);
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'coding.md'))
+              .readAsStringSync(),
+          expectedCoding,
+        );
+        expect(
+          File(
+            p.join(target.path, 'dna', '_override', 'guides', 'coding.tag.md'),
+          ).existsSync(),
+          isTrue,
+        );
+
+        final manifest = DnaManifest.read(
+          Directory(p.join(target.path, 'dna')),
+        );
+        expect(
+          manifest!.layers.map((l) => l.name),
+          ['dna_project', 'dna_repo'],
+        );
+
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+      });
+
+      test('syncs a repo configured via dna.yaml and detects config drift',
+          () async {
+        copyDirectory(Directory(p.join(sampleRoot(), 'base_pkg')), pkgRoot);
+        copyDirectory(Directory(p.join(sampleRoot(), 'target_yaml')), target);
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'coding.md'))
+              .readAsStringSync(),
+          expectedCoding,
+        );
+
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+
+        // Changing the dna.yaml config drifts against the manifest.
+        writeFile(
+          p.join(target.path, 'dna.yaml'),
+          'dna:\n'
+          '  order:\n'
+          '    - other\n'
+          '  other:\n'
+          '    path: dna/_override\n',
+        );
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('changed since last sync')),
+          isTrue,
+        );
+      });
+
+      test('throws when dna is configured in more than one file', () async {
+        copyDirectory(Directory(p.join(sampleRoot(), 'base_pkg')), pkgRoot);
+        copyDirectory(Directory(p.join(sampleRoot(), 'target_yaml')), target);
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - dna_repo\n'
+          '  dna_repo:\n'
+          '    path: dna/_override\n',
+        );
+
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              contains('more than one file'),
+            ),
+          ),
+        );
+        // Atomicity: the failed sync leaves no dna folder behind.
+        expect(
+          Directory(p.join(target.path, 'dna', 'guides')).existsSync(),
+          isFalse,
+        );
+      });
+    });
+
+    // =========================================================================
     group('--check', () {
       test('passes when target/dna matches source', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');

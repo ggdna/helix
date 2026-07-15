@@ -5,10 +5,23 @@ gg_dna ist ein Repository, in dem verschiedene Anleitungen, Scripts und Konfigur
 ## Sync
 
 `gg_dna sync` spiegelt den `dna/`-Ordner dieses Packages in das Zielrepo
-(`<target>/dna`) und legt darueber die **DNA-Schichten**, die in der
-`pubspec.yaml` des Zielrepos konfiguriert sind. Spaetere Schichten gewinnen
-bei Pfad-Kollisionen; die Basis-DNA aus gg_dna ist immer die unterste
-Schicht.
+(`<target>/dna`) und legt darueber die **DNA-Schichten**, die im Zielrepo
+konfiguriert sind. Spaetere Schichten gewinnen bei Pfad-Kollisionen; die
+Basis-DNA aus gg_dna ist immer die unterste Schicht.
+
+Die Konfiguration ist ein `dna:`-Block und darf in **genau einer** dieser
+Dateien in der Repo-Wurzel liegen (mehrere gleichzeitig sind ein Fehler):
+
+1. `dna.yaml` — neutrale Datei, funktioniert fuer jede Sprache
+2. `package.json` — `"dna"`-Key, fuer TypeScript-/JavaScript-Repos
+3. `pubspec.yaml` — fuer Dart-/Flutter-Repos
+
+Eine vorhandene `dna.yaml` ohne `dna:`-Block ist ein harter Fehler (statt
+eines stillen Basis-Syncs, der lokale Schichten loeschen wuerde). Ein
+`"dna"`-Feld in der package.json zaehlt nur, wenn es ein Objekt ist —
+Fremdfelder anderer Tools werden ignoriert. Nicht parsebare Dateien
+blockieren den Sync nur, wenn keine andere Datei die Konfiguration
+liefert; sonst gibt es eine Warnung.
 
 ```yaml
 dna:
@@ -23,6 +36,19 @@ dna:
     path: ../dna_project
   dna_repo:
     path: dna/_override
+```
+
+Dasselbe als `"dna"`-Key in einer `package.json`:
+
+```json
+{
+  "name": "my-ts-project",
+  "dna": {
+    "order": ["dna_company", "dna_repo"],
+    "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" },
+    "dna_repo": { "path": "dna/_override" }
+  }
+}
 ```
 
 - **git-Schichten** werden geklont. Ein optionales `version:` ist ein
@@ -104,8 +130,8 @@ Regeln:
 ## Migration von 1.x
 
 - Das positionale Overlay-Argument (`gg_dna sync <overlay>`) wurde entfernt.
-  Overlays werden als Schicht im `dna:`-Block der Ziel-pubspec.yaml
-  konfiguriert.
+  Overlays werden als Schicht im `dna:`-Block des Zielrepos konfiguriert
+  (dna.yaml, package.json oder pubspec.yaml).
 - Der in `.dna.json` gespeicherte Overlay wird nicht mehr automatisch
   wiederverwendet.
 - `.dna.json` hat ein neues Format (v2); `--check` meldet alte Manifeste

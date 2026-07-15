@@ -12,7 +12,7 @@ import 'package:path/path.dart' as p;
 import 'dna_config.dart';
 import 'dna_hash.dart';
 
-/// One layer entry in the sync manifest: the raw pubspec config values (for
+/// One layer entry in the sync manifest: the raw dna: config values (for
 /// machine-independent drift detection via [matchesConfig]) plus the
 /// resolution results of the last sync.
 class DnaManifestLayer {
@@ -63,13 +63,13 @@ class DnaManifestLayer {
   /// Layer name as listed in `dna: order:`.
   final String name;
 
-  /// Raw `git:` value from the pubspec. `null` for path layers.
+  /// Raw `git:` value from the dna: config. `null` for path layers.
   final String? git;
 
-  /// Raw `path:` value from the pubspec. `null` for git layers.
+  /// Raw `path:` value from the dna: config. `null` for git layers.
   final String? path;
 
-  /// Raw `version:` constraint from the pubspec. `null` when unconstrained.
+  /// Raw `version:` constraint from the config. `null` when unconstrained.
   final String? versionConstraint;
 
   /// The version the constraint resolved to at sync time, e.g. `1.5.0`.
