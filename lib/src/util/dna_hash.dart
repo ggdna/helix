@@ -44,7 +44,7 @@ String? hashDnaDirectory(Directory dir) {
     perFile.add(contentHash);
   }
   final folded = fnv1(perFile);
-  return _toHex(folded);
+  return toHex64(folded);
 }
 
 // .............................................................................
@@ -62,8 +62,13 @@ Uint8List _normalizeEol(Uint8List bytes) {
   return Uint8List.fromList(result);
 }
 
-String _toHex(int value) {
-  // Dart ints are 64 bit on the VM; mask to 64 bit before printing.
-  final masked = value.toUnsigned(64);
-  return '0x${masked.toRadixString(16).padLeft(16, '0')}';
+// .............................................................................
+/// Formats [value] as unsigned 64-bit hex (`0x` + 16 digits, never signed).
+String toHex64(int value) {
+  // toRadixString renders high-bit values with a minus sign — format the
+  // two 32-bit halves separately instead.
+  final hi = (value >> 32) & 0xFFFFFFFF;
+  final lo = value & 0xFFFFFFFF;
+  return '0x${hi.toRadixString(16).padLeft(8, '0')}'
+      '${lo.toRadixString(16).padLeft(8, '0')}';
 }

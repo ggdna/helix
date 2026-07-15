@@ -12,7 +12,10 @@ import 'package:path/path.dart' as p;
 /// Absolute path to the checked-in `test/sample_folder` fixtures.
 ///
 /// Tests never mutate the fixtures directly — use [copySampleTo] to work on
-/// a temp copy (established gg_* convention, see e.g. gg_multi).
+/// a temp copy (established gg_* convention, see e.g. gg_multi). Relies on
+/// `Directory.current` being the repo root: the cwd is process-wide and
+/// shared by all parallel suites, so tests must never mutate it — inject a
+/// CwdResolver instead.
 String sampleRoot() => p.join(Directory.current.path, 'test', 'sample_folder');
 
 /// Copies the sample folder [name] into `<parent>/<name>` and returns the

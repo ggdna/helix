@@ -30,17 +30,29 @@ dna:
   aufgeloest wird — der hoechste passende Tag wird ausgecheckt. Tags mit
   und ohne `v`-Praefix werden erkannt. `gg_*`-Kurzformen expandieren zu
   `https://github.com/ggsuite/<name>.git`.
-- **path-Schichten** sind lokale Ordner, relativ zur Wurzel des Zielrepos.
-  Enthaelt der Ordner ein `dna/`-Unterverzeichnis, wird dieses verwendet,
-  sonst der Ordner selbst.
+- **path-Schichten** sind lokale Ordner, relativ zur Wurzel des Zielrepos
+  (Vorwaerts- wie Rueckwaerts-Schraegstriche funktionieren auf allen
+  Plattformen). Enthaelt der Ordner ein `dna/`-Unterverzeichnis, wird
+  dieses verwendet, sonst der Ordner selbst.
 - **Repo-lokale Schichten** wie `dna/_override` liegen innerhalb von
   `<target>/dna` und ueberleben den Sync woertlich — ihre Marker bleiben
-  erhalten, damit der naechste Sync sie erneut anwenden kann.
+  erhalten, damit der naechste Sync sie erneut anwenden kann. Existiert der
+  Ordner (noch) nicht — etwa auf einem frischen Clone, weil Git leere
+  Ordner nicht uebertraegt — wird die Schicht als leer uebersprungen.
 
-Nach dem Sync schreibt `gg_dna sync` ein Manifest `dna/.dna.json`.
-`gg_dna sync --check` prueft ohne zu schreiben, ob `dna/` aktuell ist:
-lokale Aenderungen, neue Basis-Inhalte, Konfigurations-Drift, neue passende
-Git-Tags bzw. Commits und geaenderte lokale Schichten werden gemeldet.
+Nach dem Sync schreibt `gg_dna sync` ein Manifest `dna/.dna.json` —
+`dna/` und das Manifest gehoeren mit ins Repo committet, damit `--check`
+in der CI laufen kann. `gg_dna sync --check` prueft ohne zu schreiben, ob
+`dna/` aktuell ist: lokale Aenderungen, neue Basis-Inhalte,
+Konfigurations-Drift, neue passende Git-Tags bzw. Commits und geaenderte
+lokale Schichten werden gemeldet. Bei `version:`-Constraints gewinnt der
+hoechste passende **stabile** Tag; Prereleases werden nur gewaehlt, wenn
+nichts Stabiles passt oder der Constraint selbst eine Prerelease anpeilt.
+
+Der Sync baut den neuen Baum in `<target>/.gg_dna_staging` und tauscht ihn
+atomar ein; nach einem abgebrochenen Lauf raeumt der naechste Sync die
+Ordner `.gg_dna_staging`/`.gg_dna_backup` auf bzw. stellt `dna/` aus dem
+Backup wieder her. Beide Ordner sind fluechtig und gehoeren nicht ins Repo.
 
 ## Tag-Overrides in Markdown-Dateien
 

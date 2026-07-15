@@ -366,6 +366,12 @@ class Sync extends Command<dynamic> {
         );
         return _ResolvedLayer(config: config, contentRoot: folder);
       }
+      if (FileSystemEntity.isFileSync(folder.path)) {
+        throw Exception(
+          'Layer "${config.name}": path is a file, not a folder: '
+          '${folder.path}',
+        );
+      }
       throw Exception(
         'Layer "${config.name}": path does not exist: ${folder.path}',
       );

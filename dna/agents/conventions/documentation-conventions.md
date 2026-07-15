@@ -4,20 +4,13 @@ Dokumentation ist **funktional**, nicht "schön". Jedes Stück Doku hat ein klar
 
 ## 1. Doc-Comments im Code (`///`)
 
-Siehe `code-conventions.md` §7. Ergänzend:
+Siehe `code-conventions.md` §7 (inkl. Dichte-Limit: max. 3 Zeilen vor Klassen, max. 1 Zeile pro Methode/Attribut). Ergänzend:
 
 - **Was, nicht wie.** "Returns the list value at index `[i]`" — nicht "Loops through internal data and returns the i-th".
 - **Konsistente Tempora**: 3rd-Person-Indikativ ("Updates the state.", "Throws when ..."), kein "Will update", kein imperatives "Update the state.".
-- **Parameter-Doku als Aufzählung** mit `- [name]`-Syntax:
-  ```dart
-  /// Run the operation and display the status.
-  ///
-  /// - [task] to be executed.
-  ///   - If the task throws, an error state will be printed.
-  ///   - If the task completes successfully, a success state will be printed.
-  ```
-- **Beispiele** im Doc-Comment nur, wenn der Aufruf nicht offensichtlich aus Signatur + Beschreibung folgt. Dann als ` ```dart ` Block.
-- **Throw-Verhalten** explizit machen, wenn relevant: `Throws a [StateError] when ...`.
+- **Parameter** in der einen Zeile mit `[name]`-Referenzen erwähnen: `/// Runs [task] and prints its success or error state.`
+- **Beispiele und längere Erklärungen** gehören ins README oder in einen Library-Header, nicht in Member-Doc-Comments.
+- **Throw-Verhalten** in die Zeile aufnehmen, wenn es Teil des Vertrags ist: `...; throws a [StateError] when closed.`
 
 ## 2. README.md
 

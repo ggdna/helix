@@ -349,6 +349,29 @@ void main() {
         );
       });
 
+      test('throws a clear error when a layer path is a file', () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
+        writeFile(p.join(tmp.path, 'afile.txt'), 'ich bin eine datei');
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - f\n'
+          '  f:\n'
+          '    path: ../afile.txt\n',
+        );
+
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'message',
+              contains('is a file, not a folder'),
+            ),
+          ),
+        );
+      });
+
       test('throws when a layer points at <target>/dna itself', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
         writeFile(p.join(target.path, 'dna', 'guides', 'a.md'), 'A');

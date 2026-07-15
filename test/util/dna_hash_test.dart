@@ -61,6 +61,25 @@ void main() {
       }
     });
 
+    test('formats hashes as unsigned 16-digit hex', () {
+      // High-bit values must not render with a minus sign.
+      expect(toHex64(-1), '0xffffffffffffffff');
+      expect(toHex64(0), '0x0000000000000000');
+      expect(toHex64(0x1234abcd), '0x000000001234abcd');
+      expect(toHex64(-0x26436925f260b6b), '0xfd9bc96da0d9f495');
+
+      final tmp = Directory.systemTemp.createTempSync('gg_dna_hash_');
+      try {
+        File('${tmp.path}/a.txt').writeAsStringSync('hello');
+        expect(
+          hashDnaDirectory(tmp),
+          matches(RegExp(r'^0x[0-9a-f]{16}$')),
+        );
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
+
     test('is line-ending agnostic', () {
       final lfDir = Directory.systemTemp.createTempSync('gg_dna_hash_');
       final crlfDir = Directory.systemTemp.createTempSync('gg_dna_hash_');

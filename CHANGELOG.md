@@ -26,10 +26,10 @@ reports pre-2.0 manifests as outdated)
 renames — errors can no longer destroy the existing `dna/` (in particular
 in-dna override layers like `dna/_override`); interrupted swaps are
 recovered from the backup folder on the next run
-- Remove duplicate changelog entry
-- Simplify: shared copy and layer helpers, parallel resolution, terse doc comments
+- Layers are resolved in parallel (clones, ls-remotes) — also in `--check`
 - Prefer stable tags over prereleases in semver resolution
-- Skip missing in-dna layers as empty and normalize backslash layer paths
+- Doc-comment density rule (max 3 lines before classes, 1 per member) added
+to the shipped code conventions
 
 ### Fixed
 
@@ -45,6 +45,7 @@ double-prefixed; mixed line endings normalize to the dominant one
 clone — git does not track empty folders) is skipped as empty instead of
 failing the sync; `--check` agrees
 - Backslash `path:` values in the pubspec work on every platform
+- Fix negative hex hash rendering and cwd race between parallel test suites
 
 ## [1.1.0] - 2026-05-26
 

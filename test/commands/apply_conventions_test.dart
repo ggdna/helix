@@ -37,7 +37,10 @@ void main() {
     File(p.join(source.path, name)).writeAsStringSync(body);
   }
 
-  ApplyConventions makeCmd() => ApplyConventions(ggLog: messages.add);
+  ApplyConventions makeCmd({String? cwd}) => ApplyConventions(
+        ggLog: messages.add,
+        cwdResolver: cwd == null ? null : () => cwd,
+      );
 
   CommandRunner<dynamic> makeRunner(ApplyConventions cmd) {
     return CommandRunner<dynamic>('test', 'test')..addCommand(cmd);
@@ -264,14 +267,11 @@ void main() {
             isTrue,
           );
 
-          // Now omit --target by switching the working directory.
-          final originalCwd = Directory.current;
-          try {
-            Directory.current = ticket;
-            await makeRunner(makeCmd()).run(['apply-conventions']);
-          } finally {
-            Directory.current = originalCwd;
-          }
+          // Now omit --target and resolve via the injected cwd — global
+          // Directory.current must never be mutated, parallel suites
+          // share it.
+          await makeRunner(makeCmd(cwd: ticket.path))
+              .run(['apply-conventions']);
 
           // Workspace-level CLAUDE.md must exist now.
           expect(
@@ -303,13 +303,8 @@ void main() {
           File(p.join(standaloneSource.path, 'code-conventions.md'))
               .writeAsStringSync('# code');
 
-          final originalCwd = Directory.current;
-          try {
-            Directory.current = standalone;
-            await makeRunner(makeCmd()).run(['apply-conventions']);
-          } finally {
-            Directory.current = originalCwd;
-          }
+          await makeRunner(makeCmd(cwd: standalone.path))
+              .run(['apply-conventions']);
           expect(
             File(p.join(standalone.path, 'CLAUDE.md')).existsSync(),
             isTrue,
