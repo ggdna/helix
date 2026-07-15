@@ -1,5 +1,5 @@
 name: gg_dna
-description: gg_dna ist ein Repository, in dem verschiedene Anleitungen, Scripts und Konfigurationen fuer KI-Agenten liegen. Es stellt Anleitungen sowie Anweisungen fuer Code-Struktur, Test, Deployment und Programmierprinzipien dar. Es ist sozusagen die DNA, also der Aufbauplan fuer Programmierprojekte, die damit erzeugt werden.
+description: Die DNA fuer Programmierprojekte - synchronisiert Anleitungen, Skills und Konventionen fuer KI-Agenten aus mehrschichtigen DNA-Repos in Zielprojekte.
 version: 2.0.0
 repository: https://github.com/ggsuite/gg_dna.git
 

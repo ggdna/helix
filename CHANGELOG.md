@@ -30,6 +30,7 @@ recovered from the backup folder on the next run
 - Prefer stable tags over prereleases in semver resolution
 - Doc-comment density rule (max 3 lines before classes, 1 per member) added
 to the shipped code conventions
+- Use MIT license and shorten package description for pub.dev
 
 ### Fixed
 
