@@ -7,6 +7,7 @@
 - add init-architecture skill that creates/updates README.architecture.md
 - add dna sync manifest with hash/check support and overlay tracking
 - Add init-architecture skill that creates/updates README.architecture.md
+- Add dna layer config parsing from pubspec with yaml and pub\_semver
 
 ## [1.1.0] - 2026-05-26
 
