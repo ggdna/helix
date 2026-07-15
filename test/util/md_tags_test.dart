@@ -65,9 +65,9 @@ void main() {
         '<!-- t --> ok <!-- t -->\n',
       );
       expect(result.blocks, hasLength(1));
-      // Contiguous stray lines produce a single warning.
+      // All stray lines are collapsed into a single warning.
       expect(result.warnings.single, contains('Stray content'));
-      expect(result.warnings.single, contains('line 1'));
+      expect(result.warnings.single, contains('lines 1, 2'));
     });
 
     test('markers inside code fences are content, not delimiters', () {

@@ -6,7 +6,7 @@
 
 import 'dart:io';
 
-import 'package:gg_dna/src/commands/sync.dart';
+import 'package:gg_dna/src/util/copy_directory.dart';
 import 'package:path/path.dart' as p;
 
 /// Absolute path to the checked-in `test/sample_folder` fixtures.
@@ -23,7 +23,7 @@ Directory copySampleTo(String name, Directory parent) {
     throw ArgumentError('Sample folder not found: ${source.path}');
   }
   final dest = Directory(p.join(parent.path, name));
-  Sync.copyDirectory(source, dest);
+  copyDirectory(source, dest);
   return dest;
 }
 

@@ -27,6 +27,7 @@ renames — errors can no longer destroy the existing `dna/` (in particular
 in-dna override layers like `dna/_override`); interrupted swaps are
 recovered from the backup folder on the next run
 - Remove duplicate changelog entry
+- Simplify: shared copy and layer helpers, parallel resolution, terse doc comments
 
 ### Fixed
 

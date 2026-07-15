@@ -4,20 +4,11 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-/// Markdown tag override engine.
-///
-/// Source markdown files mark override points with two constructs:
-///   - replaceable sections: `### [tag] Überschrift` — the section spans the
-///     heading through just before the next heading of the same or a higher
-///     level (code-fence aware), or the end of file
-///   - replaceable strings: `{{tag|Standardwert}}` (or `{{tag}}` for an
-///     empty default)
-///
-/// Higher DNA layers ship `X.tag.md` files next to `X.md` that carry
-/// replacements as a sequence of blocks — see [parseTagFile] for the
-/// grammar. [applyTagBlocks] patches a merged target file with such blocks,
-/// keeping the markers intact so later layers can re-override the same tags.
-/// [renderMarkers] finally strips all markers for the synced output.
+/// Markdown tag override engine: sections marked `### [tag] Titel` and
+/// strings marked `{{tag|Standardwert}}` are replaced via `X.tag.md` files
+/// of higher DNA layers ([parseTagFile] + [applyTagBlocks], markers stay
+/// re-overridable); [renderMarkers] strips all markers for the output.
+/// The full syntax is documented in the README.
 library;
 
 /// Suffix identifying tag-override files (`X.tag.md` overrides `X.md`).
@@ -31,8 +22,7 @@ class TagBlock {
   /// The tag this block replaces.
   final String tag;
 
-  /// The replacement content. For heading-form blocks this includes the
-  /// heading line itself; for comment-delimited blocks it is the inner text.
+  /// The replacement content (heading-form blocks include their heading).
   final String content;
 }
 
@@ -61,19 +51,9 @@ class TagApplyResult {
 }
 
 // .............................................................................
-/// Parses the body of a `.tag.md` file into replacement blocks.
-///
-/// The file is a sequence of top-level blocks (outside code fences):
-///   - comment-delimited: a line `<!-- tag -->` opens a block that the next
-///     `<!-- tag -->` line with the same tag closes; other comments inside
-///     are content. The single-line form `<!-- tag --> text <!-- tag -->`
-///     yields the trimmed inner text.
-///   - heading-form: `#… [tag] Titel` opens a block that runs until the next
-///     tagged heading, the next top-level comment marker, or the end of
-///     file; the heading line is part of the replacement.
-///
-/// Non-whitespace content outside any block and unclosed comment blocks are
-/// reported as warnings.
+/// Parses a `.tag.md` body into its comment-delimited (`<!-- tag -->` …
+/// `<!-- tag -->`, also single-line) and heading-form (`#… [tag] Titel` up
+/// to the next block) replacement blocks; stray content warns.
 TagFileParseResult parseTagFile(String content) {
   final doc = _Doc(content);
   final lines = doc.lines;
@@ -84,7 +64,7 @@ TagFileParseResult parseTagFile(String content) {
   String? commentTag;
   String? headingTag;
   var collected = <String>[];
-  var lastWasStray = false;
+  final strayLines = <int>[];
 
   void closeHeadingBlock() {
     if (headingTag == null) return;
@@ -107,12 +87,7 @@ TagFileParseResult parseTagFile(String content) {
       if (commentTag != null || headingTag != null) {
         collected.add(line);
       } else if (line.trim().isNotEmpty) {
-        if (!lastWasStray) {
-          warnings.add(
-            'Stray content outside any tag block (line ${i + 1}): "$line".',
-          );
-        }
-        lastWasStray = true;
+        strayLines.add(i + 1);
       }
       continue;
     }
@@ -159,7 +134,6 @@ TagFileParseResult parseTagFile(String content) {
           'Ambiguous tag marker line ${i + 1}: "$line" — skipped.',
         );
       }
-      lastWasStray = false;
       continue;
     }
 
@@ -168,7 +142,6 @@ TagFileParseResult parseTagFile(String content) {
       closeHeadingBlock();
       headingTag = tagged.group(2);
       collected = [line];
-      lastWasStray = false;
       continue;
     }
 
@@ -177,16 +150,9 @@ TagFileParseResult parseTagFile(String content) {
       continue;
     }
 
-    if (line.trim().isEmpty) {
-      lastWasStray = false;
-      continue;
+    if (line.trim().isNotEmpty) {
+      strayLines.add(i + 1);
     }
-    if (!lastWasStray) {
-      warnings.add(
-        'Stray content outside any tag block (line ${i + 1}): "$line".',
-      );
-    }
-    lastWasStray = true;
   }
 
   if (commentTag != null) {
@@ -195,25 +161,20 @@ TagFileParseResult parseTagFile(String content) {
     );
   }
   closeHeadingBlock();
+  if (strayLines.isNotEmpty) {
+    warnings.add(
+      'Stray content outside any tag block '
+      '(line${strayLines.length > 1 ? 's' : ''} ${strayLines.join(', ')}).',
+    );
+  }
 
   return TagFileParseResult(blocks: blocks, warnings: warnings);
 }
 
 // .............................................................................
-/// Applies [blocks] to [target], the current merged content of an `X.md`.
-///
-/// The target decides the mechanism per tag:
-///   - a `[tag]` heading present → section replacement. The replacement must
-///     start with a heading (warned and skipped otherwise); the tag is
-///     re-attached to that heading so later layers can re-override it. All
-///     occurrences are replaced; the replaced region of each occurrence is
-///     bounded by its original heading level.
-///   - `{{tag|…}}` placeholders present → string override, implemented as a
-///     rewrite to `{{tag|<new value>}}` so later layers can re-override.
-///     Placeholders inside code fences or inline code are untouched.
-///   - neither → warning.
-///
-/// [fileLabel] names the target in warnings.
+/// Applies [blocks] to [target] — a `[tag]` heading there means section
+/// replacement, a `{{tag|…}}` placeholder means string rewrite (both stay
+/// re-overridable for later layers), anything else warns via [fileLabel].
 TagApplyResult applyTagBlocks(
   String target,
   List<TagBlock> blocks, {
@@ -298,12 +259,9 @@ TagApplyResult applyTagBlocks(
 }
 
 // .............................................................................
-/// Strips all tag markers from [content] for the final synced output:
-/// `### [tag] Titel` becomes `### Titel`, `{{tag|wert}}` becomes `wert`,
-/// `{{tag}}` becomes the empty string.
-///
-/// Markers inside code fences or inline code are preserved so documentation
-/// can show the syntax literally. The function is idempotent.
+/// Strips all markers for the synced output (`### [tag] T` -> `### T`,
+/// `{{tag|wert}}` -> `wert`); fenced and inline code stay untouched so
+/// documentation can show the syntax literally. Idempotent.
 String renderMarkers(String content) {
   final doc = _Doc(content);
   final lines = doc.lines;
@@ -343,7 +301,7 @@ final RegExp _fenceRe = RegExp(r'^\s{0,3}(`{3,}|~{3,})');
 final RegExp _inlineCodeRe = RegExp(r'`[^`]*`');
 
 RegExp _placeholderRe(String tag) =>
-    RegExp(r'\{\{' + RegExp.escape(tag) + r'(?:\|(.*?))?\}\}');
+    RegExp(r'\{\{' + RegExp.escape(tag) + r'(?:\|.*?)?\}\}');
 
 // .............................................................................
 /// Splits [content] into logical lines while remembering the dominant line
@@ -361,8 +319,7 @@ class _Doc {
     ]);
   }
 
-  /// The line ending the majority of lines use. Mixed files get normalized
-  /// to their dominant ending on render.
+  /// The majority line ending; mixed files normalize to it on render.
   static String _dominantEol(String content) {
     final crlf = '\r\n'.allMatches(content).length;
     final lf = '\n'.allMatches(content).length - crlf;
@@ -377,13 +334,8 @@ class _Doc {
 }
 
 // .............................................................................
-/// Returns a mask marking every line that belongs to a code fence (including
-/// the fence delimiter lines themselves).
-///
-/// Follows the CommonMark closing rule: a fence only closes on a run of the
-/// same character that is at least as long as the opener — so a 3-backtick
-/// line inside a 4-backtick fence is content, which lets documentation nest
-/// literal fenced examples.
+/// Masks all code-fence lines (CommonMark: closers need the same character
+/// and at least the opener's length, so longer fences nest shorter ones).
 List<bool> _fenceMask(List<String> lines) {
   final mask = List<bool>.filled(lines.length, false);
   String? fence;
@@ -405,10 +357,8 @@ List<bool> _fenceMask(List<String> lines) {
 }
 
 // .............................................................................
-/// Validates and prepares the section replacement of [block]: must start
-/// with a heading; the block's tag occupies the heading's marker slot — a
-/// missing tag is attached, a foreign tag is replaced. Returns `null` (with
-/// a warning) for invalid replacements.
+/// Prepares [block] as section replacement: must start with a heading whose
+/// marker slot receives the block's tag; `null` plus warning otherwise.
 List<String>? _sectionReplacement(
   TagBlock block,
   List<String> warnings,

@@ -7,6 +7,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:gg_dna/src/util/dna_config.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
 import 'package:test/test.dart';
 
@@ -141,6 +142,58 @@ void main() {
       } finally {
         tmp.deleteSync(recursive: true);
       }
+    });
+  });
+
+  group('DnaManifestLayer', () {
+    const config = DnaLayerConfig(
+      name: 'company',
+      git: 'gg_dna_company',
+      rawVersionConstraint: '^1.4.0',
+    );
+
+    test('fromConfig copies the raw config values', () {
+      final layer = DnaManifestLayer.fromConfig(
+        config,
+        resolvedVersion: '1.5.0',
+        resolvedTag: 'v1.5.0',
+        commit: 'abc',
+        hash: '0x01',
+      );
+      expect(layer.name, 'company');
+      expect(layer.git, 'gg_dna_company');
+      expect(layer.path, isNull);
+      expect(layer.versionConstraint, '^1.4.0');
+      expect(layer.resolvedTag, 'v1.5.0');
+    });
+
+    test('matchesConfig detects drift in any config field', () {
+      final layer = DnaManifestLayer.fromConfig(config);
+      expect(layer.matchesConfig(config), isTrue);
+      expect(
+        layer.matchesConfig(const DnaLayerConfig(name: 'x', git: 'g')),
+        isFalse,
+      );
+      expect(
+        layer.matchesConfig(const DnaLayerConfig(name: 'company', git: 'g')),
+        isFalse,
+      );
+      expect(
+        layer.matchesConfig(
+          const DnaLayerConfig(name: 'company', path: 'dna/_override'),
+        ),
+        isFalse,
+      );
+      expect(
+        layer.matchesConfig(
+          const DnaLayerConfig(
+            name: 'company',
+            git: 'gg_dna_company',
+            rawVersionConstraint: '^2.0.0',
+          ),
+        ),
+        isFalse,
+      );
     });
   });
 

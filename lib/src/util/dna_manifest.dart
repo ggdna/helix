@@ -9,12 +9,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'dna_config.dart';
 import 'dna_hash.dart';
 
-/// One layer entry in the sync manifest.
-///
-/// Stores the raw pubspec config values ([git]/[path]/[versionConstraint])
-/// so `--check` can detect config drift machine-independently, plus the
+/// One layer entry in the sync manifest: the raw pubspec config values (for
+/// machine-independent drift detection via [matchesConfig]) plus the
 /// resolution results of the last sync.
 class DnaManifestLayer {
   /// Constructor.
@@ -29,8 +28,26 @@ class DnaManifestLayer {
     this.hash,
   });
 
-  /// Restores a layer from its [toJson] representation. Fields of an
-  /// unexpected type are treated as absent.
+  /// Creates the entry for [config] plus its resolution results.
+  factory DnaManifestLayer.fromConfig(
+    DnaLayerConfig config, {
+    String? resolvedVersion,
+    String? resolvedTag,
+    String? commit,
+    String? hash,
+  }) =>
+      DnaManifestLayer(
+        name: config.name,
+        git: config.git,
+        path: config.path,
+        versionConstraint: config.rawVersionConstraint,
+        resolvedVersion: resolvedVersion,
+        resolvedTag: resolvedTag,
+        commit: commit,
+        hash: hash,
+      );
+
+  /// Restores a layer from [toJson]; fields of unexpected type are absent.
   factory DnaManifestLayer.fromJson(Map<String, dynamic> data) =>
       DnaManifestLayer(
         name: _string(data, 'name') ?? '',
@@ -67,6 +84,13 @@ class DnaManifestLayer {
   /// Content hash of the layer's dna root at sync time.
   final String? hash;
 
+  /// Whether this entry was produced by [config] (drift detection).
+  bool matchesConfig(DnaLayerConfig config) =>
+      name == config.name &&
+      git == config.git &&
+      path == config.path &&
+      versionConstraint == config.rawVersionConstraint;
+
   /// JSON representation used by [DnaManifest.write] and tests.
   Map<String, dynamic> toJson() => <String, dynamic>{
         'name': name,
@@ -80,10 +104,9 @@ class DnaManifestLayer {
       };
 }
 
-/// Sync manifest written to `<target>/dna/.dna.json` after every successful
-/// `gg_dna sync`. Stores enough information for a later `--check` to verify
-/// the target is still in sync with the source without re-doing the full
-/// file walk.
+/// Sync manifest at `<target>/dna/.dna.json` — everything a later `--check`
+/// needs to verify the target is still in sync (base and result hashes plus
+/// per-layer config and resolution data).
 class DnaManifest {
   /// Constructor.
   const DnaManifest({
@@ -93,8 +116,7 @@ class DnaManifest {
     this.hash,
   });
 
-  /// Manifest format version written by this gg_dna. [read] rejects
-  /// manifests of other versions (e.g. pre-2.0 files) by returning `null`.
+  /// Manifest format version; [read] rejects all others (e.g. pre-2.0).
   static const int formatVersion = 2;
 
   /// The layers that were merged during the last sync, in order.
@@ -106,14 +128,10 @@ class DnaManifest {
   /// Content hash of the gg_dna package's `dna/` folder at sync time.
   final String? baseHash;
 
-  /// Content hash of `<target>/dna/` after the sync (layers merged in,
-  /// markers rendered, snapshots restored).
+  /// Content hash of `<target>/dna/` after the completed sync.
   final String? hash;
 
-  /// Reads the manifest at `<dnaDir>/.dna.json`. Returns `null` when the
-  /// file does not exist, cannot be parsed as JSON, is structurally not a
-  /// manifest, or has a different format version (e.g. was written by
-  /// gg_dna 1.x).
+  /// Reads `<dnaDir>/.dna.json`; `null` when missing, invalid, or not v2.
   static DnaManifest? read(Directory dnaDir) {
     final file = File(p.join(dnaDir.path, dnaManifestFilename));
     if (!file.existsSync()) return null;
@@ -165,11 +183,7 @@ String? _string(Map<String, dynamic> data, String key) {
   return value is String ? value : null;
 }
 
-/// Returns the `version:` field from the `pubspec.yaml` at [packageRoot], or
-/// `null` when the file does not exist or no version line is present.
-///
-/// Uses a simple regex so this hot path does not need to parse the whole
-/// pubspec as YAML.
+/// Returns the pubspec `version:` at [packageRoot], `null` when absent.
 String? readPackageVersion(String packageRoot) {
   final file = File(p.join(packageRoot, 'pubspec.yaml'));
   if (!file.existsSync()) return null;

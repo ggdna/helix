@@ -283,6 +283,28 @@ void main() {
         );
       });
 
+      test('resolvePathLayer prefers the dna/ subfolder when present', () {
+        final config = DnaConfig.read(p.join(sampleRoot(), 'target'))!;
+        final project = config.layers[1];
+        final repo = config.layers[2];
+
+        // Repo-style layer: content root is the dna/ subfolder.
+        final projectRoot = resolvePathLayer(
+          p.join(sampleRoot(), 'target'),
+          project,
+        );
+        expect(p.basename(projectRoot.folder.path), 'dna_project');
+        expect(p.basename(projectRoot.content.path), 'dna');
+
+        // Direct-content layer: content root is the folder itself.
+        final repoRoot = resolvePathLayer(
+          p.join(sampleRoot(), 'target'),
+          repo,
+        );
+        expect(p.basename(repoRoot.folder.path), '_override');
+        expect(repoRoot.content.path, repoRoot.folder.path);
+      });
+
       test('accepts an exact version constraint', () {
         final config = DnaConfig.parse(
           'dna:\n'

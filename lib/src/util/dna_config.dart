@@ -10,12 +10,9 @@ import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
 import 'package:yaml/yaml.dart';
 
-/// One layer entry from the `dna:` block of a target repo's pubspec.yaml.
-///
-/// A layer is either a git layer ([git] set) or a path layer ([path] set) —
-/// never both. The raw values are kept exactly as written in the pubspec so
-/// callers can resolve them (shorthand expansion, relative paths) and so the
-/// sync manifest can detect config drift machine-independently.
+/// One layer from the pubspec `dna:` block — either git ([git] set) or
+/// path ([path] set), never both. Values are kept raw as written, so the
+/// manifest can detect config drift machine-independently.
 class DnaLayerConfig {
   /// Constructor.
   const DnaLayerConfig({
@@ -29,43 +26,38 @@ class DnaLayerConfig {
   /// Layer name as listed in `dna: order:`.
   final String name;
 
-  /// Raw `git:` value as written (git URL or `gg_*` shorthand). `null` for
-  /// path layers.
+  /// Raw `git:` value (URL or `gg_*` shorthand); `null` for path layers.
   final String? git;
 
-  /// Raw `path:` value as written (absolute, or relative to the target repo
-  /// root). `null` for git layers.
+  /// Raw `path:` value relative to the target root; `null` for git layers.
   final String? path;
 
-  /// Parsed `version:` semver constraint. Only allowed on git layers; the
-  /// highest git tag satisfying it is cloned.
+  /// Parsed `version:` constraint — the highest matching git tag is cloned.
   final VersionConstraint? versionConstraint;
 
-  /// Raw `version:` string as written in the pubspec. Stored in the manifest
-  /// for drift detection.
+  /// Raw `version:` string, stored in the manifest for drift detection.
   final String? rawVersionConstraint;
 
   /// Whether this layer is cloned from git.
   bool get isGit => git != null;
 }
 
-/// Parsed `dna:` block of a target repo's pubspec.yaml.
-///
-/// ```yaml
-/// dna:
-///   order:
-///     - dna_company
-///     - dna_repo
-///   dna_company:
-///     git: https://github.com/acme/dna_company.git
-///     version: ^1.4.0
-///   dna_repo:
-///     path: dna/_override
-/// ```
-///
-/// Layers are applied in `order` — later entries win on collisions. The
-/// gg_dna base DNA is always the implicit lowest layer and not part of this
-/// config.
+// .............................................................................
+/// The folder and content root of a path layer: content is `<path>/dna`
+/// when that subfolder exists, else the folder itself — shared by sync and
+/// `--check` so both always hash and copy the same tree.
+({Directory folder, Directory content}) resolvePathLayer(
+  String targetRoot,
+  DnaLayerConfig layer,
+) {
+  final folder = Directory(p.normalize(p.join(targetRoot, layer.path!)));
+  final dnaSub = Directory(p.join(folder.path, 'dna'));
+  return (folder: folder, content: dnaSub.existsSync() ? dnaSub : folder);
+}
+
+/// Parsed `dna:` block of a target repo's pubspec.yaml: the ordered layer
+/// list (later layers win; the gg_dna base DNA is the implicit lowest
+/// layer) plus non-fatal warnings.
 class DnaConfig {
   /// Constructor.
   const DnaConfig({required this.layers, required this.warnings});
@@ -76,26 +68,15 @@ class DnaConfig {
   /// Non-fatal findings, e.g. configured layers missing from `order`.
   final List<String> warnings;
 
-  /// Reads the `dna:` block from `<targetRoot>/pubspec.yaml`.
-  ///
-  /// Returns `null` when the pubspec or the `dna:` key is absent. Throws a
-  /// [FormatException] when the pubspec is not valid YAML or the `dna:`
-  /// block is invalid (see [parse] for the validation rules).
+  /// Reads the `dna:` block from `<targetRoot>/pubspec.yaml` via [parse].
   static DnaConfig? read(String targetRoot) {
     final file = File(p.join(targetRoot, 'pubspec.yaml'));
     if (!file.existsSync()) return null;
     return parse(file.readAsStringSync());
   }
 
-  /// Parses the `dna:` block from an already-loaded pubspec YAML string.
-  ///
-  /// Returns `null` when no `dna:` key is present. Throws [FormatException]
-  /// when the config is invalid:
-  ///   - `dna:` is not a map, `order:` is not a list of strings
-  ///   - duplicate names in `order`
-  ///   - a name in `order` has no configuration map
-  ///   - a layer has both `git:` and `path:`, or neither
-  ///   - `version:` on a path layer, or an unparsable `version:` constraint
+  /// Parses a pubspec string — `null` without `dna:`, [FormatException]
+  /// on any invalid config (types, duplicates, git/path/version rules).
   static DnaConfig? parse(String pubspecContent) {
     final Object? doc;
     try {

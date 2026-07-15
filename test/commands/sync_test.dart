@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:gg_dna/src/commands/apply_conventions.dart';
 import 'package:gg_dna/src/commands/sync.dart';
+import 'package:gg_dna/src/util/copy_directory.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -397,6 +398,35 @@ void main() {
           Directory(p.join(target.path, 'dna')),
         );
         expect(manifest!.layers.single.name, 'layer');
+      });
+
+      test('in-dna layers may use a repo-style dna/ subfolder', () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
+        writeFile(
+          p.join(target.path, 'dna', '_override', 'dna', 'guides', 'a.md'),
+          'OVERRIDE',
+        );
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - repo\n'
+          '  repo:\n'
+          '    path: dna/_override\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'OVERRIDE',
+        );
+        // The layer source survived verbatim.
+        expect(
+          File(
+            p.join(target.path, 'dna', '_override', 'dna', 'guides', 'a.md'),
+          ).existsSync(),
+          isTrue,
+        );
       });
 
       test('removes stale staging and backup folders of interrupted syncs',
@@ -841,14 +871,14 @@ void main() {
       /// dna_company as a real local git repo with tags, dna_project as a
       /// path layer, and the target repo with its dna/_override layer.
       Future<void> setUpSampleWorkspace() async {
-        Sync.copyDirectory(
+        copyDirectory(
           Directory(p.join(sampleRoot(), 'base_pkg')),
           pkgRoot,
         );
         companyRepo = copySampleTo('dna_company', tmp);
         await initGitRepoWithTags(companyRepo, ['1.4.0', 'v1.5.0', 'latest']);
         copySampleTo('dna_project', tmp);
-        Sync.copyDirectory(
+        copyDirectory(
           Directory(p.join(sampleRoot(), 'target')),
           target,
         );
@@ -1240,7 +1270,10 @@ void main() {
           ),
           throwsA(isA<Exception>()),
         );
-        expect(messages.any((m) => m.contains('anymore')), isTrue);
+        expect(
+          messages.any((m) => m.contains('no tag satisfies')),
+          isTrue,
+        );
       });
 
       test('checks unconstrained git layers against remote HEAD', () async {

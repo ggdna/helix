@@ -12,6 +12,7 @@ import 'package:gg_log/gg_log.dart';
 import 'package:interact/interact.dart' as interact;
 import 'package:path/path.dart' as p;
 
+import '../util/copy_directory.dart';
 import '../util/dna_config.dart';
 import '../util/dna_hash.dart';
 import '../util/dna_manifest.dart';
@@ -23,58 +24,31 @@ import 'install_skills.dart';
 /// Returns the directory the `gg_dna` package is installed in.
 typedef PackageRootResolver = Future<String> Function();
 
-/// Asks the user a yes/no question represented by [prompt] and returns `true`
-/// for "yes". Used by [Sync] to decide which skills / conventions to install.
+/// Asks the yes/no question [prompt]; `true` means "yes".
 typedef YesNoSelector = bool Function(String prompt);
 
-/// Clones the git repo at [url] into [dest], optionally checking out [ref]
-/// (a tag or branch). Used by [Sync] for git layers. Injected so tests can
-/// stub the network call.
+/// Clones [url] into [dest], optionally checking out the tag/branch [ref].
 typedef GitCloner = Future<void> Function(
   String url,
   Directory dest, {
   String? ref,
 });
 
-/// Reads the current commit SHA of the git repository at [dir]. Used by
-/// [Sync] after a clone to capture the layer's exact revision. Returns
-/// `null` when the directory is not a git repo.
+/// Reads the HEAD commit SHA of the repo at [dir]; `null` outside a repo.
 typedef GitRevParse = Future<String?> Function(Directory dir);
 
-/// Resolves the remote HEAD commit SHA of the git repo at [url] without
-/// cloning. Used by [Sync] during `--check` for unconstrained git layers.
+/// Resolves the remote HEAD SHA of [url] without cloning; `null` on failure.
 typedef GitLsRemote = Future<String?> Function(String url);
 
-/// Lists the tags of the git repo at [url] without cloning, as a map from
-/// tag name to commit SHA (peeled SHAs preferred). Returns `null` on
-/// failure. Used by [Sync] to resolve `version:` constraints of git layers.
+/// Lists the tags of [url] as name -> SHA (peeled); `null` on failure.
 typedef GitLsRemoteTags = Future<Map<String, String>?> Function(String url);
 
-/// Mirrors the `dna/` folder shipped with `gg_dna` into the consuming
-/// repository and merges the DNA layers configured in the target's
-/// pubspec.yaml `dna:` block on top — later layers win on path collisions.
-///
-/// Layers can override whole files, or single sections / strings of `.md`
-/// files via `X.tag.md` override files (see the md_tags library). After the
-/// merge all tag markers are rendered away; `.tag.md` files are consumed
-/// and never copied into the target.
-///
-/// After the copy, the command offers — per skill and per convention — to
-/// install them into the project's `.claude/` folder via [InstallSkills]
-/// and [ApplyConventions].
+/// Mirrors the gg_dna `dna/` folder into the target, merges the DNA layers
+/// of the target pubspec's `dna:` block on top (later layers win, `X.tag.md`
+/// files patch sections/strings), then offers to install the synced skills
+/// and conventions. All git and prompt access is injectable for tests.
 class Sync extends Command<dynamic> {
   /// Constructor.
-  ///
-  /// [packageRootResolver] is the source of truth for the gg_dna content;
-  /// the default resolves it via [Isolate.resolvePackageUri] so the command
-  /// works both inside the gg_dna repo *and* from a consumer that has
-  /// gg_dna in its pub cache.
-  ///
-  /// [selector] is used for the interactive yes/no prompts. The default
-  /// renders an [interact.Select] with two options ("yes"/"no").
-  ///
-  /// [gitCloner], [gitRevParse], [gitLsRemote], and [gitLsRemoteTags] wrap
-  /// the git binary and are injectable for tests.
   Sync({
     required this.ggLog,
     PackageRootResolver? packageRootResolver,
@@ -126,12 +100,10 @@ class Sync extends Command<dynamic> {
   final GitLsRemote _gitLsRemote;
   final GitLsRemoteTags _gitLsRemoteTags;
 
-  /// Subdirectory inside `<target>/dna/agents/skills` discovered for the
-  /// install-skills prompt phase.
+  /// Skills folder scanned for the install-skills prompt phase.
   static const String _dnaSkillsRel = 'dna/agents/skills';
 
-  /// Subdirectory inside `<target>/dna/agents/conventions` discovered for
-  /// the apply-conventions prompt phase.
+  /// Conventions folder scanned for the apply-conventions prompt phase.
   static const String _dnaConventionsRel = 'dna/agents/conventions';
 
   @override
@@ -222,88 +194,30 @@ class Sync extends Command<dynamic> {
       ggLog('No dna: config found in pubspec.yaml — base sync only.');
     }
 
-    // Resolve ALL layers first, then build the complete new dna tree in a
-    // staging folder. The target dna/ stays untouched until the final
-    // rename swap, so no error along the way can destroy existing content —
-    // in particular not an in-dna override layer like dna/_override.
+    // Resolve all layers up front and in parallel — any error (unreachable
+    // remote, unsatisfiable constraint, missing path) leaves the target
+    // untouched; temps of already resolved layers are cleaned up.
     final resolved = <_ResolvedLayer>[];
     try {
-      for (final layer in config?.layers ?? const <DnaLayerConfig>[]) {
-        resolved.add(await _resolveLayer(layer, target, dnaDir));
-      }
-
-      // Leftovers of an earlier interrupted sync.
-      if (staging.existsSync()) {
-        staging.deleteSync(recursive: true);
-      }
-      if (backup.existsSync()) {
-        backup.deleteSync(recursive: true);
-      }
-
-      // The base is layer 0 and follows the same rules as every layer.
-      _applyLayerContent('base', sourceDna, staging);
-      final baseHash = hashDnaDirectory(sourceDna);
-
-      for (final layer in resolved) {
-        _applyLayerContent(layer.config.name, layer.contentRoot, staging);
-        ggLog('Applied layer "${layer.config.name}".');
-      }
-
-      // Render all markers away, then restore in-dna layer sources
-      // verbatim — their markers must survive for the next sync.
-      _renderAll(staging);
-      for (final layer in resolved) {
-        if (layer.restoreRel == null) continue;
-        final dest = Directory(p.join(staging.path, layer.restoreRel!));
-        if (dest.existsSync()) {
-          dest.deleteSync(recursive: true);
-        }
-        copyDirectory(layer.snapshotRoot!, dest);
-      }
-
-      // The final hash MUST be computed after the snapshot restore —
-      // otherwise the very next `--check` would report a mismatch. It is
-      // computed on staging, but only relative paths enter the hash, so it
-      // equals the post-swap hash of <target>/dna.
-      final manifest = DnaManifest(
-        layers: [
-          for (final layer in resolved)
-            DnaManifestLayer(
-              name: layer.config.name,
-              git: layer.config.git,
-              path: layer.config.path,
-              versionConstraint: layer.config.rawVersionConstraint,
-              resolvedVersion: layer.resolvedTag?.version.toString(),
-              resolvedTag: layer.resolvedTag?.tag,
-              commit: layer.commit,
-              hash: layer.hash,
-            ),
-        ],
-        baseVersion: readPackageVersion(packageRoot),
-        baseHash: baseHash,
-        hash: hashDnaDirectory(staging),
+      resolved.addAll(
+        await Future.wait(
+          [
+            for (final layer in config?.layers ?? const <DnaLayerConfig>[])
+              _resolveLayer(layer, target, dnaDir),
+          ],
+          cleanUp: _cleanupLayer,
+        ),
       );
-      manifest.write(staging);
-
-      // Swap the fully built tree into place. The two renames are the only
-      // destructive moment; if the second one fails, the previous dna/
-      // still exists as the backup folder — nothing is ever lost.
-      if (dnaDir.existsSync()) {
-        dnaDir.renameSync(backup.path);
-      }
-      staging.renameSync(dnaDir.path);
-      if (backup.existsSync()) {
-        backup.deleteSync(recursive: true);
-      }
-      ggLog('Synced ${sourceDna.path} -> ${dnaDir.path}.');
-      ggLog('Wrote ${p.join(dnaDir.path, dnaManifestFilename)}.');
+      _buildAndSwap(
+        sourceDna: sourceDna,
+        dnaDir: dnaDir,
+        staging: staging,
+        backup: backup,
+        resolved: resolved,
+        packageRoot: packageRoot,
+      );
     } finally {
-      for (final layer in resolved) {
-        final cleanup = layer.cleanup;
-        if (cleanup != null && cleanup.existsSync()) {
-          cleanup.deleteSync(recursive: true);
-        }
-      }
+      resolved.forEach(_cleanupLayer);
       // A failed build leaves the staging folder behind — remove it. After
       // a successful swap it no longer exists.
       if (staging.existsSync()) {
@@ -323,34 +237,7 @@ class Sync extends Command<dynamic> {
   // Public helpers (also used by tests)
   // ===========================================================================
 
-  /// Recursively copies the contents of [source] into [target]. Existing
-  /// files in [target] at colliding relative paths are overwritten; files
-  /// that exist only in [target] are kept (overlay semantics).
-  static void copyDirectory(Directory source, Directory target) {
-    target.createSync(recursive: true);
-    for (final entity in source.listSync(recursive: true, followLinks: false)) {
-      final relative = p.relative(entity.path, from: source.path);
-      final targetPath = p.join(target.path, relative);
-      if (entity is Directory) {
-        Directory(targetPath).createSync(recursive: true);
-      } else if (entity is File) {
-        Directory(p.dirname(targetPath)).createSync(recursive: true);
-        entity.copySync(targetPath);
-      }
-    }
-  }
-
-  /// Expands a bare `gg_*` repo shorthand to its canonical github URL.
-  ///
-  /// Returns `https://github.com/ggsuite/<name>.git` when [arg] looks like a
-  /// `gg_*` repo name (e.g. `gg_dna_ggsuite` or `gg_dna_ggsuite.git`).
-  /// Returns `null` otherwise.
-  ///
-  /// The shape must be a bare name: it must start with `gg_`, may only
-  /// contain word characters, dots, or hyphens after that, and must not
-  /// contain slashes, colons, `@`, or whitespace (so real paths and URLs
-  /// are never misclassified as a shorthand). A trailing `.git` is
-  /// stripped before the URL is built, so callers can write either form.
+  /// Expands bare `gg_*` names to ggsuite github URLs; `null` otherwise.
   static String? expandShorthand(String arg) {
     final name = arg.endsWith('.git') ? arg.substring(0, arg.length - 4) : arg;
     if (!RegExp(r'^gg_[A-Za-z0-9._-]+$').hasMatch(name)) return null;
@@ -376,9 +263,88 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Resolves a configured layer to a local content root. Git layers are
-  /// cloned to a temp dir; local path layers inside `<target>/dna` are
-  /// snapshotted to a temp dir so the swap can restore them verbatim.
+  /// Deletes the temp clone/snapshot of [layer], if any.
+  static void _cleanupLayer(_ResolvedLayer layer) {
+    final cleanup = layer.cleanup;
+    if (cleanup != null && cleanup.existsSync()) {
+      cleanup.deleteSync(recursive: true);
+    }
+  }
+
+  // ...........................................................................
+  /// Builds the merged dna tree in [staging] and rename-swaps it into place.
+  void _buildAndSwap({
+    required Directory sourceDna,
+    required Directory dnaDir,
+    required Directory staging,
+    required Directory backup,
+    required List<_ResolvedLayer> resolved,
+    required String packageRoot,
+  }) {
+    // Leftovers of an earlier interrupted sync.
+    if (staging.existsSync()) {
+      staging.deleteSync(recursive: true);
+    }
+    if (backup.existsSync()) {
+      backup.deleteSync(recursive: true);
+    }
+
+    // The base is layer 0 and follows the same rules as every layer.
+    _applyLayerContent('base', sourceDna, staging);
+    final baseHash = hashDnaDirectory(sourceDna);
+
+    for (final layer in resolved) {
+      _applyLayerContent(layer.config.name, layer.contentRoot, staging);
+      ggLog('Applied layer "${layer.config.name}".');
+    }
+
+    // Render all markers away, then restore in-dna layer sources verbatim —
+    // their markers must survive for the next sync.
+    _renderAll(staging);
+    for (final layer in resolved) {
+      if (layer.restoreRel == null) continue;
+      final dest = Directory(p.join(staging.path, layer.restoreRel!));
+      if (dest.existsSync()) {
+        dest.deleteSync(recursive: true);
+      }
+      copyDirectory(layer.cleanup!, dest);
+    }
+
+    // The final hash MUST be computed after the snapshot restore — only
+    // relative paths enter it, so staging and post-swap dna/ agree.
+    final manifest = DnaManifest(
+      layers: [
+        for (final layer in resolved)
+          DnaManifestLayer.fromConfig(
+            layer.config,
+            resolvedVersion: layer.resolvedTag?.version.toString(),
+            resolvedTag: layer.resolvedTag?.tag,
+            commit: layer.commit,
+            hash: layer.hash,
+          ),
+      ],
+      baseVersion: readPackageVersion(packageRoot),
+      baseHash: baseHash,
+      hash: hashDnaDirectory(staging),
+    );
+    manifest.write(staging);
+
+    // Swap the fully built tree into place. The two renames are the only
+    // destructive moment; if the second one fails, the previous dna/ still
+    // exists as the backup folder — nothing is ever lost.
+    if (dnaDir.existsSync()) {
+      dnaDir.renameSync(backup.path);
+    }
+    staging.renameSync(dnaDir.path);
+    if (backup.existsSync()) {
+      backup.deleteSync(recursive: true);
+    }
+    ggLog('Synced ${sourceDna.path} -> ${dnaDir.path}.');
+    ggLog('Wrote ${p.join(dnaDir.path, dnaManifestFilename)}.');
+  }
+
+  // ...........................................................................
+  /// Resolves a layer to a local content root (clone or snapshot temp).
   Future<_ResolvedLayer> _resolveLayer(
     DnaLayerConfig config,
     Directory target,
@@ -388,42 +354,41 @@ class Sync extends Command<dynamic> {
       return _resolveGitLayer(config);
     }
 
-    final abs = Directory(p.normalize(p.join(target.path, config.path!)));
-    if (!abs.existsSync()) {
+    final resolved = resolvePathLayer(target.path, config);
+    final folder = resolved.folder;
+    if (!folder.existsSync()) {
       throw Exception(
-        'Layer "${config.name}": path does not exist: ${abs.path}',
+        'Layer "${config.name}": path does not exist: ${folder.path}',
       );
     }
-    final dnaSub = Directory(p.join(abs.path, 'dna'));
-    final contentSource = dnaSub.existsSync() ? dnaSub : abs;
-    if (p.equals(abs.path, dnaDir.path) ||
-        p.equals(contentSource.path, dnaDir.path)) {
+    if (p.equals(folder.path, dnaDir.path) ||
+        p.equals(resolved.content.path, dnaDir.path)) {
       throw Exception(
         'Layer "${config.name}" must not point at <target>/dna itself.',
       );
     }
 
-    if (p.isWithin(dnaDir.path, abs.path)) {
+    if (p.isWithin(dnaDir.path, folder.path)) {
       // The layer source lives inside the folder that gets replaced —
       // snapshot it now so the new tree can carry it over verbatim.
       final tmp = Directory.systemTemp.createTempSync('gg_dna_layer_');
-      copyDirectory(abs, tmp);
-      final tmpContent =
-          dnaSub.existsSync() ? Directory(p.join(tmp.path, 'dna')) : tmp;
+      copyDirectory(folder, tmp);
+      final tmpContent = p.equals(resolved.content.path, folder.path)
+          ? tmp
+          : Directory(p.join(tmp.path, 'dna'));
       return _ResolvedLayer(
         config: config,
         contentRoot: tmpContent,
         cleanup: tmp,
-        snapshotRoot: tmp,
-        restoreRel: p.relative(abs.path, from: dnaDir.path),
-        hash: hashDnaDirectory(contentSource),
+        restoreRel: p.relative(folder.path, from: dnaDir.path),
+        hash: hashDnaDirectory(resolved.content),
       );
     }
 
     return _ResolvedLayer(
       config: config,
-      contentRoot: contentSource,
-      hash: hashDnaDirectory(contentSource),
+      contentRoot: resolved.content,
+      hash: hashDnaDirectory(resolved.content),
     );
   }
 
@@ -433,24 +398,14 @@ class Sync extends Command<dynamic> {
 
     ResolvedTag? resolvedTag;
     if (config.versionConstraint != null) {
-      final tags = await _gitLsRemoteTags(url);
-      if (tags == null) {
-        throw Exception(
-          'Layer "${config.name}": cannot list tags of $url',
-        );
+      final result = await _resolveConstraint(config, url);
+      if (result.problem != null) {
+        throw Exception('Layer "${config.name}": ${result.problem}');
       }
-      resolvedTag = resolveTagForConstraint(tags, config.versionConstraint!);
-      if (resolvedTag == null) {
-        final available = semverVersionsOf(tags.keys);
-        throw Exception(
-          'Layer "${config.name}": no tag satisfies '
-          '"${config.rawVersionConstraint}". Available versions: '
-          '${available.isEmpty ? '(none)' : available.join(', ')}',
-        );
-      }
+      resolvedTag = result.tag;
       ggLog(
         'Layer "${config.name}": ${config.rawVersionConstraint} '
-        '-> ${resolvedTag.tag}',
+        '-> ${resolvedTag!.tag}',
       );
     }
 
@@ -481,6 +436,30 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
+  /// Resolves the constraint of [config] against the tags of [url];
+  /// exactly one of `tag` and `problem` is set (shared by sync and check).
+  Future<({ResolvedTag? tag, String? problem})> _resolveConstraint(
+    DnaLayerConfig config,
+    String url,
+  ) async {
+    final tags = await _gitLsRemoteTags(url);
+    if (tags == null) {
+      return (tag: null, problem: 'cannot list tags of $url');
+    }
+    final resolved = resolveTagForConstraint(tags, config.versionConstraint!);
+    if (resolved == null) {
+      final available = semverVersionsOf(tags.keys);
+      return (
+        tag: null,
+        problem: 'no tag satisfies "${config.rawVersionConstraint}". '
+            'Available versions: '
+            '${available.isEmpty ? '(none)' : available.join(', ')}',
+      );
+    }
+    return (tag: resolved, problem: null);
+  }
+
+  // ...........................................................................
   /// Expands `gg_*` shorthands in the `git:` value of [config].
   String _gitUrlOf(DnaLayerConfig config) {
     final shorthand = expandShorthand(config.git!);
@@ -492,29 +471,22 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Applies one layer's content to [dnaDir]: full files are copied
-  /// (`.tag.md` files, a layer-root `.dna.json`, and `.git/` are skipped),
-  /// then the layer's `.tag.md` files patch the current merged state.
+  /// Copies one layer into [dnaDir], then applies its `.tag.md` patches.
   void _applyLayerContent(String name, Directory root, Directory dnaDir) {
-    dnaDir.createSync(recursive: true);
+    // Copy all dna content; collect the tag files instead of copying them.
     final tagFiles = <String>[];
-    for (final entity in root.listSync(recursive: true, followLinks: false)) {
-      final relative = p.relative(entity.path, from: root.path);
-      final rel = relative.replaceAll('\\', '/');
-      if (rel == '.git' || rel.startsWith('.git/')) continue;
-      if (entity is Directory) {
-        Directory(p.join(dnaDir.path, relative)).createSync(recursive: true);
-      } else if (entity is File) {
-        if (rel == dnaManifestFilename) continue;
+    copyDirectory(
+      root,
+      dnaDir,
+      skip: (rel) {
+        if (!isDnaContent(rel)) return true;
         if (rel.endsWith(tagFileSuffix)) {
           tagFiles.add(rel);
-          continue;
+          return true;
         }
-        final targetPath = p.join(dnaDir.path, relative);
-        Directory(p.dirname(targetPath)).createSync(recursive: true);
-        entity.copySync(targetPath);
-      }
-    }
+        return false;
+      },
+    );
     tagFiles.sort();
 
     for (final rel in tagFiles) {
@@ -601,15 +573,22 @@ class Sync extends Command<dynamic> {
 
     // 3) Config drift: the pubspec dna: block must match the manifest.
     final layers = config?.layers ?? const <DnaLayerConfig>[];
-    if (!_sameLayerConfig(layers, manifest.layers)) {
+    final drifted = layers.length != manifest.layers.length ||
+        [
+          for (var i = 0; i < layers.length; i++)
+            manifest.layers[i].matchesConfig(layers[i]),
+        ].contains(false);
+    if (drifted) {
       problems.add(
         'dna: config in pubspec.yaml changed since last sync',
       );
     } else {
-      // 4) Per-layer freshness.
-      for (var i = 0; i < layers.length; i++) {
-        await _checkLayer(layers[i], manifest.layers[i], dest, problems);
-      }
+      // 4) Per-layer freshness, checked in parallel.
+      final layerProblems = await Future.wait([
+        for (var i = 0; i < layers.length; i++)
+          _checkLayer(layers[i], manifest.layers[i], dest),
+      ]);
+      problems.addAll(layerProblems.expand((list) => list));
     }
 
     if (problems.isEmpty) {
@@ -624,84 +603,53 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  Future<void> _checkLayer(
+  /// Returns the freshness problems of one layer (empty when up to date).
+  Future<List<String>> _checkLayer(
     DnaLayerConfig config,
     DnaManifestLayer stored,
     Directory dest,
-    List<String> problems,
   ) async {
     if (config.isGit) {
       final url = _gitUrlOf(config);
       if (config.versionConstraint != null) {
-        final tags = await _gitLsRemoteTags(url);
-        if (tags == null) {
-          problems.add('cannot list tags of layer "${config.name}": $url');
-          return;
+        final result = await _resolveConstraint(config, url);
+        if (result.problem != null) {
+          return ['layer "${config.name}": ${result.problem}'];
         }
-        final now = resolveTagForConstraint(tags, config.versionConstraint!);
-        if (now == null) {
-          problems.add(
-            'no tag of layer "${config.name}" satisfies '
-            '"${config.rawVersionConstraint}" anymore',
-          );
-        } else if (now.version.toString() != stored.resolvedVersion ||
+        final now = result.tag!;
+        if (now.version.toString() != stored.resolvedVersion ||
             now.sha != stored.commit) {
-          problems.add(
+          return [
             'layer "${config.name}" has a new matching version '
-            '(${stored.resolvedVersion} -> ${now.version})',
-          );
+                '(${stored.resolvedVersion} -> ${now.version})',
+          ];
         }
-        return;
+        return const [];
       }
       final sha = await _gitLsRemote(url);
       if (sha == null) {
-        problems.add(
-          'cannot resolve remote HEAD of layer "${config.name}": $url',
-        );
-      } else if (sha != stored.commit) {
-        problems.add(
+        return ['cannot resolve remote HEAD of layer "${config.name}": $url'];
+      }
+      if (sha != stored.commit) {
+        return [
           'layer "${config.name}" has new commits '
-          '(${stored.commit} -> $sha)',
-        );
+              '(${stored.commit} -> $sha)',
+        ];
       }
-      return;
+      return const [];
     }
 
-    final abs = Directory(p.normalize(p.join(dest.parent.path, config.path!)));
-    if (!abs.existsSync()) {
-      problems.add(
-        'layer "${config.name}" path no longer exists: ${config.path}',
-      );
-      return;
+    final resolved = resolvePathLayer(dest.parent.path, config);
+    if (!resolved.folder.existsSync()) {
+      return ['layer "${config.name}" path no longer exists: ${config.path}'];
     }
-    final dnaSub = Directory(p.join(abs.path, 'dna'));
-    final root = dnaSub.existsSync() ? dnaSub : abs;
-    final hashNow = hashDnaDirectory(root);
+    final hashNow = hashDnaDirectory(resolved.content);
     if (hashNow != stored.hash) {
-      problems.add(
-        'layer "${config.name}" has changed '
-        '(${stored.hash} -> $hashNow)',
-      );
+      return [
+        'layer "${config.name}" has changed (${stored.hash} -> $hashNow)',
+      ];
     }
-  }
-
-  // ...........................................................................
-  static bool _sameLayerConfig(
-    List<DnaLayerConfig> config,
-    List<DnaManifestLayer> stored,
-  ) {
-    if (config.length != stored.length) return false;
-    for (var i = 0; i < config.length; i++) {
-      final a = config[i];
-      final b = stored[i];
-      if (a.name != b.name ||
-          a.git != b.git ||
-          a.path != b.path ||
-          a.rawVersionConstraint != b.versionConstraint) {
-        return false;
-      }
-    }
-    return true;
+    return const [];
   }
 
   // ...........................................................................
@@ -783,9 +731,7 @@ class Sync extends Command<dynamic> {
   }
 
   // coverage:ignore-start
-  /// Resolves the gg_dna package root via [Isolate.resolvePackageUri] so the
-  /// command works both when run from inside the gg_dna repo *and* from a
-  /// consuming repo where gg_dna sits in the pub cache.
+  /// Resolves the gg_dna package root (works from repo and pub cache).
   static Future<String> _defaultPackageRoot() async {
     final libUri = await Isolate.resolvePackageUri(
       Uri.parse('package:gg_dna/gg_dna.dart'),
@@ -813,25 +759,24 @@ class Sync extends Command<dynamic> {
     return choice == 0;
   }
 
-  /// Default git cloner: shells out to
-  /// `git clone --depth 1 [--branch <ref>] <url> <dest>`.
+  /// Runs git with [args]; shared plumbing of the default git wrappers.
+  static Future<ProcessResult> _git(List<String> args) =>
+      Process.run('git', args, runInShell: true);
+
+  /// Default cloner: `git clone --depth 1 [--branch <ref>] <url> <dest>`.
   static Future<void> _defaultGitCloner(
     String url,
     Directory dest, {
     String? ref,
   }) async {
-    final result = await Process.run(
-      'git',
-      [
-        'clone',
-        '--depth',
-        '1',
-        if (ref != null) ...['--branch', ref],
-        url,
-        dest.path,
-      ],
-      runInShell: true,
-    );
+    final result = await _git([
+      'clone',
+      '--depth',
+      '1',
+      if (ref != null) ...['--branch', ref],
+      url,
+      dest.path,
+    ]);
     if (result.exitCode != 0) {
       throw Exception(
         'git clone failed (exit ${result.exitCode}): ${result.stderr}',
@@ -839,27 +784,17 @@ class Sync extends Command<dynamic> {
     }
   }
 
-  /// Default `git rev-parse HEAD` inside [dir]. Returns the SHA, or `null`
-  /// when the call fails (e.g. the directory is not a git repo).
+  /// Default `git rev-parse HEAD` inside [dir]; `null` on failure.
   static Future<String?> _defaultGitRevParse(Directory dir) async {
-    final result = await Process.run(
-      'git',
-      ['-C', dir.path, 'rev-parse', 'HEAD'],
-      runInShell: true,
-    );
+    final result = await _git(['-C', dir.path, 'rev-parse', 'HEAD']);
     if (result.exitCode != 0) return null;
     final sha = (result.stdout as String).trim();
     return sha.isEmpty ? null : sha;
   }
 
-  /// Default `git ls-remote <url> HEAD`. Returns the SHA, or `null` on
-  /// failure (network error, unauthenticated, etc.).
+  /// Default `git ls-remote <url> HEAD`; `null` on failure.
   static Future<String?> _defaultGitLsRemote(String url) async {
-    final result = await Process.run(
-      'git',
-      ['ls-remote', url, 'HEAD'],
-      runInShell: true,
-    );
+    final result = await _git(['ls-remote', url, 'HEAD']);
     if (result.exitCode != 0) return null;
     final out = (result.stdout as String).trim();
     if (out.isEmpty) return null;
@@ -868,16 +803,11 @@ class Sync extends Command<dynamic> {
     return firstToken.isEmpty ? null : firstToken;
   }
 
-  /// Default `git ls-remote --tags <url>`. Returns tag name -> SHA (peeled
-  /// preferred), or `null` on failure.
+  /// Default `git ls-remote --tags <url>`; `null` on failure.
   static Future<Map<String, String>?> _defaultGitLsRemoteTags(
     String url,
   ) async {
-    final result = await Process.run(
-      'git',
-      ['ls-remote', '--tags', url],
-      runInShell: true,
-    );
+    final result = await _git(['ls-remote', '--tags', url]);
     if (result.exitCode != 0) return null;
     return parseLsRemoteTags(result.stdout as String);
   }
@@ -891,7 +821,6 @@ class _ResolvedLayer {
     required this.config,
     required this.contentRoot,
     this.cleanup,
-    this.snapshotRoot,
     this.restoreRel,
     this.commit,
     this.resolvedTag,
@@ -904,21 +833,16 @@ class _ResolvedLayer {
   /// The folder whose content gets merged into `<target>/dna`.
   final Directory contentRoot;
 
-  /// Temp folder (clone or snapshot) to delete after the sync.
+  /// Temp clone or snapshot to delete after the sync.
   final Directory? cleanup;
 
-  /// Snapshot of the original layer folder — carried over verbatim to
-  /// [restoreRel] in the new tree (for layers living inside `<target>/dna`).
-  final Directory? snapshotRoot;
-
-  /// Path relative to `<target>/dna` the snapshot gets restored to, or
-  /// `null`.
+  /// Where under `<target>/dna` the snapshot in [cleanup] gets restored.
   final String? restoreRel;
 
-  /// Commit SHA of the cloned layer. `null` for path layers.
+  /// Commit SHA of the cloned layer; `null` for path layers.
   final String? commit;
 
-  /// The tag a `version:` constraint resolved to. `null` otherwise.
+  /// The tag a `version:` constraint resolved to; `null` otherwise.
   final ResolvedTag? resolvedTag;
 
   /// Content hash of the layer's dna root at resolve time.

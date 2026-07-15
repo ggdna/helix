@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:gg_hash/gg_hash.dart';
 import 'package:path/path.dart' as p;
@@ -13,21 +14,16 @@ import 'package:path/path.dart' as p;
 /// Filename that holds the sync manifest inside `<target>/dna/`.
 const String dnaManifestFilename = '.dna.json';
 
-/// Computes a stable content hash for the directory tree at [dir].
-///
-/// The hash combines, for every regular file under [dir] (recursive, sorted
-/// by relative path with forward slashes), the relative path bytes and the
-/// file bytes via [fnv1].
-///
-/// The manifest file [dnaManifestFilename] at the root of [dir] and a root
-/// `.git/` folder are **always excluded** — the manifest so it can store
-/// the hash without becoming circular, `.git/` because it never becomes
-/// part of a sync but changes with every git operation.
-///
-/// File bytes are hashed with `\r\n` normalized to `\n`, so checkouts with
-/// differing line-ending configs (git autocrlf) do not drift apart.
-///
-/// Returns `null` when [dir] does not exist.
+// .............................................................................
+/// Whether the relative posix path [rel] counts as dna content — the root
+/// manifest and `.git/` never do, so hashing and copying agree on scope.
+bool isDnaContent(String rel) =>
+    rel != dnaManifestFilename && rel != '.git' && !rel.startsWith('.git/');
+
+// .............................................................................
+/// Stable [fnv1] hash over paths and bytes of all dna content files in
+/// [dir] — sorted, EOL-normalized (`\r\n` == `\n`), `null` if [dir] is
+/// missing. Only content per [isDnaContent] enters the hash.
 String? hashDnaDirectory(Directory dir) {
   if (!dir.existsSync()) return null;
   final base = dir.absolute.path;
@@ -35,8 +31,7 @@ String? hashDnaDirectory(Directory dir) {
   for (final entity in dir.listSync(recursive: true, followLinks: false)) {
     if (entity is! File) continue;
     final rel = p.relative(entity.path, from: base).replaceAll('\\', '/');
-    if (rel == dnaManifestFilename) continue;
-    if (rel.startsWith('.git/')) continue;
+    if (!isDnaContent(rel)) continue;
     entries.add((rel, entity));
   }
   entries.sort((a, b) => a.$1.compareTo(b.$1));
@@ -52,8 +47,11 @@ String? hashDnaDirectory(Directory dir) {
   return _toHex(folded);
 }
 
-/// Replaces every `\r\n` byte pair with `\n`.
-List<int> _normalizeEol(List<int> bytes) {
+// .............................................................................
+/// Replaces every `\r\n` byte pair with `\n` ([fnv1] hashes [Uint8List]
+/// chunked, so both paths must return the same representation).
+Uint8List _normalizeEol(Uint8List bytes) {
+  if (!bytes.contains(13)) return bytes;
   final result = <int>[];
   for (var i = 0; i < bytes.length; i++) {
     if (bytes[i] == 13 && i + 1 < bytes.length && bytes[i + 1] == 10) {
@@ -61,7 +59,7 @@ List<int> _normalizeEol(List<int> bytes) {
     }
     result.add(bytes[i]);
   }
-  return result;
+  return Uint8List.fromList(result);
 }
 
 String _toHex(int value) {

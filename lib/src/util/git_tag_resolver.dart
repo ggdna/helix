@@ -18,21 +18,16 @@ class ResolvedTag {
   /// The normalized semver version, e.g. `1.4.0`.
   final Version version;
 
-  /// The original tag name, e.g. `v1.4.0` — this is what gets passed to
-  /// `git clone --branch`.
+  /// The original tag name (e.g. `v1.4.0`), used for `git clone --branch`.
   final String tag;
 
   /// The commit SHA the tag points at (peeled for annotated tags).
   final String sha;
 }
 
-/// Picks the highest tag satisfying [constraint] from [tags].
-///
-/// [tags] maps tag names to commit SHAs (peeled SHAs preferred, see
-/// [parseLsRemoteTags]). Tag names may carry a leading `v` (`v1.4.0` and
-/// `1.4.0` are both accepted); tags that do not parse as semver are ignored.
-/// When two tags resolve to the same version, the plain name wins over the
-/// `v`-prefixed one. Returns `null` when no tag satisfies the constraint.
+/// Picks the highest tag of [tags] (name -> SHA, `v` prefix and plain both
+/// accepted, plain wins ties, non-semver ignored) that satisfies
+/// [constraint]; `null` when none does.
 ResolvedTag? resolveTagForConstraint(
   Map<String, String> tags,
   VersionConstraint constraint,
@@ -57,8 +52,7 @@ ResolvedTag? resolveTagForConstraint(
   return best;
 }
 
-/// Returns the semver versions of all [tags], sorted ascending. Non-semver
-/// tags are skipped. Used for actionable "no tag satisfies …" errors.
+/// Returns the semver versions of [tags], sorted ascending, for messages.
 List<Version> semverVersionsOf(Iterable<String> tags) {
   final versions = <Version>[
     for (final tag in tags)
@@ -67,13 +61,8 @@ List<Version> semverVersionsOf(Iterable<String> tags) {
   return versions;
 }
 
-/// Parses the output of `git ls-remote --tags <url>` into a map from tag
-/// name to commit SHA.
-///
-/// Annotated tags appear twice in the output — once as `refs/tags/<name>`
-/// (the tag object) and once as `refs/tags/<name>^{}` (the peeled commit).
-/// The peeled SHA wins so the map always points at commits, for both
-/// annotated and lightweight tags.
+/// Parses `git ls-remote --tags` output into tag name -> commit SHA, with
+/// peeled `^{}` SHAs of annotated tags winning over the tag-object SHA.
 Map<String, String> parseLsRemoteTags(String output) {
   final tags = <String, String>{};
   final peeled = <String, String>{};
