@@ -70,12 +70,6 @@ skills
 replaced; `.claude/conventions/` copies are no longer used and can be
 deleted.
 
-## [Unreleased]
-
-### Changed
-
-- Move mergeable DNA from dna/ to dna/src (gg\_dna 4.0 layout)
-
 ## [2.1.1] - 2026-07-24
 
 ## [2.1.0] - 2026-07-15
