@@ -95,7 +95,7 @@ void main() {
         final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
         try {
           File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
-            'order:\n  - a\na:\n  path: ../a\n',
+            'order:\n  - a\ndependencies:\n  a:\n    path: ../a\n',
           );
           expect(
             () => DnaConfig.read(tmp.path),
@@ -121,7 +121,12 @@ void main() {
 
           // It also does not conflict with the real config source.
           File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
-            'dna:\n  order:\n    - a\n  a:\n    path: ../a\n',
+            'dna:\n'
+            '  order:\n'
+            '    - a\n'
+            '  dependencies:\n'
+            '    a:\n'
+            '      path: ../a\n',
           );
           final config = DnaConfig.read(tmp.path);
           expect(config!.layers.single.name, 'a');
@@ -136,7 +141,12 @@ void main() {
         try {
           File(p.join(tmp.path, 'package.json')).writeAsStringSync('{broken,}');
           File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
-            'dna:\n  order:\n    - a\n  a:\n    path: ../a\n',
+            'dna:\n'
+            '  order:\n'
+            '    - a\n'
+            '  dependencies:\n'
+            '    a:\n'
+            '      path: ../a\n',
           );
           final config = DnaConfig.read(tmp.path);
           expect(config!.layers.single.name, 'a');
@@ -174,8 +184,9 @@ void main() {
           const block = 'dna:\n'
               '  order:\n'
               '    - a\n'
-              '  a:\n'
-              '    path: ../a\n';
+              '  dependencies:\n'
+              '    a:\n'
+              '      path: ../a\n';
           File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(block);
           File(p.join(tmp.path, 'pubspec.yaml'))
               .writeAsStringSync('name: foo\n$block');
@@ -197,6 +208,30 @@ void main() {
           tmp.deleteSync(recursive: true);
         }
       });
+
+      test('keeps the claude config when merging broken-file warnings', () {
+        final tmp = Directory.systemTemp.createTempSync('dna_config_test_');
+        try {
+          File(p.join(tmp.path, 'package.json')).writeAsStringSync('{broken,}');
+          File(p.join(tmp.path, 'dna.yaml')).writeAsStringSync(
+            'dna:\n'
+            '  order: []\n'
+            '  config:\n'
+            '    claude:\n'
+            '      claude_md:\n'
+            '        include:\n'
+            '          - project_structure.md\n',
+          );
+          final config = DnaConfig.read(tmp.path);
+          expect(
+            config!.claude!.claudeMdInclude,
+            ['project_structure.md'],
+          );
+          expect(config.warnings.single, contains('not valid JSON'));
+        } finally {
+          tmp.deleteSync(recursive: true);
+        }
+      });
     });
 
     group('parse', () {
@@ -211,8 +246,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: gg_dna_company\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: gg_dna_company\n',
         );
         expect(config!.layers.single.git, 'gg_dna_company');
       });
@@ -220,8 +256,9 @@ void main() {
       test('empty or absent order yields zero layers plus orphan warnings', () {
         final config = DnaConfig.parse(
           'dna:\n'
-          '  orphan:\n'
-          '    path: ../somewhere\n',
+          '  dependencies:\n'
+          '    orphan:\n'
+          '      path: ../somewhere\n',
         );
         expect(config!.layers, isEmpty);
         expect(config.warnings, hasLength(1));
@@ -238,13 +275,58 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - used\n'
-          '  used:\n'
-          '    path: ../used\n'
-          '  unused:\n'
-          '    path: ../unused\n',
+          '  dependencies:\n'
+          '    used:\n'
+          '      path: ../used\n'
+          '    unused:\n'
+          '      path: ../unused\n',
         );
         expect(config!.layers, hasLength(1));
         expect(config.warnings.single, contains('"unused"'));
+      });
+
+      test('throws with a migration hint on pre-3.0 layer syntax', () {
+        expect(
+          () => DnaConfig.parse(
+            'dna:\n'
+            '  order:\n'
+            '    - a\n'
+            '  a:\n'
+            '    path: ../a\n',
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('pre-3.0'),
+                contains('dependencies'),
+              ),
+            ),
+          ),
+        );
+      });
+
+      test('warns about unknown keys under dna:', () {
+        final config = DnaConfig.parse(
+          'dna:\n'
+          '  order: []\n'
+          '  something: else\n',
+        );
+        expect(config!.warnings.single, contains('"something"'));
+      });
+
+      test('throws when dependencies is not a map', () {
+        expect(
+          () => DnaConfig.parse('dna:\n  dependencies: 42\n'),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('`dna: dependencies:`'),
+            ),
+          ),
+        );
       });
 
       test('throws when dna is not a map', () {
@@ -278,8 +360,9 @@ void main() {
             '  order:\n'
             '    - a\n'
             '    - a\n'
-            '  a:\n'
-            '    path: ../a\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      path: ../a\n',
           ),
           throwsA(
             isA<FormatException>().having(
@@ -310,7 +393,8 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a: 42\n',
+            '  dependencies:\n'
+            '    a: 42\n',
           ),
           throwsA(isA<FormatException>()),
         );
@@ -322,9 +406,10 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a:\n'
-            '    git: https://example.com/a.git\n'
-            '    path: ../a\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      git: https://example.com/a.git\n'
+            '      path: ../a\n',
           ),
           throwsA(
             isA<FormatException>().having(
@@ -339,8 +424,9 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a:\n'
-            '    version: ^1.0.0\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      version: ^1.0.0\n',
           ),
           throwsA(isA<FormatException>()),
         );
@@ -352,9 +438,10 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a:\n'
-            '    path: ../a\n'
-            '    version: ^1.0.0\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      path: ../a\n'
+            '      version: ^1.0.0\n',
           ),
           throwsA(
             isA<FormatException>().having(
@@ -372,9 +459,10 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a:\n'
-            '    git: https://example.com/a.git\n'
-            '    version: not-a-version\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      git: https://example.com/a.git\n'
+            '      version: not-a-version\n',
           ),
           throwsA(
             isA<FormatException>().having(
@@ -392,8 +480,9 @@ void main() {
             'dna:\n'
             '  order:\n'
             '    - a\n'
-            '  a:\n'
-            '    git: 42\n',
+            '  dependencies:\n'
+            '    a:\n'
+            '      git: 42\n',
           ),
           throwsA(isA<FormatException>()),
         );
@@ -459,7 +548,8 @@ void main() {
 
       test('parseJson reads a package.json dna block', () {
         final config = DnaConfig.parseJson(
-          '{"name": "x", "dna": {"order": ["a"], "a": {"path": "../a"}}}',
+          '{"name": "x", "dna": {"order": ["a"], '
+          '"dependencies": {"a": {"path": "../a"}}}}',
         );
         expect(config!.layers.single.name, 'a');
         expect(config.layers.single.path, '../a');
@@ -503,8 +593,8 @@ void main() {
       test('parseJson validates with the same rules as parse', () {
         expect(
           () => DnaConfig.parseJson(
-            '{"dna": {"order": ["a"], "a": {"path": "../a", '
-            '"version": "^1.0.0"}}}',
+            '{"dna": {"order": ["a"], "dependencies": '
+            '{"a": {"path": "../a", "version": "^1.0.0"}}}}',
           ),
           throwsA(
             isA<FormatException>().having(
@@ -524,9 +614,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - a\n'
-          '  a:\n'
-          '    git: https://example.com/a.git\n'
-          '    version: 1.4.0\n',
+          '  dependencies:\n'
+          '    a:\n'
+          '      git: https://example.com/a.git\n'
+          '      version: 1.4.0\n',
         );
         final layer = config!.layers.single;
         expect(layer.rawVersionConstraint, '1.4.0');
@@ -537,6 +628,129 @@ void main() {
         expect(
           layer.versionConstraint!.allows(Version.parse('1.4.1')),
           isFalse,
+        );
+      });
+    });
+
+    group('config: claude:', () {
+      test('parses claude_md and skills include lists', () {
+        final config = DnaConfig.parse(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - dna/agents/conventions\n'
+          '          - project_structure.md\n'
+          '      skills:\n'
+          '        include:\n'
+          '          - dna/agents/skills\n',
+        );
+        expect(config!.warnings, isEmpty);
+        expect(
+          config.claude!.claudeMdInclude,
+          ['dna/agents/conventions', 'project_structure.md'],
+        );
+        expect(config.claude!.skillsInclude, ['dna/agents/skills']);
+      });
+
+      test('parses the same structure from package.json', () {
+        final config = DnaConfig.parseJson(
+          '{"dna": {"order": [], "config": {"claude": '
+          '{"claude_md": {"include": ["a.md"]}, '
+          '"skills": {"include": ["skills"]}}}}}',
+        );
+        expect(config!.claude!.claudeMdInclude, ['a.md']);
+        expect(config.claude!.skillsInclude, ['skills']);
+      });
+
+      test('claude is null when config or claude section is absent', () {
+        expect(DnaConfig.parse('dna:\n  order: []\n')!.claude, isNull);
+        expect(
+          DnaConfig.parse('dna:\n  order: []\n  config: {}\n')!.claude,
+          isNull,
+        );
+      });
+
+      test('absent subsections yield null include lists', () {
+        final config = DnaConfig.parse(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - a.md\n',
+        );
+        expect(config!.claude!.claudeMdInclude, ['a.md']);
+        expect(config.claude!.skillsInclude, isNull);
+      });
+
+      test('a subsection without include yields an empty list', () {
+        final config = DnaConfig.parse(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      skills: {}\n',
+        );
+        expect(config!.claude!.skillsInclude, isEmpty);
+        expect(config.claude!.claudeMdInclude, isNull);
+      });
+
+      test('warns about unknown keys under config and claude', () {
+        final config = DnaConfig.parse(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    other_tool: {}\n'
+          '    claude:\n'
+          '      unknown: {}\n',
+        );
+        expect(config!.warnings, hasLength(2));
+        expect(config.warnings[0], contains('other_tool'));
+        expect(config.warnings[1], contains('unknown'));
+      });
+
+      test('throws when config, claude, or a subsection is not a map', () {
+        expect(
+          () => DnaConfig.parse('dna:\n  config: 42\n'),
+          throwsA(isA<FormatException>()),
+        );
+        expect(
+          () => DnaConfig.parse('dna:\n  config:\n    claude: 42\n'),
+          throwsA(isA<FormatException>()),
+        );
+        expect(
+          () => DnaConfig.parse(
+            'dna:\n  config:\n    claude:\n      claude_md: 42\n',
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      });
+
+      test('throws when include is not a list of non-empty strings', () {
+        expect(
+          () => DnaConfig.parse(
+            'dna:\n'
+            '  config:\n'
+            '    claude:\n'
+            '      skills:\n'
+            '        include: 42\n',
+          ),
+          throwsA(isA<FormatException>()),
+        );
+        expect(
+          () => DnaConfig.parse(
+            'dna:\n'
+            '  config:\n'
+            '    claude:\n'
+            '      skills:\n'
+            '        include:\n'
+            '          - 42\n',
+          ),
+          throwsA(isA<FormatException>()),
         );
       });
     });

@@ -9,23 +9,19 @@ import 'dart:isolate';
 
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
-import 'package:interact/interact.dart' as interact;
 import 'package:path/path.dart' as p;
 
+import '../util/claude_md.dart';
+import '../util/claude_skills.dart';
 import '../util/copy_directory.dart';
 import '../util/dna_config.dart';
 import '../util/dna_hash.dart';
 import '../util/dna_manifest.dart';
 import '../util/git_tag_resolver.dart';
 import '../util/md_tags.dart';
-import 'apply_conventions.dart';
-import 'install_skills.dart';
 
 /// Returns the directory the `gg_dna` package is installed in.
 typedef PackageRootResolver = Future<String> Function();
-
-/// Asks the yes/no question [prompt]; `true` means "yes".
-typedef YesNoSelector = bool Function(String prompt);
 
 /// Clones [url] into [dest], optionally checking out the tag/branch [ref].
 typedef GitCloner = Future<void> Function(
@@ -45,20 +41,19 @@ typedef GitLsRemoteTags = Future<Map<String, String>?> Function(String url);
 
 /// Mirrors the gg_dna `dna/` folder into the target, merges the DNA layers
 /// of the target repo's `dna:` config on top (later layers win, `X.tag.md`
-/// files patch sections/strings), then offers to install the synced skills
-/// and conventions. All git and prompt access is injectable for tests.
+/// files patch sections/strings), then applies the `config: claude:`
+/// section: the managed CLAUDE.md block and the configured skills — all
+/// non-interactive. All git access is injectable for tests.
 class Sync extends Command<dynamic> {
   /// Constructor.
   Sync({
     required this.ggLog,
     PackageRootResolver? packageRootResolver,
-    YesNoSelector? selector,
     GitCloner? gitCloner,
     GitRevParse? gitRevParse,
     GitLsRemote? gitLsRemote,
     GitLsRemoteTags? gitLsRemoteTags,
   })  : _packageRootResolver = packageRootResolver ?? _defaultPackageRoot,
-        _selector = selector ?? _defaultSelector,
         _gitCloner = gitCloner ?? _defaultGitCloner,
         _gitRevParse = gitRevParse ?? _defaultGitRevParse,
         _gitLsRemote = gitLsRemote ?? _defaultGitLsRemote,
@@ -79,13 +74,8 @@ class Sync extends Command<dynamic> {
       ..addFlag(
         'check',
         abbr: 'c',
-        help: 'Verify <target>/dna is up to date without writing anything. '
-            'Skips the interactive install/apply phase.',
-        negatable: false,
-      )
-      ..addFlag(
-        'no-install',
-        help: 'Skip the post-sync install-skills / apply-conventions phase.',
+        help: 'Verify <target>/dna, CLAUDE.md and the installed skills are '
+            'up to date without writing anything.',
         negatable: false,
       );
   }
@@ -94,17 +84,10 @@ class Sync extends Command<dynamic> {
   final GgLog ggLog;
 
   final PackageRootResolver _packageRootResolver;
-  final YesNoSelector _selector;
   final GitCloner _gitCloner;
   final GitRevParse _gitRevParse;
   final GitLsRemote _gitLsRemote;
   final GitLsRemoteTags _gitLsRemoteTags;
-
-  /// Skills folder scanned for the install-skills prompt phase.
-  static const String _dnaSkillsRel = 'dna/agents/skills';
-
-  /// Conventions folder scanned for the apply-conventions prompt phase.
-  static const String _dnaConventionsRel = 'dna/agents/conventions';
 
   @override
   final name = 'sync';
@@ -112,11 +95,12 @@ class Sync extends Command<dynamic> {
   @override
   final description =
       'Mirror the gg_dna `dna/` folder into <target>/dna and merge the DNA '
-      'layers configured in the target repo on top — later layers '
-      'win. Then offer to install Claude Code skills and conventions into '
-      "the project's .claude folder.\n"
+      'layers configured in the target repo on top — later layers win. '
+      'Then apply the `config: claude:` section: maintain the managed '
+      '@-import block in CLAUDE.md and install the configured skills into '
+      "the project's .claude/skills folder — without prompting.\n"
       '\n'
-      'Layers are configured in exactly one of '
+      'The configuration lives in exactly one of '
       '${dnaConfigFilenames.join(', ')}\n'
       '(in package.json under the `"dna"` key) in the target root:\n'
       '\n'
@@ -124,11 +108,21 @@ class Sync extends Command<dynamic> {
       '    order:\n'
       '      - dna_company\n'
       '      - dna_repo\n'
-      '    dna_company:\n'
-      '      git: https://github.com/acme/dna_company.git\n'
-      '      version: ^1.4.0\n'
-      '    dna_repo:\n'
-      '      path: dna/_override\n'
+      '    dependencies:\n'
+      '      dna_company:\n'
+      '        git: https://github.com/acme/dna_company.git\n'
+      '        version: ^1.4.0\n'
+      '      dna_repo:\n'
+      '        path: dna/_override\n'
+      '    config:\n'
+      '      claude:\n'
+      '        claude_md:\n'
+      '          include:\n'
+      '            - dna/agents/conventions\n'
+      '            - project_structure.md\n'
+      '        skills:\n'
+      '          include:\n'
+      '            - dna/agents/skills\n'
       '\n'
       '  * `git:` layers are cloned; a `version:` semver constraint is\n'
       '    resolved against the repo tags (highest matching tag wins).\n'
@@ -137,7 +131,11 @@ class Sync extends Command<dynamic> {
       '    A path inside <target>/dna (e.g. dna/_override) survives the\n'
       '    sync verbatim.\n'
       '  * `X.tag.md` files patch sections and strings of the merged\n'
-      '    `X.md`; they are consumed, not copied.';
+      '    `X.md`; they are consumed, not copied.\n'
+      '  * `claude_md: include:` entries (files or folders) become\n'
+      '    @-import lines in a managed block in CLAUDE.md.\n'
+      '  * `skills: include:` folders are mirrored into .claude/skills;\n'
+      '    only skills gg_dna installed are overwritten or removed.';
 
   @override
   Future<void> run() async {
@@ -157,7 +155,6 @@ class Sync extends Command<dynamic> {
     );
     final target = _resolveTarget(argResults!['target'] as String?);
     final checkOnly = argResults!['check'] as bool;
-    final noInstall = argResults!['no-install'] as bool;
 
     if (!sourceDna.existsSync()) {
       throw UsageException(
@@ -199,10 +196,15 @@ class Sync extends Command<dynamic> {
       );
     }
 
+    // Skill ownership of the previous sync — must be read before the swap
+    // replaces the manifest.
+    final previousManifest = DnaManifest.read(dnaDir);
+
     // Resolve all layers up front and in parallel — any error (unreachable
     // remote, unsatisfiable constraint, missing path) leaves the target
     // untouched; temps of already resolved layers are cleaned up.
     final resolved = <_ResolvedLayer>[];
+    final DnaManifest manifest;
     try {
       resolved.addAll(
         await Future.wait(
@@ -213,13 +215,15 @@ class Sync extends Command<dynamic> {
           cleanUp: _cleanupLayer,
         ),
       );
-      _buildAndSwap(
+      manifest = _buildAndSwap(
         sourceDna: sourceDna,
         dnaDir: dnaDir,
         staging: staging,
         backup: backup,
         resolved: resolved,
         packageRoot: packageRoot,
+        config: config,
+        previousManifest: previousManifest,
       );
     } finally {
       resolved.forEach(_cleanupLayer);
@@ -230,12 +234,13 @@ class Sync extends Command<dynamic> {
       }
     }
 
-    if (noInstall) {
-      return;
-    }
-
-    await _promptAndInstallSkills(target);
-    await _promptAndApplyConventions(target);
+    _applyClaudeConfig(
+      target: target,
+      dnaDir: dnaDir,
+      config: config,
+      manifest: manifest,
+      previousManifest: previousManifest,
+    );
   }
 
   // ===========================================================================
@@ -277,14 +282,18 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Builds the merged dna tree in [staging] and rename-swaps it into place.
-  void _buildAndSwap({
+  /// Builds the merged dna tree in [staging] and rename-swaps it into
+  /// place. Returns the manifest it wrote — the claude phase updates its
+  /// `installedSkills` afterwards.
+  DnaManifest _buildAndSwap({
     required Directory sourceDna,
     required Directory dnaDir,
     required Directory staging,
     required Directory backup,
     required List<_ResolvedLayer> resolved,
     required String packageRoot,
+    required DnaConfig? config,
+    required DnaManifest? previousManifest,
   }) {
     // Leftovers of an earlier interrupted sync.
     if (staging.existsSync()) {
@@ -317,6 +326,8 @@ class Sync extends Command<dynamic> {
 
     // The final hash MUST be computed after the snapshot restore — only
     // relative paths enter it, so staging and post-swap dna/ agree.
+    // installedSkills carries the previous ownership until the claude
+    // phase succeeds — a failing skill sync must not orphan owned skills.
     final manifest = DnaManifest(
       layers: [
         for (final layer in resolved)
@@ -328,6 +339,11 @@ class Sync extends Command<dynamic> {
             hash: layer.hash,
           ),
       ],
+      claude: DnaManifestClaude(
+        claudeMdInclude: config?.claude?.claudeMdInclude,
+        skillsInclude: config?.claude?.skillsInclude,
+        installedSkills: previousManifest?.claude.installedSkills ?? const [],
+      ),
       baseVersion: readPackageVersion(packageRoot),
       baseHash: baseHash,
       hash: hashDnaDirectory(staging),
@@ -346,6 +362,7 @@ class Sync extends Command<dynamic> {
     }
     ggLog('Synced ${sourceDna.path} -> ${dnaDir.path}.');
     ggLog('Wrote ${p.join(dnaDir.path, dnaManifestFilename)}.');
+    return manifest;
   }
 
   // ...........................................................................
@@ -613,6 +630,9 @@ class Sync extends Command<dynamic> {
       problems.addAll(layerProblems.expand((list) => list));
     }
 
+    // 5) config: claude: — CLAUDE.md block and installed skills.
+    problems.addAll(_checkClaude(dest.parent, config, manifest));
+
     if (problems.isEmpty) {
       ggLog('dna/ is up to date.');
       return;
@@ -622,6 +642,83 @@ class Sync extends Command<dynamic> {
       ggLog('  - $problem');
     }
     throw Exception('dna/ out of date — run `gg_dna sync` to fix.');
+  }
+
+  // ...........................................................................
+  /// Returns the `config: claude:` problems: config drift, an outdated
+  /// CLAUDE.md block, missing/outdated owned skills, and owned skills
+  /// that are no longer configured.
+  List<String> _checkClaude(
+    Directory target,
+    DnaConfig? config,
+    DnaManifest manifest,
+  ) {
+    final problems = <String>[];
+    final claude = config?.claude;
+
+    if (!manifest.claude.matchesConfig(claude)) {
+      problems.add('claude config changed since last sync');
+      return problems;
+    }
+
+    final claudeMdInclude = claude?.claudeMdInclude;
+    if (claudeMdInclude != null) {
+      try {
+        final imports = expandClaudeMdIncludes(target.path, claudeMdInclude);
+        final block = buildClaudeMdBlock(imports);
+        final file = File(p.join(target.path, 'CLAUDE.md'));
+        if (!file.existsSync()) {
+          problems.add('missing: ${file.path}');
+        } else {
+          final content = file.readAsStringSync();
+          if (upsertClaudeMdBlock(content, block) != content) {
+            problems.add('CLAUDE.md block out of date');
+          }
+        }
+      } catch (e) {
+        problems.add('CLAUDE.md check failed: $e');
+      }
+    }
+
+    try {
+      final sources = <String, Directory>{};
+      for (final entry in claude?.skillsInclude ?? const <String>[]) {
+        final dir = Directory(
+          p.normalize(p.join(target.path, entry.replaceAll('\\', '/'))),
+        );
+        for (final skill in discoverSkills(dir)) {
+          sources[p.basename(skill.path)] = skill;
+        }
+      }
+      final owned = manifest.claude.installedSkills;
+      for (final name in sources.keys.toList()..sort()) {
+        final dest = Directory(p.join(target.path, claudeSkillsRel, name));
+        if (!dest.existsSync()) {
+          // A sync would install this skill (fresh or owned re-install).
+          problems.add('skill "$name" is not installed');
+          continue;
+        }
+        // Present but not owned is a hand-installed skill — the sync
+        // leaves it alone, so the check does too.
+        if (owned.contains(name) &&
+            hashDnaDirectory(dest) != hashDnaDirectory(sources[name]!)) {
+          problems.add('skill "$name" is out of date');
+        }
+      }
+      for (final name in owned) {
+        if (sources.containsKey(name)) continue;
+        final dest = Directory(p.join(target.path, claudeSkillsRel, name));
+        if (dest.existsSync()) {
+          problems.add(
+            'skill "$name" is no longer configured but still installed',
+          );
+        }
+      }
+    } catch (e) {
+      problems.add('skills check failed: $e');
+    }
+
+    return problems;
   }
 
   // ...........................................................................
@@ -678,81 +775,52 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  Future<void> _promptAndInstallSkills(Directory target) async {
-    final skillsRoot = Directory(p.join(target.path, _dnaSkillsRel));
-    if (!skillsRoot.existsSync()) {
-      return;
-    }
-    final skills = InstallSkills.discoverSkills(skillsRoot);
-    if (skills.isEmpty) {
-      return;
-    }
+  /// Applies `config: claude:` after the swap: upserts the managed
+  /// CLAUDE.md block and mirrors the configured skills. Rewrites the
+  /// manifest so `installedSkills` reflects the new ownership.
+  void _applyClaudeConfig({
+    required Directory target,
+    required Directory dnaDir,
+    required DnaConfig? config,
+    required DnaManifest manifest,
+    required DnaManifest? previousManifest,
+  }) {
+    final claude = config?.claude;
 
-    ggLog('');
-    ggLog('Claude Code Skills:');
-    final selected = <String>[];
-    for (final skill in skills) {
-      final name = p.basename(skill.path);
-      if (_selector('  Install /$name?')) {
-        selected.add(name);
+    final claudeMdInclude = claude?.claudeMdInclude;
+    if (claudeMdInclude != null) {
+      final imports = expandClaudeMdIncludes(target.path, claudeMdInclude);
+      if (writeClaudeMd(target.path, imports)) {
+        ggLog('Updated CLAUDE.md (${imports.length} @-import(s)).');
       }
     }
 
-    if (selected.isEmpty) {
-      ggLog('  (no skills selected)');
-      return;
+    final result = syncClaudeSkills(
+      targetRoot: target.path,
+      include: claude?.skillsInclude ?? const [],
+      previouslyInstalled: previousManifest?.claude.installedSkills ?? const [],
+    );
+    for (final warning in result.warnings) {
+      ggLog(warning);
+    }
+    for (final name in result.installed) {
+      ggLog('  + installed skill $name');
+    }
+    for (final name in result.removed) {
+      ggLog('  - removed skill $name (no longer configured)');
     }
 
-    final dest = Directory(p.join(target.path, '.claude', 'skills'));
-    final runner = CommandRunner<dynamic>('gg_dna', 'gg_dna sub-runner')
-      ..addCommand(InstallSkills(ggLog: ggLog));
-    await runner.run([
-      'install-skills',
-      '--source',
-      skillsRoot.path,
-      '--dest',
-      dest.path,
-      '--only',
-      selected.join(','),
-    ]);
-  }
-
-  Future<void> _promptAndApplyConventions(Directory target) async {
-    final convRoot = Directory(p.join(target.path, _dnaConventionsRel));
-    if (!convRoot.existsSync()) {
-      return;
-    }
-    final docs = ApplyConventions.discoverConventions(convRoot);
-    if (docs.isEmpty) {
-      return;
-    }
-
-    ggLog('');
-    ggLog('Claude Code Conventions:');
-    final selected = <String>[];
-    for (final doc in docs) {
-      final name = p.basename(doc.path);
-      if (_selector('  Apply $name?')) {
-        selected.add(name);
-      }
-    }
-
-    if (selected.isEmpty) {
-      ggLog('  (no conventions selected)');
-      return;
-    }
-
-    final runner = CommandRunner<dynamic>('gg_dna', 'gg_dna sub-runner')
-      ..addCommand(ApplyConventions(ggLog: ggLog));
-    await runner.run([
-      'apply-conventions',
-      '--source',
-      convRoot.path,
-      '--target',
-      target.path,
-      '--only',
-      selected.join(','),
-    ]);
+    DnaManifest(
+      layers: manifest.layers,
+      claude: DnaManifestClaude(
+        claudeMdInclude: claude?.claudeMdInclude,
+        skillsInclude: claude?.skillsInclude,
+        installedSkills: result.installed,
+      ),
+      baseVersion: manifest.baseVersion,
+      baseHash: manifest.baseHash,
+      hash: manifest.hash,
+    ).write(dnaDir);
   }
 
   // coverage:ignore-start
@@ -772,16 +840,6 @@ class Sync extends Command<dynamic> {
       dir = dir.parent;
     }
     return Directory.current.path;
-  }
-
-  /// Default yes/no selector that renders a two-option [interact.Select].
-  static bool _defaultSelector(String prompt) {
-    final choice = interact.Select(
-      prompt: prompt,
-      options: const ['yes', 'no'],
-      initialIndex: 0,
-    ).interact();
-    return choice == 0;
   }
 
   /// Runs git with [args]; shared plumbing of the default git wrappers.

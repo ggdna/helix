@@ -1,6 +1,6 @@
 name: gg_dna
 description: Die DNA fuer Programmierprojekte - synchronisiert Anleitungen, Skills und Konventionen fuer KI-Agenten aus mehrschichtigen DNA-Repos in Zielprojekte.
-version: 2.1.0
+version: 3.0.0
 repository: https://github.com/ggsuite/gg_dna.git
 
 environment:
@@ -13,7 +13,6 @@ dependencies:
   gg_hash: ^1.0.4
   gg_log: ^1.0.6
   gg_process: ^1.1.6
-  interact: ^2.2.0
   path: ^1.9.0
   pub_semver: ^2.1.0
   yaml: ^3.1.0
@@ -25,7 +24,7 @@ dev_dependencies:
 executables:
  gg_dna:
 
-# Example dna layer configuration for consuming repos.
+# Example dna configuration for consuming repos.
 # Layers are applied in `order` — later layers win:
 #
 # dna:
@@ -33,10 +32,19 @@ executables:
 #     - dna_company
 #     - dna_project
 #     - dna_repo
-#   dna_company:
-#     git: https://github.com/acme/dna_company.git
-#     version: ^1.4.0
-#   dna_project:
-#     path: ../dna_project
-#   dna_repo:
-#     path: dna/_override
+#   dependencies:
+#     dna_company:
+#       git: https://github.com/acme/dna_company.git
+#       version: ^1.4.0
+#     dna_project:
+#       path: ../dna_project
+#     dna_repo:
+#       path: dna/_override
+#   config:
+#     claude:
+#       claude_md:
+#         include:
+#           - dna/agents/conventions
+#       skills:
+#         include:
+#           - dna/agents/skills

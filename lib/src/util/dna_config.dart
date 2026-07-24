@@ -66,18 +66,41 @@ class DnaLayerConfig {
   return (folder: folder, content: dnaSub.existsSync() ? dnaSub : folder);
 }
 
+/// The `dna: config: claude:` section — which files/folders end up as
+/// `@`-imports in the managed CLAUDE.md block and which skill folders get
+/// installed into `.claude/skills/`. A `null` include list means the
+/// corresponding subsection is absent (vs. explicitly empty).
+class DnaClaudeConfig {
+  /// Constructor.
+  const DnaClaudeConfig({this.claudeMdInclude, this.skillsInclude});
+
+  /// `claude_md: include:` — files/folders referenced from CLAUDE.md.
+  final List<String>? claudeMdInclude;
+
+  /// `skills: include:` — folders whose skills are installed.
+  final List<String>? skillsInclude;
+}
+
 /// Parsed `dna:` block of a target repo (dna.yaml, package.json, or
 /// pubspec.yaml): the ordered layer list (later layers win; the gg_dna
-/// base DNA is the implicit lowest layer) plus non-fatal warnings.
+/// base DNA is the implicit lowest layer), the tool config, and
+/// non-fatal warnings.
 class DnaConfig {
   /// Constructor.
-  const DnaConfig({required this.layers, required this.warnings});
+  const DnaConfig({
+    required this.layers,
+    required this.warnings,
+    this.claude,
+  });
 
   /// The configured layers, in `order` order.
   final List<DnaLayerConfig> layers;
 
   /// Non-fatal findings, e.g. configured layers missing from `order`.
   final List<String> warnings;
+
+  /// The `config: claude:` section; `null` when absent.
+  final DnaClaudeConfig? claude;
 
   /// Reads the `dna:` block from [dnaConfigFilenames] in [targetRoot].
   static DnaConfig? read(String targetRoot) {
@@ -122,6 +145,7 @@ class DnaConfig {
     if (broken.isEmpty) return config;
     return DnaConfig(
       layers: config.layers,
+      claude: config.claude,
       warnings: [
         ...config.warnings,
         for (final message in broken)
@@ -182,21 +206,134 @@ class DnaConfig {
     }
 
     final order = _readOrder(dna, source);
-    final layers = <DnaLayerConfig>[];
-    for (final name in order) {
-      layers.add(_readLayer(dna, name, source));
-    }
+    final dependencies = _readDependencies(dna, source);
 
     final warnings = <String>[];
     for (final key in dna.keys) {
-      if (key == 'order' || order.contains(key)) continue;
+      if (key == 'order' || key == 'dependencies' || key == 'config') {
+        continue;
+      }
+      // A map with git:/path: under dna: is the pre-3.0 layer syntax —
+      // fail loudly (and before the missing-dependency error) instead of
+      // silently dropping the layer.
+      final value = dna[key];
+      if (value is Map &&
+          (value.containsKey('git') || value.containsKey('path'))) {
+        throw FormatException(
+          'dna: layer "$key" in $source uses the pre-3.0 syntax — since '
+          'gg_dna 3.0 layers live under `dna: dependencies:`. Move the '
+          'layer maps into a `dependencies:` block (see README).',
+        );
+      }
+      warnings.add('dna: unknown key "$key" in $source — ignored.');
+    }
+
+    final layers = <DnaLayerConfig>[];
+    for (final name in order) {
+      layers.add(_readLayer(dependencies, name, source));
+    }
+    for (final key in dependencies.keys) {
+      if (order.contains(key)) continue;
       warnings.add(
-        'dna: layer "$key" is configured but not listed in '
-        '`dna: order:` — ignored.',
+        'dna: layer "$key" is configured in `dependencies:` but not '
+        'listed in `dna: order:` — ignored.',
       );
     }
 
-    return DnaConfig(layers: layers, warnings: warnings);
+    final claude = _readClaudeConfig(dna, source, warnings);
+    return DnaConfig(layers: layers, warnings: warnings, claude: claude);
+  }
+
+  // ...........................................................................
+  static Map<dynamic, dynamic> _readDependencies(
+    Map<dynamic, dynamic> dna,
+    String source,
+  ) {
+    final dependencies = dna['dependencies'];
+    if (dependencies == null) return const {};
+    if (dependencies is! Map) {
+      throw FormatException(
+        '`dna: dependencies:` in $source must be a map of layer '
+        'configurations.',
+      );
+    }
+    return dependencies;
+  }
+
+  // ...........................................................................
+  /// Reads `config: claude:`; `null` when absent. Unknown keys warn.
+  static DnaClaudeConfig? _readClaudeConfig(
+    Map<dynamic, dynamic> dna,
+    String source,
+    List<String> warnings,
+  ) {
+    final config = dna['config'];
+    if (config == null) return null;
+    if (config is! Map) {
+      throw FormatException('`dna: config:` in $source must be a map.');
+    }
+    for (final key in config.keys) {
+      if (key != 'claude') {
+        warnings.add(
+          'dna: unknown key "config: $key" in $source — ignored.',
+        );
+      }
+    }
+    final claude = config['claude'];
+    if (claude == null) return null;
+    if (claude is! Map) {
+      throw FormatException(
+        '`dna: config: claude:` in $source must be a map.',
+      );
+    }
+    for (final key in claude.keys) {
+      if (key != 'claude_md' && key != 'skills') {
+        warnings.add(
+          'dna: unknown key "config: claude: $key" in $source — ignored.',
+        );
+      }
+    }
+    return DnaClaudeConfig(
+      claudeMdInclude: _readIncludeList(claude, 'claude_md', source),
+      skillsInclude: _readIncludeList(claude, 'skills', source),
+    );
+  }
+
+  // ...........................................................................
+  /// Reads `config: claude: <section>: include:` as a list of non-empty
+  /// strings; `null` when the section is absent.
+  static List<String>? _readIncludeList(
+    Map<dynamic, dynamic> claude,
+    String section,
+    String source,
+  ) {
+    final raw = claude[section];
+    if (raw == null) return null;
+    if (raw is! Map) {
+      throw FormatException(
+        '`dna: config: claude: $section:` in $source must be a map '
+        'with an `include:` list.',
+      );
+    }
+    final include = raw['include'];
+    if (include == null) return const [];
+    if (include is! List) {
+      throw FormatException(
+        '`dna: config: claude: $section: include:` in $source must be '
+        'a list of paths.',
+      );
+    }
+    final result = <String>[];
+    for (final entry in include) {
+      if (entry is! String || entry.isEmpty) {
+        throw FormatException(
+          '`dna: config: claude: $section: include:` in $source must '
+          'only contain non-empty path strings.',
+        );
+      }
+      result.add(entry);
+    }
+    return result;
   }
 
   // ...........................................................................
@@ -228,15 +365,15 @@ class DnaConfig {
 
   // ...........................................................................
   static DnaLayerConfig _readLayer(
-    Map<dynamic, dynamic> dna,
+    Map<dynamic, dynamic> dependencies,
     String name,
     String source,
   ) {
-    final raw = dna[name];
+    final raw = dependencies[name];
     if (raw == null) {
       throw FormatException(
         'dna: layer "$name" is listed in `dna: order:` but has no '
-        'configuration map in $source.',
+        'configuration map under `dna: dependencies:` in $source.',
       );
     }
     if (raw is! Map) {

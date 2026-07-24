@@ -12,17 +12,29 @@ import '../../bin/gg_dna.dart';
 
 void main() {
   group('run(args, log)', () {
-    test('runs install-skills against an empty source folder', () async {
+    test('runs sync with an explicit source and target', () async {
       final tmp = await Directory.systemTemp.createTemp('gg_dna_bin_test_');
       try {
+        final source = Directory('${tmp.path}/pkg/dna');
+        await source.create(recursive: true);
+        await File('${source.path}/a.md').writeAsString('A');
+        final target = Directory('${tmp.path}/target');
+        await target.create();
+
         final messages = <String>[];
         await run(
-          args: ['install-skills', '--source', tmp.path, '--all'],
+          args: [
+            'sync',
+            '--source',
+            '${tmp.path}/pkg',
+            '--target',
+            target.path,
+          ],
           ggLog: messages.add,
         );
 
         expect(
-          messages.any((m) => m.contains('No skills found')),
+          messages.any((m) => m.contains('Synced')),
           isTrue,
           reason: 'messages: $messages',
         );

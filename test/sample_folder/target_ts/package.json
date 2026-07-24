@@ -4,7 +4,9 @@
   "private": true,
   "dna": {
     "order": ["dna_project", "dna_repo"],
-    "dna_project": { "path": "../dna_project" },
-    "dna_repo": { "path": "dna/_override" }
+    "dependencies": {
+      "dna_project": { "path": "../dna_project" },
+      "dna_repo": { "path": "dna/_override" }
+    }
   }
 }

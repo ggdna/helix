@@ -29,13 +29,23 @@ dna:
     - dna_company
     - dna_project
     - dna_repo
-  dna_company:
-    git: https://github.com/acme/dna_company.git
-    version: ^1.4.0
-  dna_project:
-    path: ../dna_project
-  dna_repo:
-    path: dna/_override
+  dependencies:
+    dna_company:
+      git: https://github.com/acme/dna_company.git
+      version: ^1.4.0
+    dna_project:
+      path: ../dna_project
+    dna_repo:
+      path: dna/_override
+  config:
+    claude:
+      claude_md:
+        include:
+          - dna/agents/conventions
+          - project_structure.md
+      skills:
+        include:
+          - dna/agents/skills
 ```
 
 Dasselbe als `"dna"`-Key in einer `package.json`:
@@ -45,8 +55,16 @@ Dasselbe als `"dna"`-Key in einer `package.json`:
   "name": "my-ts-project",
   "dna": {
     "order": ["dna_company", "dna_repo"],
-    "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" },
-    "dna_repo": { "path": "dna/_override" }
+    "dependencies": {
+      "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" },
+      "dna_repo": { "path": "dna/_override" }
+    },
+    "config": {
+      "claude": {
+        "claude_md": { "include": ["dna/agents/conventions"] },
+        "skills": { "include": ["dna/agents/skills"] }
+      }
+    }
   }
 }
 ```
@@ -79,6 +97,34 @@ Der Sync baut den neuen Baum in `<target>/.gg_dna_staging` und tauscht ihn
 atomar ein; nach einem abgebrochenen Lauf raeumt der naechste Sync die
 Ordner `.gg_dna_staging`/`.gg_dna_backup` auf bzw. stellt `dna/` aus dem
 Backup wieder her. Beide Ordner sind fluechtig und gehoeren nicht ins Repo.
+
+## Claude-Konfiguration (`config: claude:`)
+
+Der Sync ist vollstaendig **non-interaktiv** — was frueher die Subcommands
+`install-skills`/`apply-conventions` per Rueckfrage erledigten, steuert
+jetzt der optionale `config: claude:`-Block:
+
+- **`claude_md: include:`** — Liste aus Dateien und/oder Ordnern (relativ
+  zur Zielrepo-Wurzel). Der Sync pflegt in `<target>/CLAUDE.md` einen
+  verwalteten Block zwischen `<!-- gg_dna:claude_md:start -->` und
+  `<!-- gg_dna:claude_md:end -->` mit einer `@pfad`-Import-Zeile pro Datei
+  (Ordner werden rekursiv zu ihren `.md`-Dateien expandiert, alphabetisch
+  sortiert). Claude Code laedt diese Imports beim Session-Start (relative
+  Pfade, maximal vier Ebenen tief; Imports in Code-Bloecken werden
+  ignoriert). Fehlt die `CLAUDE.md`, wird sie angelegt; handgeschriebener
+  Inhalt vor/nach dem Block bleibt unangetastet. Ein uebrig gebliebener
+  pre-3.0-`gg_dna:conventions`-Block wird entfernt. Fehlende Include-Pfade
+  sind ein Fehler — kaputte `@`-Imports entstehen nie.
+- **`skills: include:`** — Liste von Ordnern, deren Skills
+  (`<name>/SKILL.md`) nach `.claude/skills/<name>` gespiegelt werden.
+  gg_dna verwaltet nur die von ihm installierten Skills (gemerkt im
+  Manifest): Diese werden aktualisiert bzw. — wenn nicht mehr
+  konfiguriert — geloescht. Handinstallierte Skills werden **nie**
+  angefasst; eine Namenskollision erzeugt nur eine Warnung.
+
+Ohne `config: claude:` fasst der Sync weder `CLAUDE.md` noch
+`.claude/skills` an (zuvor von gg_dna installierte Skills werden dann als
+nicht mehr konfiguriert entfernt).
 
 ## Tag-Overrides in Markdown-Dateien
 
@@ -127,12 +173,17 @@ Regeln:
   fuer die Syntax gehoeren deshalb immer in Code-Bloecke, sonst werden sie
   beim Sync ersetzt.
 
-## Migration von 1.x
+## Migration von 2.x
 
-- Das positionale Overlay-Argument (`gg_dna sync <overlay>`) wurde entfernt.
-  Overlays werden als Schicht im `dna:`-Block des Zielrepos konfiguriert
-  (dna.yaml, package.json oder pubspec.yaml).
-- Der in `.dna.json` gespeicherte Overlay wird nicht mehr automatisch
-  wiederverwendet.
-- `.dna.json` hat ein neues Format (v2); `--check` meldet alte Manifeste
+- Die Layer-Maps wandern in einen `dependencies:`-Block unter `dna:` —
+  die alte Syntax (Layer direkt unter `dna:`) wird mit einem
+  Migrationshinweis abgelehnt.
+- Die Subcommands `install-skills` und `apply-conventions` wurden entfernt;
+  gewuenschte CLAUDE.md-Includes und Skill-Ordner werden in
+  `dna: config: claude:` konfiguriert und von `gg_dna sync` ohne
+  Rueckfragen angewendet.
+- Einmal `gg_dna sync` ausfuehren: Der alte `gg_dna:conventions`-Block in
+  der CLAUDE.md wird ersetzt; Kopien unter `.claude/conventions/` werden
+  nicht mehr benutzt und koennen geloescht werden.
+- `.dna.json` hat ein neues Format (v3); `--check` meldet alte Manifeste
   als veraltet — einmal `gg_dna sync` ausfuehren.

@@ -8,8 +8,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
-import 'package:gg_dna/src/commands/apply_conventions.dart';
 import 'package:gg_dna/src/commands/sync.dart';
+import 'package:gg_dna/src/util/claude_md.dart';
 import 'package:gg_dna/src/util/copy_directory.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
 import 'package:path/path.dart' as p;
@@ -23,8 +23,6 @@ void main() {
   late Directory pkgDna;
   late Directory target;
   late List<String> messages;
-  late List<String> selectorPrompts;
-  late Map<String, bool> selectorAnswers;
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('sync_test_');
@@ -32,8 +30,6 @@ void main() {
     pkgDna = Directory(p.join(pkgRoot.path, 'dna'))..createSync();
     target = Directory(p.join(tmp.path, 'target'))..createSync();
     messages = <String>[];
-    selectorPrompts = <String>[];
-    selectorAnswers = <String, bool>{};
   });
 
   tearDown(() {
@@ -56,14 +52,6 @@ void main() {
     );
   }
 
-  bool selector(String prompt) {
-    selectorPrompts.add(prompt);
-    for (final entry in selectorAnswers.entries) {
-      if (prompt.contains(entry.key)) return entry.value;
-    }
-    return false;
-  }
-
   Sync makeCmd({
     GitCloner? gitCloner,
     GitRevParse? gitRevParse,
@@ -73,7 +61,6 @@ void main() {
       Sync(
         ggLog: messages.add,
         packageRootResolver: () async => pkgRoot.path,
-        selector: selector,
         gitCloner: gitCloner,
         gitRevParse: gitRevParse,
         gitLsRemote: gitLsRemote,
@@ -85,7 +72,7 @@ void main() {
 
   Future<void> runSync(
     Sync cmd, {
-    List<String> extra = const ['--no-install'],
+    List<String> extra = const [],
   }) =>
       makeRunner(cmd).run(['sync', '--target', target.path, ...extra]);
 
@@ -122,7 +109,6 @@ void main() {
           p.join(tmp.path, 'missing'),
           '--target',
           target.path,
-          '--no-install',
         ]),
         throwsA(isA<UsageException>()),
       );
@@ -136,7 +122,6 @@ void main() {
           'sync',
           '--target',
           target.path,
-          '--no-install',
           'gg_some_overlay',
         ]),
         throwsA(
@@ -149,7 +134,7 @@ void main() {
       );
     });
 
-    test('mirrors source dna/ into <target>/dna and skips install', () async {
+    test('mirrors source dna/ into <target>/dna', () async {
       writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
       writeFile(p.join(pkgDna.path, 'scripts', 'run.sh'), 'echo hi');
       writeFile(p.join(pkgDna.path, 'agents', 'sub', 'b.md'), 'B');
@@ -175,7 +160,6 @@ void main() {
         messages.any((m) => m.contains('No dna: config')),
         isTrue,
       );
-      expect(selectorPrompts, isEmpty);
     });
 
     test('a pubspec without dna key results in a base-only sync', () async {
@@ -251,8 +235,9 @@ void main() {
     test('logs config warnings about orphaned layer configs', () async {
       writePubspec(
         'dna:\n'
-        '  orphan:\n'
-        '    path: ../nowhere\n',
+        '  dependencies:\n'
+        '    orphan:\n'
+        '      path: ../nowhere\n',
       );
       writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
 
@@ -273,10 +258,11 @@ void main() {
           '  order:\n'
           '    - one\n'
           '    - two\n'
-          '  one:\n'
-          '    path: ../layer1\n'
-          '  two:\n'
-          '    path: ../layer2\n',
+          '  dependencies:\n'
+          '    one:\n'
+          '      path: ../layer1\n'
+          '    two:\n'
+          '      path: ../layer2\n',
         );
 
         await runSync(makeCmd());
@@ -307,8 +293,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - direct\n'
-          '  direct:\n'
-          '    path: ../direct\n',
+          '  dependencies:\n'
+          '    direct:\n'
+          '      path: ../direct\n',
         );
 
         await runSync(makeCmd());
@@ -329,8 +316,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - missing\n'
-          '  missing:\n'
-          '    path: ../missing\n',
+          '  dependencies:\n'
+          '    missing:\n'
+          '      path: ../missing\n',
         );
         await expectLater(
           runSync(makeCmd()),
@@ -356,8 +344,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - f\n'
-          '  f:\n'
-          '    path: ../afile.txt\n',
+          '  dependencies:\n'
+          '    f:\n'
+          '      path: ../afile.txt\n',
         );
 
         await expectLater(
@@ -379,8 +368,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - self\n'
-          '  self:\n'
-          '    path: dna\n',
+          '  dependencies:\n'
+          '    self:\n'
+          '      path: dna\n',
         );
 
         await expectLater(
@@ -405,8 +395,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - layer\n'
-          '  layer:\n'
-          '    path: ../layer\n',
+          '  dependencies:\n'
+          '    layer:\n'
+          '      path: ../layer\n',
         );
 
         await runSync(makeCmd());
@@ -431,8 +422,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - repo\n'
-          '  repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    repo:\n'
+          '      path: dna/_override\n',
         );
 
         await runSync(makeCmd());
@@ -491,10 +483,11 @@ void main() {
           '  order:\n'
           '    - one\n'
           '    - two\n'
-          '  one:\n'
-          '    path: ../layer1\n'
-          '  two:\n'
-          '    path: ../layer2\n',
+          '  dependencies:\n'
+          '    one:\n'
+          '      path: ../layer1\n'
+          '    two:\n'
+          '      path: ../layer2\n',
         );
 
         await runSync(makeCmd());
@@ -516,8 +509,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - repo\n'
-          '  repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    repo:\n'
+          '      path: dna/_override\n',
         );
 
         await runSync(makeCmd());
@@ -581,8 +575,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - repo\n'
-          '  repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    repo:\n'
+          '      path: dna/_override\n',
         );
 
         await runSync(makeCmd());
@@ -615,8 +610,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - repo\n'
-          '  repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    repo:\n'
+          '      path: dna/_override\n',
         );
         await runSync(makeCmd());
         final before = File(p.join(target.path, 'dna', 'guides', 'a.md'))
@@ -675,8 +671,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - repo\n'
-          '  repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    repo:\n'
+          '      path: dna/_override\n',
         );
 
         await runSync(makeCmd());
@@ -717,8 +714,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n',
         );
 
         await runSync(
@@ -752,8 +750,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: gg_dna_company\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: gg_dna_company\n',
         );
 
         await runSync(
@@ -778,9 +777,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n'
-          '    version: ^1.4.0\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n'
+          '      version: ^1.4.0\n',
         );
 
         await runSync(
@@ -817,9 +817,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n'
-          '    version: ^3.0.0\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n'
+          '      version: ^3.0.0\n',
         );
         await expectLater(
           runSync(
@@ -850,9 +851,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n'
-          '    version: ^1.0.0\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n'
+          '      version: ^1.0.0\n',
         );
 
         await expectLater(
@@ -879,8 +881,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - company\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n',
         );
 
         await expectLater(
@@ -909,10 +912,11 @@ void main() {
           '  order:\n'
           '    - company\n'
           '    - missing\n'
-          '  company:\n'
-          '    git: https://example.com/company.git\n'
-          '  missing:\n'
-          '    path: ../missing\n',
+          '  dependencies:\n'
+          '    company:\n'
+          '      git: https://example.com/company.git\n'
+          '    missing:\n'
+          '      path: ../missing\n',
         );
 
         await expectLater(
@@ -948,8 +952,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - layer\n'
-          '  layer:\n'
-          '    path: ../layer\n',
+          '  dependencies:\n'
+          '    layer:\n'
+          '      path: ../layer\n',
         );
 
         await runSync(makeCmd());
@@ -1205,8 +1210,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - other\n'
-          '  other:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    other:\n'
+          '      path: dna/_override\n',
         );
         messages.clear();
         await expectLater(
@@ -1226,8 +1232,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - dna_repo\n'
-          '  dna_repo:\n'
-          '    path: dna/_override\n',
+          '  dependencies:\n'
+          '    dna_repo:\n'
+          '      path: dna/_override\n',
         );
 
         await expectLater(
@@ -1337,8 +1344,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - a\n'
-          '  a:\n'
-          '    path: ../layerA\n',
+          '  dependencies:\n'
+          '    a:\n'
+          '      path: ../layerA\n',
         );
         await runSync(makeCmd());
 
@@ -1357,18 +1365,20 @@ void main() {
 
         // Path changed.
         await expectDrift(
-          'dna:\n  order:\n    - a\n  a:\n    path: ../layerB\n',
+          'dna:\n  order:\n    - a\n  dependencies:\n    a:\n'
+          '      path: ../layerB\n',
         );
         // Name changed.
         await expectDrift(
-          'dna:\n  order:\n    - b\n  b:\n    path: ../layerA\n',
+          'dna:\n  order:\n    - b\n  dependencies:\n    b:\n'
+          '      path: ../layerA\n',
         );
         // Layer removed.
         await expectDrift('dna:\n  order: []\n');
         // Switched from path to git.
         await expectDrift(
-          'dna:\n  order:\n    - a\n  a:\n'
-          '    git: https://example.com/a.git\n',
+          'dna:\n  order:\n    - a\n  dependencies:\n    a:\n'
+          '      git: https://example.com/a.git\n',
         );
         // Constraint added on the git variant needs a matching manifest —
         // covered by the version-constraint drift below.
@@ -1395,9 +1405,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - c\n'
-          '  c:\n'
-          '    git: https://example.com/c.git\n'
-          '    version: ^1.0.0\n',
+          '  dependencies:\n'
+          '    c:\n'
+          '      git: https://example.com/c.git\n'
+          '      version: ^1.0.0\n',
         );
         await runSync(
           makeCmd(
@@ -1410,9 +1421,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - c\n'
-          '  c:\n'
-          '    git: https://example.com/c.git\n'
-          '    version: ^2.0.0\n',
+          '  dependencies:\n'
+          '    c:\n'
+          '      git: https://example.com/c.git\n'
+          '      version: ^2.0.0\n',
         );
         messages.clear();
         await expectLater(
@@ -1434,9 +1446,10 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - c\n'
-          '  c:\n'
-          '    git: https://example.com/c.git\n'
-          '    version: ^1.0.0\n',
+          '  dependencies:\n'
+          '    c:\n'
+          '      git: https://example.com/c.git\n'
+          '      version: ^1.0.0\n',
         );
         await runSync(
           makeCmd(
@@ -1505,8 +1518,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - c\n'
-          '  c:\n'
-          '    git: https://example.com/c.git\n',
+          '  dependencies:\n'
+          '    c:\n'
+          '      git: https://example.com/c.git\n',
         );
         await runSync(
           makeCmd(
@@ -1559,8 +1573,9 @@ void main() {
           'dna:\n'
           '  order:\n'
           '    - a\n'
-          '  a:\n'
-          '    path: ../layerA\n',
+          '  dependencies:\n'
+          '    a:\n'
+          '      path: ../layerA\n',
         );
         await runSync(makeCmd());
 
@@ -1591,143 +1606,359 @@ void main() {
     });
 
     // =========================================================================
-    test('prompts per skill and installs only the selected ones', () async {
-      final skillsSrc = Directory(p.join(pkgDna.path, 'agents', 'skills'))
-        ..createSync(recursive: true);
-      writeSkillIn(skillsSrc, 'new-project');
-      writeSkillIn(skillsSrc, 'new-ticket');
-      writeSkillIn(skillsSrc, 'simplify');
+    group('config: claude:', () {
+      const claudeConfig = '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - dna/agents/conventions\n'
+          '          - project_structure.md\n'
+          '      skills:\n'
+          '        include:\n'
+          '          - dna/agents/skills\n';
 
-      selectorAnswers['/new-project?'] = true;
-      selectorAnswers['/new-ticket?'] = false;
-      selectorAnswers['/simplify?'] = true;
+      void writeClaudeSources() {
+        writeFile(
+          p.join(pkgDna.path, 'agents', 'conventions', 'code-conventions.md'),
+          '# code',
+        );
+        final skillsSrc = Directory(p.join(pkgDna.path, 'agents', 'skills'))
+          ..createSync(recursive: true);
+        writeSkillIn(skillsSrc, 'new-project');
+        writeSkillIn(skillsSrc, 'simplify');
+        writeFile(p.join(target.path, 'project_structure.md'), '# structure');
+      }
 
-      await runSync(makeCmd(), extra: []);
+      test('writes the CLAUDE.md block and installs skills from the config',
+          () async {
+        writeClaudeSources();
+        writePubspec('dna:\n  order: []\n$claudeConfig');
 
-      expect(
-        Directory(p.join(target.path, 'dna', 'agents', 'skills', 'new-project'))
-            .existsSync(),
-        isTrue,
-      );
+        await runSync(makeCmd());
 
-      final claudeSkills = Directory(p.join(target.path, '.claude', 'skills'));
-      expect(
-        File(p.join(claudeSkills.path, 'new-project', 'SKILL.md')).existsSync(),
-        isTrue,
-      );
-      expect(
-        File(p.join(claudeSkills.path, 'simplify', 'SKILL.md')).existsSync(),
-        isTrue,
-      );
-      expect(
-        Directory(p.join(claudeSkills.path, 'new-ticket')).existsSync(),
-        isFalse,
-      );
+        final claudeMd =
+            File(p.join(target.path, 'CLAUDE.md')).readAsStringSync();
+        expect(claudeMd, contains(claudeMdStartMarker));
+        expect(
+          claudeMd,
+          contains('@dna/agents/conventions/code-conventions.md'),
+        );
+        expect(claudeMd, contains('@project_structure.md'));
 
-      expect(
-        selectorPrompts.where((p) => p.contains('/new-project?')).length,
-        1,
-      );
-      expect(
-        selectorPrompts.where((p) => p.contains('/new-ticket?')).length,
-        1,
-      );
-      expect(
-        selectorPrompts.where((p) => p.contains('/simplify?')).length,
-        1,
-      );
-    });
+        final claudeSkills =
+            Directory(p.join(target.path, '.claude', 'skills'));
+        expect(
+          File(p.join(claudeSkills.path, 'new-project', 'SKILL.md'))
+              .existsSync(),
+          isTrue,
+        );
+        expect(
+          File(p.join(claudeSkills.path, 'simplify', 'SKILL.md')).existsSync(),
+          isTrue,
+        );
 
-    test('prompts per convention and applies only the selected ones', () async {
-      final convSrc = Directory(
-        p.join(pkgDna.path, 'agents', 'conventions'),
-      )..createSync(recursive: true);
-      File(p.join(convSrc.path, 'code-conventions.md'))
-          .writeAsStringSync('# code');
-      File(p.join(convSrc.path, 'test-conventions.md'))
-          .writeAsStringSync('# test');
+        final manifest = DnaManifest.read(
+          Directory(p.join(target.path, 'dna')),
+        );
+        expect(
+          manifest!.claude.installedSkills,
+          ['new-project', 'simplify'],
+        );
+        expect(
+          manifest.claude.claudeMdInclude,
+          ['dna/agents/conventions', 'project_structure.md'],
+        );
 
-      selectorAnswers['code-conventions.md'] = true;
-      selectorAnswers['test-conventions.md'] = false;
+        // The claude phase keeps --check green.
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+      });
 
-      await runSync(makeCmd(), extra: []);
+      test('keeps hand-written CLAUDE.md content around the block', () async {
+        writeClaudeSources();
+        writeFile(
+          p.join(target.path, 'CLAUDE.md'),
+          '# Mine\n\nKeep me.\n',
+        );
+        writePubspec('dna:\n  order: []\n$claudeConfig');
 
-      final destDir = Directory(p.join(target.path, '.claude', 'conventions'));
-      expect(
-        File(p.join(destDir.path, 'code-conventions.md')).existsSync(),
-        isTrue,
-      );
-      expect(
-        File(p.join(destDir.path, 'test-conventions.md')).existsSync(),
-        isFalse,
-      );
+        await runSync(makeCmd());
 
-      final claudeMd =
-          File(p.join(target.path, 'CLAUDE.md')).readAsStringSync();
-      expect(
-        claudeMd,
-        contains('@.claude/conventions/code-conventions.md'),
-      );
-      expect(
-        claudeMd.contains('@.claude/conventions/test-conventions.md'),
-        isFalse,
-      );
-      expect(claudeMd, contains(ApplyConventions.startMarker));
-    });
+        final claudeMd =
+            File(p.join(target.path, 'CLAUDE.md')).readAsStringSync();
+        expect(claudeMd, startsWith('# Mine\n\nKeep me.\n'));
+        expect(claudeMd, contains('@project_structure.md'));
+      });
 
-    test('logs "no skills selected" when user says no to every prompt',
-        () async {
-      final skillsSrc = Directory(p.join(pkgDna.path, 'agents', 'skills'))
-        ..createSync(recursive: true);
-      writeSkillIn(skillsSrc, 'alpha');
+      test('removes skills that are no longer configured, keeps foreign ones',
+          () async {
+        writeClaudeSources();
+        writePubspec('dna:\n  order: []\n$claudeConfig');
+        await runSync(makeCmd());
 
-      await runSync(makeCmd(), extra: []);
+        // A hand-installed skill appears next to the managed ones.
+        writeFile(
+          p.join(target.path, '.claude', 'skills', 'mine', 'SKILL.md'),
+          '# mine',
+        );
 
-      expect(
-        messages.any((m) => m.contains('no skills selected')),
-        isTrue,
-      );
-      expect(
-        Directory(p.join(target.path, '.claude', 'skills')).existsSync(),
-        isFalse,
-      );
-    });
+        // The skills section disappears from the config.
+        writePubspec(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - project_structure.md\n',
+        );
+        await runSync(makeCmd());
 
-    test('logs "no conventions selected" when user says no to every prompt',
-        () async {
-      final convSrc = Directory(p.join(pkgDna.path, 'agents', 'conventions'))
-        ..createSync(recursive: true);
-      File(p.join(convSrc.path, 'code-conventions.md'))
-          .writeAsStringSync('# code');
+        expect(
+          Directory(p.join(target.path, '.claude', 'skills', 'new-project'))
+              .existsSync(),
+          isFalse,
+        );
+        expect(
+          Directory(p.join(target.path, '.claude', 'skills', 'simplify'))
+              .existsSync(),
+          isFalse,
+        );
+        expect(
+          File(p.join(target.path, '.claude', 'skills', 'mine', 'SKILL.md'))
+              .existsSync(),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('removed skill new-project')),
+          isTrue,
+        );
 
-      await runSync(makeCmd(), extra: []);
+        final manifest = DnaManifest.read(
+          Directory(p.join(target.path, 'dna')),
+        );
+        expect(manifest!.claude.installedSkills, isEmpty);
+      });
 
-      expect(
-        messages.any((m) => m.contains('no conventions selected')),
-        isTrue,
-      );
-      expect(
-        File(p.join(target.path, 'CLAUDE.md')).existsSync(),
-        isFalse,
-      );
-    });
+      test('never overwrites a hand-installed skill with the same name',
+          () async {
+        writeClaudeSources();
+        writeFile(
+          p.join(target.path, '.claude', 'skills', 'simplify', 'SKILL.md'),
+          '# handmade',
+        );
+        writePubspec('dna:\n  order: []\n$claudeConfig');
 
-    test('--no-install skips both prompt phases', () async {
-      final skillsSrc = Directory(p.join(pkgDna.path, 'agents', 'skills'))
-        ..createSync(recursive: true);
-      writeSkillIn(skillsSrc, 'alpha');
-      final convSrc = Directory(p.join(pkgDna.path, 'agents', 'conventions'))
-        ..createSync(recursive: true);
-      File(p.join(convSrc.path, 'code-conventions.md'))
-          .writeAsStringSync('# code');
+        await runSync(makeCmd());
 
-      await runSync(makeCmd());
+        expect(
+          File(p.join(target.path, '.claude', 'skills', 'simplify', 'SKILL.md'))
+              .readAsStringSync(),
+          '# handmade',
+        );
+        expect(
+          messages.any((m) => m.contains('not installed by gg_dna')),
+          isTrue,
+        );
+        final manifest = DnaManifest.read(
+          Directory(p.join(target.path, 'dna')),
+        );
+        expect(manifest!.claude.installedSkills, ['new-project']);
+      });
 
-      expect(selectorPrompts, isEmpty);
-      expect(
-        Directory(p.join(target.path, '.claude')).existsSync(),
-        isFalse,
-      );
+      test('without config: claude: neither CLAUDE.md nor .claude appear',
+          () async {
+        writeClaudeSources();
+        writePubspec('dna:\n  order: []\n');
+
+        await runSync(makeCmd());
+
+        expect(File(p.join(target.path, 'CLAUDE.md')).existsSync(), isFalse);
+        expect(
+          Directory(p.join(target.path, '.claude')).existsSync(),
+          isFalse,
+        );
+      });
+
+      test('throws when a claude_md include is missing after the sync',
+          () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
+        writePubspec(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - does-not-exist.md\n',
+        );
+
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'message',
+              contains('does-not-exist.md'),
+            ),
+          ),
+        );
+      });
+
+      test('--check detects claude config drift, block and skill drift',
+          () async {
+        writeClaudeSources();
+        writePubspec('dna:\n  order: []\n$claudeConfig');
+        await runSync(makeCmd());
+
+        // 1) Config drift: include list changed after the sync.
+        writePubspec(
+          'dna:\n'
+          '  order: []\n'
+          '  config:\n'
+          '    claude:\n'
+          '      claude_md:\n'
+          '        include:\n'
+          '          - project_structure.md\n',
+        );
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('claude config changed')),
+          isTrue,
+        );
+
+        // Restore the config for the remaining checks.
+        writePubspec('dna:\n  order: []\n$claudeConfig');
+
+        // 2) Someone edited the managed block.
+        final claudeMdFile = File(p.join(target.path, 'CLAUDE.md'));
+        final original = claudeMdFile.readAsStringSync();
+        claudeMdFile.writeAsStringSync(
+          original.replaceAll('@project_structure.md', '@tampered.md'),
+        );
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('CLAUDE.md block out of date')),
+          isTrue,
+        );
+        claudeMdFile.writeAsStringSync(original);
+
+        // 3) CLAUDE.md deleted entirely.
+        claudeMdFile.deleteSync();
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(messages.any((m) => m.contains('missing')), isTrue);
+        claudeMdFile.writeAsStringSync(original);
+
+        // 4) An owned skill was modified locally.
+        final skillFile = File(
+          p.join(target.path, '.claude', 'skills', 'simplify', 'SKILL.md'),
+        );
+        skillFile.writeAsStringSync('# tampered');
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('skill "simplify" is out of date')),
+          isTrue,
+        );
+
+        // 5) An owned skill was deleted locally.
+        skillFile.parent.deleteSync(recursive: true);
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('skill "simplify" is not installed')),
+          isTrue,
+        );
+
+        // A fresh sync heals everything.
+        await runSync(makeCmd());
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+
+        // 6) A claude_md include vanished after the sync.
+        File(p.join(target.path, 'project_structure.md')).deleteSync();
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('CLAUDE.md check failed')),
+          isTrue,
+        );
+        writeFile(p.join(target.path, 'project_structure.md'), '# structure');
+
+        // 7) One skill source vanished — its installed copy is an orphan.
+        Directory(p.join(target.path, 'dna', 'agents', 'skills', 'simplify'))
+            .deleteSync(recursive: true);
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any(
+            (m) => m.contains(
+              'skill "simplify" is no longer configured but still installed',
+            ),
+          ),
+          isTrue,
+        );
+
+        // 8) The whole skills source inside dna/ vanished.
+        Directory(p.join(target.path, 'dna', 'agents', 'skills'))
+            .deleteSync(recursive: true);
+        messages.clear();
+        await expectLater(
+          runSync(makeCmd(), extra: ['--check']),
+          throwsA(isA<Exception>()),
+        );
+        expect(
+          messages.any((m) => m.contains('skills check failed')),
+          isTrue,
+        );
+      });
+
+      test('replaces a pre-3.0 conventions block in CLAUDE.md', () async {
+        writeClaudeSources();
+        writeFile(
+          p.join(target.path, 'CLAUDE.md'),
+          '# Mine\n'
+          '\n'
+          '$legacyConventionsStartMarker v=2026-01-01 -->\n'
+          '@.claude/conventions/code-conventions.md\n'
+          '$legacyConventionsEndMarker\n',
+        );
+        writePubspec('dna:\n  order: []\n$claudeConfig');
+
+        await runSync(makeCmd());
+
+        final claudeMd =
+            File(p.join(target.path, 'CLAUDE.md')).readAsStringSync();
+        expect(claudeMd, isNot(contains('gg_dna:conventions')));
+        expect(claudeMd, contains(claudeMdStartMarker));
+        expect(claudeMd, startsWith('# Mine\n'));
+      });
     });
 
     // =========================================================================
