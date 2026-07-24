@@ -10,10 +10,11 @@ dna:
     - dna_company
     - dna_project
     - dna_repo
-  dna_company:
-    git: https://github.com/acme/dna_company.git
-    version: ^1.4.0
-  dna_project:
-    path: ../dna_project
-  dna_repo:
-    path: dna/_override
+  dependencies:
+    dna_company:
+      git: https://github.com/acme/dna_company.git
+      version: ^1.4.0
+    dna_project:
+      path: ../dna_project
+    dna_repo:
+      path: dna/_override

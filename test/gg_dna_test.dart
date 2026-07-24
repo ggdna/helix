@@ -33,18 +33,24 @@ void main() {
       test('should allow to run a subcommand from the command line', () async {
         final tmp = await Directory.systemTemp.createTemp('gg_dna_test_');
         try {
+          final source = Directory('${tmp.path}/pkg/dna');
+          await source.create(recursive: true);
+          await File('${source.path}/a.md').writeAsString('A');
+          final target = Directory('${tmp.path}/target');
+          await target.create();
           await capturePrint(
             ggLog: messages.add,
             code: () async => await runner.run([
               'ggDna',
-              'install-skills',
+              'sync',
               '--source',
-              tmp.path,
-              '--all',
+              '${tmp.path}/pkg',
+              '--target',
+              target.path,
             ]),
           );
           expect(
-            messages.any((m) => m.contains('No skills found')),
+            messages.any((m) => m.contains('Synced')),
             isTrue,
             reason: 'messages: $messages',
           );

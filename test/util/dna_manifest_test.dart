@@ -42,6 +42,11 @@ void main() {
               hash: '0xfeedface',
             ),
           ],
+          claude: DnaManifestClaude(
+            claudeMdInclude: ['dna/agents/conventions', 'notes.md'],
+            skillsInclude: ['dna/agents/skills'],
+            installedSkills: ['demo'],
+          ),
           baseVersion: '1.2.3',
           baseHash: '0xcafef00d',
           hash: '0x0000000000000001',
@@ -53,6 +58,8 @@ void main() {
         expect(loaded.layers, hasLength(2));
         expect(loaded.layers.first.resolvedTag, 'v1.5.0');
         expect(loaded.layers.last.path, 'dna/_override');
+        expect(loaded.claude.installedSkills, ['demo']);
+        expect(loaded.claude.skillsInclude, ['dna/agents/skills']);
       } finally {
         tmp.deleteSync(recursive: true);
       }
@@ -82,12 +89,18 @@ void main() {
       }
     });
 
-    test('read returns null on pre-2.0 manifests', () {
+    test('read returns null on pre-3.0 manifests', () {
       final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
       try {
         // A gg_dna 1.x manifest has no version field.
         File('${tmp.path}/.dna.json').writeAsStringSync(
           '{"overlay": "gg_foo", "hash": "0x01"}',
+        );
+        expect(DnaManifest.read(tmp), isNull);
+
+        // A gg_dna 2.x manifest has version 2.
+        File('${tmp.path}/.dna.json').writeAsStringSync(
+          '{"version": 2, "layers": [], "hash": "0x01"}',
         );
         expect(DnaManifest.read(tmp), isNull);
       } finally {
@@ -99,14 +112,16 @@ void main() {
       final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
       try {
         File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 2, "hash": "0x01"}',
+          '{"version": 3, "hash": "0x01"}',
         );
         final manifest = DnaManifest.read(tmp);
         expect(manifest!.layers, isEmpty);
         expect(manifest.hash, '0x01');
+        expect(manifest.claude.claudeMdInclude, isNull);
+        expect(manifest.claude.installedSkills, isEmpty);
 
         File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 2, "layers": [{}]}',
+          '{"version": 3, "layers": [{}]}',
         );
         expect(DnaManifest.read(tmp)!.layers.single.name, '');
       } finally {
@@ -124,21 +139,30 @@ void main() {
         expect(DnaManifest.read(tmp), isNull);
 
         // A layers element that is not an object.
-        file.writeAsStringSync('{"version": 2, "layers": [42]}');
+        file.writeAsStringSync('{"version": 3, "layers": [42]}');
         expect(DnaManifest.read(tmp), isNull);
 
         // A non-list layers value is treated as absent.
-        file.writeAsStringSync('{"version": 2, "layers": "nope"}');
+        file.writeAsStringSync('{"version": 3, "layers": "nope"}');
         expect(DnaManifest.read(tmp)!.layers, isEmpty);
 
         // Non-string fields are treated as absent.
         file.writeAsStringSync(
-          '{"version": 2, "hash": 42, "layers": [{"name": 7, "git": []}]}',
+          '{"version": 3, "hash": 42, "layers": [{"name": 7, "git": []}]}',
         );
         final manifest = DnaManifest.read(tmp);
         expect(manifest!.hash, isNull);
         expect(manifest.layers.single.name, '');
         expect(manifest.layers.single.git, isNull);
+
+        // A malformed claude section is treated as absent.
+        file.writeAsStringSync(
+          '{"version": 3, "layers": [], "claude": '
+          '{"installedSkills": [42], "claudeMdInclude": "x"}}',
+        );
+        final claude = DnaManifest.read(tmp)!.claude;
+        expect(claude.installedSkills, isEmpty);
+        expect(claude.claudeMdInclude, isNull);
       } finally {
         tmp.deleteSync(recursive: true);
       }
@@ -165,6 +189,53 @@ void main() {
       expect(layer.path, isNull);
       expect(layer.versionConstraint, '^1.4.0');
       expect(layer.resolvedTag, 'v1.5.0');
+    });
+
+    test('DnaManifestClaude.matchesConfig detects drift', () {
+      const stored = DnaManifestClaude(
+        claudeMdInclude: ['a.md'],
+        skillsInclude: ['skills'],
+        installedSkills: ['demo'],
+      );
+      expect(
+        stored.matchesConfig(
+          const DnaClaudeConfig(
+            claudeMdInclude: ['a.md'],
+            skillsInclude: ['skills'],
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        stored.matchesConfig(
+          const DnaClaudeConfig(
+            claudeMdInclude: ['b.md'],
+            skillsInclude: ['skills'],
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        stored.matchesConfig(
+          const DnaClaudeConfig(skillsInclude: ['skills']),
+        ),
+        isFalse,
+      );
+      expect(
+        stored.matchesConfig(
+          const DnaClaudeConfig(
+            claudeMdInclude: ['a.md'],
+            skillsInclude: ['skills', 'more'],
+          ),
+        ),
+        isFalse,
+      );
+      expect(stored.matchesConfig(null), isFalse);
+      expect(const DnaManifestClaude().matchesConfig(null), isTrue);
+      expect(
+        const DnaManifestClaude().matchesConfig(const DnaClaudeConfig()),
+        isTrue,
+      );
     });
 
     test('matchesConfig detects drift in any config field', () {

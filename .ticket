@@ -1,1 +1,1 @@
-{"issue_id":"feat-dna-overrides","description":"Introduce DNA overrides"}
+{"issue_id":"feat-dna-config-v3","description":"Neues dna:-Config-Format wie in testproject_dna_project (Layer unter dependencies:, neuer config:-Block), CLAUDE.md-Verwaltung ueber managed @-Import-Block, Skills/Conventions non-interaktiv ueber Config statt Prompts (Breaking Change -> 3.0.0)."}

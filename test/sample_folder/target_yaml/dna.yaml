@@ -1,5 +1,6 @@
 dna:
   order:
     - dna_repo
-  dna_repo:
-    path: dna/_override
+  dependencies:
+    dna_repo:
+      path: dna/_override
