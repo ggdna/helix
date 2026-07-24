@@ -168,8 +168,8 @@ class DnaManifest {
     this.hash,
   });
 
-  /// Manifest format version; [read] rejects all others (e.g. pre-3.0).
-  static const int formatVersion = 3;
+  /// Manifest format version; [read] rejects all others (e.g. pre-4.0).
+  static const int formatVersion = 4;
 
   /// The layers that were merged during the last sync, in order.
   final List<DnaManifestLayer> layers;

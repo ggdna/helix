@@ -14,3 +14,5 @@ build
 
 .aicode
 .gg/.gg-publish.json
+.gg/*
+!.gg/.gg.json

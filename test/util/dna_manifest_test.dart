@@ -89,7 +89,7 @@ void main() {
       }
     });
 
-    test('read returns null on pre-3.0 manifests', () {
+    test('read returns null on pre-4.0 manifests', () {
       final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
       try {
         // A gg_dna 1.x manifest has no version field.
@@ -112,7 +112,7 @@ void main() {
       final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
       try {
         File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 3, "hash": "0x01"}',
+          '{"version": 4, "hash": "0x01"}',
         );
         final manifest = DnaManifest.read(tmp);
         expect(manifest!.layers, isEmpty);
@@ -121,7 +121,7 @@ void main() {
         expect(manifest.claude.installedSkills, isEmpty);
 
         File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 3, "layers": [{}]}',
+          '{"version": 4, "layers": [{}]}',
         );
         expect(DnaManifest.read(tmp)!.layers.single.name, '');
       } finally {
@@ -139,16 +139,16 @@ void main() {
         expect(DnaManifest.read(tmp), isNull);
 
         // A layers element that is not an object.
-        file.writeAsStringSync('{"version": 3, "layers": [42]}');
+        file.writeAsStringSync('{"version": 4, "layers": [42]}');
         expect(DnaManifest.read(tmp), isNull);
 
         // A non-list layers value is treated as absent.
-        file.writeAsStringSync('{"version": 3, "layers": "nope"}');
+        file.writeAsStringSync('{"version": 4, "layers": "nope"}');
         expect(DnaManifest.read(tmp)!.layers, isEmpty);
 
         // Non-string fields are treated as absent.
         file.writeAsStringSync(
-          '{"version": 3, "hash": 42, "layers": [{"name": 7, "git": []}]}',
+          '{"version": 4, "hash": 42, "layers": [{"name": 7, "git": []}]}',
         );
         final manifest = DnaManifest.read(tmp);
         expect(manifest!.hash, isNull);
@@ -157,7 +157,7 @@ void main() {
 
         // A malformed claude section is treated as absent.
         file.writeAsStringSync(
-          '{"version": 3, "layers": [], "claude": '
+          '{"version": 4, "layers": [], "claude": '
           '{"installedSkills": [42], "claudeMdInclude": "x"}}',
         );
         final claude = DnaManifest.read(tmp)!.claude;

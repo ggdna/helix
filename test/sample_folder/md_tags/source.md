@@ -1,26 +1,26 @@
 # Guide
 
-Intro mit {{project_name|Projekt}}.
+Intro mit {{@project_name:Projekt}}.
 
-## [setup] Setup
+## [@setup] Setup
 
-Installiere {{package_manager|npm}}.
+Installiere {{@package_manager:npm}}.
 
 ### Unterschritt
 
 Bleibt Teil von Setup.
 
-## [usage] Nutzung
+## [@usage] Nutzung
 
-Rufe `{{cli|tool}}` auf.
+Rufe `{{@cli:tool}}` auf.
 
 ## Schluss
 
-Deps via {{package_manager|npm}}.
+Deps via {{@package_manager:npm}}.
 
 ```markdown
-## [setup] Beispiel im Fence
-{{package_manager|bleibt}}
+## [@setup] Beispiel im Fence
+{{@package_manager:bleibt}}
 ```
 
-Ende {{project_name|Projekt}}.
+Ende {{@project_name:Projekt}}.

@@ -4,26 +4,43 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-/// Markdown tag override engine: sections marked `### [tag] Titel` and
-/// strings marked `{{tag|Standardwert}}` are replaced via `X.tag.md` files
-/// of higher DNA layers ([parseTagFile] + [applyTagBlocks], markers stay
-/// re-overridable); [renderMarkers] strips all markers for the output.
-/// The full syntax is documented in the README.
+/// Markdown tag override engine: sections marked `### [@tag] Titel` and
+/// strings marked `{{@tag:Standardwert}}` are replaced via `X.overrides.md`
+/// files of higher DNA layers ([parseTagFile] + [applyTagBlocks], markers
+/// stay re-overridable); a `global.overrides.md` rewrites string tags in
+/// every file ([applyGlobalStringBlocks]); [renderMarkers] strips all
+/// markers for the output. The full syntax is documented in the README.
 library;
 
-/// Suffix identifying tag-override files (`X.tag.md` overrides `X.md`).
-const String tagFileSuffix = '.tag.md';
+/// Suffix identifying override files (`X.overrides.md` overrides `X.md`).
+const String overridesFileSuffix = '.overrides.md';
 
-/// One parsed replacement block of a `.tag.md` file.
+/// The pre-4.0 override suffix — hitting one is a hard error with a
+/// rename hint, never a silent skip.
+const String legacyOverridesFileSuffix = '.tag.md';
+
+/// Name of the per-layer global overrides file (in the src root): its
+/// string blocks rewrite `{{@tag:…}}` placeholders in **all** files.
+const String globalOverridesFilename = 'global.overrides.md';
+
+/// One parsed replacement block of a `.overrides.md` file.
 class TagBlock {
   /// Constructor.
-  const TagBlock({required this.tag, required this.content});
+  const TagBlock({
+    required this.tag,
+    required this.content,
+    this.isHeadingForm = false,
+  });
 
   /// The tag this block replaces.
   final String tag;
 
   /// The replacement content (heading-form blocks include their heading).
   final String content;
+
+  /// Whether the block was written as `#… [@tag] Titel` (vs. comment
+  /// markers) — global overrides reject heading-form blocks.
+  final bool isHeadingForm;
 }
 
 /// Result of [parseTagFile].
@@ -51,9 +68,10 @@ class TagApplyResult {
 }
 
 // .............................................................................
-/// Parses a `.tag.md` body into its comment-delimited (`<!-- tag -->` …
-/// `<!-- tag -->`, also single-line) and heading-form (`#… [tag] Titel` up
-/// to the next block) replacement blocks; stray content warns.
+/// Parses a `.overrides.md` body into its comment-delimited
+/// (`<!-- @tag -->` … `<!-- @tag -->`, also single-line) and heading-form
+/// (`#… [@tag] Titel` up to the next block) replacement blocks; stray
+/// content warns.
 TagFileParseResult parseTagFile(String content) {
   final doc = _Doc(content);
   final lines = doc.lines;
@@ -72,6 +90,7 @@ TagFileParseResult parseTagFile(String content) {
       TagBlock(
         tag: headingTag!,
         content: _trimBlankEdges(collected).join('\n'),
+        isHeadingForm: true,
       ),
     );
     headingTag = null;
@@ -172,8 +191,8 @@ TagFileParseResult parseTagFile(String content) {
 }
 
 // .............................................................................
-/// Applies [blocks] to [target] — a `[tag]` heading there means section
-/// replacement, a `{{tag|…}}` placeholder means string rewrite (both stay
+/// Applies [blocks] to [target] — a `[@tag]` heading there means section
+/// replacement, a `{{@tag:…}}` placeholder means string rewrite (both stay
 /// re-overridable for later layers), anything else warns via [fileLabel].
 TagApplyResult applyTagBlocks(
   String target,
@@ -224,7 +243,7 @@ TagApplyResult applyTagBlocks(
       continue;
     }
 
-    // String override: rewrite {{tag|old}} to {{tag|new}}.
+    // String override: rewrite {{@tag:old}} to {{@tag:new}}.
     var value = block.content;
     if (value.contains('\n')) {
       warnings.add(
@@ -246,7 +265,7 @@ TagApplyResult applyTagBlocks(
       lines[i] = _mapOutsideInlineCode(lines[i], (segment) {
         return segment.replaceAllMapped(placeholder, (match) {
           found = true;
-          return '{{${block.tag}|$value}}';
+          return '{{@${block.tag}:$value}}';
         });
       });
     }
@@ -259,8 +278,8 @@ TagApplyResult applyTagBlocks(
 }
 
 // .............................................................................
-/// Strips all markers for the synced output (`### [tag] T` -> `### T`,
-/// `{{tag|wert}}` -> `wert`); fenced and inline code stay untouched so
+/// Strips all markers for the synced output (`### [@tag] T` -> `### T`,
+/// `{{@tag:wert}}` -> `wert`); fenced and inline code stay untouched so
 /// documentation can show the syntax literally. Idempotent.
 String renderMarkers(String content) {
   final doc = _Doc(content);
@@ -287,21 +306,100 @@ String renderMarkers(String content) {
   return doc.render();
 }
 
+// .............................................................................
+/// Applies the string blocks of a `global.overrides.md` to [target]:
+/// every `{{@tag:…}}` placeholder whose tag matches one of [blocks] is
+/// rewritten — regardless of the file name. Tags that matched are added
+/// to [foundTags]; the caller aggregates them across all files and warns
+/// once per tag that never matched. Heading-form blocks must be filtered
+/// out by the caller; multi-line values are collapsed silently (the
+/// caller warns once at parse time).
+String applyGlobalStringBlocks(
+  String target,
+  List<TagBlock> blocks, {
+  required Set<String> foundTags,
+}) {
+  final doc = _Doc(target);
+  final lines = doc.lines;
+  final fenced = _fenceMask(lines);
+
+  for (final block in blocks) {
+    var value = block.content;
+    if (value.contains('\n')) {
+      value = value.split('\n').map((line) => line.trim()).join(' ');
+    }
+    final placeholder = _placeholderRe(block.tag);
+    for (var i = 0; i < lines.length; i++) {
+      if (fenced[i]) continue;
+      lines[i] = _mapOutsideInlineCode(lines[i], (segment) {
+        return segment.replaceAllMapped(placeholder, (match) {
+          foundTags.add(block.tag);
+          return '{{@${block.tag}:$value}}';
+        });
+      });
+    }
+  }
+
+  return doc.render();
+}
+
+// .............................................................................
+/// Reports lines of [content] that still use the pre-4.0 notation —
+/// unambiguous patterns only (`## [tag] …` headings and `{{tag|…}}`
+/// placeholders); fenced and inline code are skipped. Returns one
+/// message per finding, prefixed with the 1-based line number.
+List<String> detectLegacyMarkers(String content) {
+  final doc = _Doc(content);
+  final lines = doc.lines;
+  final fenced = _fenceMask(lines);
+  final findings = <String>[];
+
+  for (var i = 0; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    final line = lines[i];
+    if (_legacyHeadingRe.hasMatch(line)) {
+      findings.add(
+        'line ${i + 1}: legacy section tag — '
+        'use "[@tag]" instead of "[tag]".',
+      );
+    }
+    var legacyPlaceholder = false;
+    _mapOutsideInlineCode(line, (segment) {
+      if (_legacyPlaceholderRe.hasMatch(segment)) legacyPlaceholder = true;
+      return segment;
+    });
+    if (legacyPlaceholder) {
+      findings.add(
+        'line ${i + 1}: legacy string tag — '
+        'use "{{@tag:default}}" instead of "{{tag|default}}".',
+      );
+    }
+  }
+
+  return findings;
+}
+
 // =============================================================================
 // Private
 // =============================================================================
 
 final RegExp _taggedHeadingRe =
-    RegExp(r'^(#{1,6})[ \t]+\[([A-Za-z0-9_-]+)\][ \t]*(.*)$');
+    RegExp(r'^(#{1,6})[ \t]+\[@([A-Za-z0-9_-]+)\][ \t]*(.*)$');
 final RegExp _headingRe = RegExp(r'^(#{1,6})(?:[ \t]+(.*))?$');
-final RegExp _commentMarkerRe = RegExp(r'<!--\s*([A-Za-z0-9_-]+)\s*-->');
+final RegExp _commentMarkerRe = RegExp(r'<!--\s*@([A-Za-z0-9_-]+)\s*-->');
 final RegExp _anyPlaceholderRe =
-    RegExp(r'\{\{([A-Za-z0-9_-]+)(?:\|(.*?))?\}\}');
+    RegExp(r'\{\{@([A-Za-z0-9_-]+)(?::(.*?))?\}\}');
 final RegExp _fenceRe = RegExp(r'^\s{0,3}(`{3,}|~{3,})');
 final RegExp _inlineCodeRe = RegExp(r'`[^`]*`');
 
+/// Pre-4.0 notation, detected for warnings only: `## [tag] …` headings and
+/// `{{tag|…}}` placeholders (without the `@`).
+final RegExp _legacyHeadingRe =
+    RegExp(r'^#{1,6}[ \t]+\[(?!@)[A-Za-z0-9_-]+\][ \t]*');
+final RegExp _legacyPlaceholderRe = RegExp(r'\{\{(?!@)[A-Za-z0-9_-]+\|');
+
 RegExp _placeholderRe(String tag) =>
-    RegExp(r'\{\{' + RegExp.escape(tag) + r'(?:\|.*?)?\}\}');
+    RegExp(r'\{\{@' + RegExp.escape(tag) + r'(?::.*?)?\}\}');
 
 // .............................................................................
 /// Splits [content] into logical lines while remembering the dominant line
@@ -378,13 +476,13 @@ List<String>? _sectionReplacement(
     final hashes = heading.group(1)!;
     final rest = (heading.group(2) ?? '').trim();
     lines[0] = rest.isEmpty
-        ? '$hashes [${block.tag}]'
-        : '$hashes [${block.tag}] $rest';
+        ? '$hashes [@${block.tag}]'
+        : '$hashes [@${block.tag}] $rest';
   } else if (tagged.group(2) != block.tag) {
     final rest = tagged.group(3)!.trim();
     lines[0] = rest.isEmpty
-        ? '${tagged.group(1)} [${block.tag}]'
-        : '${tagged.group(1)} [${block.tag}] $rest';
+        ? '${tagged.group(1)} [@${block.tag}]'
+        : '${tagged.group(1)} [@${block.tag}] $rest';
   }
   return lines;
 }

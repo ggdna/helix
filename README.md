@@ -4,10 +4,16 @@ gg_dna ist ein Repository, in dem verschiedene Anleitungen, Scripts und Konfigur
 
 ## Sync
 
-`gg_dna sync` spiegelt den `dna/`-Ordner dieses Packages in das Zielrepo
-(`<target>/dna`) und legt darueber die **DNA-Schichten**, die im Zielrepo
-konfiguriert sind. Spaetere Schichten gewinnen bei Pfad-Kollisionen; die
-Basis-DNA aus gg_dna ist immer die unterste Schicht.
+`gg_dna sync` spiegelt die Basis-DNA dieses Packages (`dna/src`) in das
+Zielrepo (`<target>/dna`) und legt darueber die **DNA-Schichten**, die im
+Zielrepo konfiguriert sind. Spaetere Schichten gewinnen bei
+Pfad-Kollisionen; die Basis-DNA aus gg_dna ist immer die unterste Schicht,
+`<target>/dna/src` ist immer die oberste (implizit, ohne Config-Eintrag).
+
+In **allen DNA-Quellen** liegt die mergebare DNA unter `dna/src` — im
+gg_dna-Package selbst, in git-Schichten und in path-Schichten. Im Zielrepo
+enthaelt `/dna` nur das fertig gemergte Ergebnis (plus Manifest und den
+eigenen `src`-Ordner).
 
 Die Konfiguration ist ein `dna:`-Block und darf in **genau einer** dieser
 Dateien in der Repo-Wurzel liegen (mehrere gleichzeitig sind ein Fehler):
@@ -28,15 +34,12 @@ dna:
   order:
     - dna_company
     - dna_project
-    - dna_repo
   dependencies:
     dna_company:
       git: https://github.com/acme/dna_company.git
       version: ^1.4.0
     dna_project:
       path: ../dna_project
-    dna_repo:
-      path: dna/_override
   config:
     claude:
       claude_md:
@@ -54,10 +57,9 @@ Dasselbe als `"dna"`-Key in einer `package.json`:
 {
   "name": "my-ts-project",
   "dna": {
-    "order": ["dna_company", "dna_repo"],
+    "order": ["dna_company"],
     "dependencies": {
-      "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" },
-      "dna_repo": { "path": "dna/_override" }
+      "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" }
     },
     "config": {
       "claude": {
@@ -69,20 +71,23 @@ Dasselbe als `"dna"`-Key in einer `package.json`:
 }
 ```
 
-- **git-Schichten** werden geklont. Ein optionales `version:` ist ein
-  Semver-Constraint (pub-Semantik), das gegen die Git-Tags des Repos
-  aufgeloest wird — der hoechste passende Tag wird ausgecheckt. Tags mit
-  und ohne `v`-Praefix werden erkannt. `gg_*`-Kurzformen expandieren zu
-  `https://github.com/ggsuite/<name>.git`.
+- **git-Schichten** werden geklont; die DNA kommt aus `<clone>/dna/src`
+  (fehlt der Ordner, ist das ein Fehler mit Migrationshinweis). Ein
+  optionales `version:` ist ein Semver-Constraint (pub-Semantik), das
+  gegen die Git-Tags des Repos aufgeloest wird — der hoechste passende Tag
+  wird ausgecheckt. Tags mit und ohne `v`-Praefix werden erkannt.
+  `gg_*`-Kurzformen expandieren zu `https://github.com/ggsuite/<name>.git`.
 - **path-Schichten** sind lokale Ordner, relativ zur Wurzel des Zielrepos
   (Vorwaerts- wie Rueckwaerts-Schraegstriche funktionieren auf allen
-  Plattformen). Enthaelt der Ordner ein `dna/`-Unterverzeichnis, wird
-  dieses verwendet, sonst der Ordner selbst.
-- **Repo-lokale Schichten** wie `dna/_override` liegen innerhalb von
-  `<target>/dna` und ueberleben den Sync woertlich — ihre Marker bleiben
-  erhalten, damit der naechste Sync sie erneut anwenden kann. Existiert der
-  Ordner (noch) nicht — etwa auf einem frischen Clone, weil Git leere
-  Ordner nicht uebertraegt — wird die Schicht als leer uebersprungen.
+  Plattformen); die DNA kommt aus `<pfad>/dna/src`.
+- **`<target>/dna/src`** ist die repo-eigene Override-Schicht: Sie wird
+  automatisch als **allerletzte Schicht** angewendet und darf nicht in der
+  Config stehen (der Layername `src` ist reserviert). Sie ueberlebt den
+  Sync woertlich — ihre Marker bleiben erhalten, damit der naechste Sync
+  sie erneut anwenden kann. Existiert der Ordner (noch) nicht — etwa auf
+  einem frischen Clone, weil Git leere Ordner nicht uebertraegt — wird die
+  Schicht als leer uebersprungen. Path-Schichten, die in `<target>/dna`
+  zeigen (frueher `dna/_override`), sind ein Fehler.
 
 Nach dem Sync schreibt `gg_dna sync` ein Manifest `dna/.dna.json` —
 `dna/` und das Manifest gehoeren mit ins Repo committet, damit `--check`
@@ -134,30 +139,31 @@ gezielt einzelne Abschnitte oder Zeichenketten ueberschreiben.
 In der Quelldatei (z. B. `guide.md`) markieren Tags die Override-Punkte:
 
 ```markdown
-## [greeting] Begruessung
+## [@greeting] Begruessung
 
-Sag {{tone|freundlich}} hallo.
+Sag {{@tone:freundlich}} hallo.
 ```
 
-- `## [tag] Ueberschrift` markiert einen **ersetzbaren Abschnitt** — von der
-  Ueberschrift bis zur naechsten Ueberschrift gleicher oder hoeherer Ebene.
-- `{{tag|Standardwert}}` markiert eine **ersetzbare Zeichenkette** (auch
-  `{{tag}}` fuer einen leeren Standardwert).
+- `## [@tag] Ueberschrift` markiert einen **ersetzbaren Abschnitt** — von
+  der Ueberschrift bis zur naechsten Ueberschrift gleicher oder hoeherer
+  Ebene.
+- `{{@tag:Standardwert}}` markiert eine **ersetzbare Zeichenkette** (auch
+  `{{@tag}}` fuer einen leeren Standardwert).
 
-Eine hoehere Schicht legt daneben eine Datei `guide.tag.md` mit den
+Eine hoehere Schicht legt daneben eine Datei `guide.overrides.md` mit den
 Ersetzungen ab. Erlaubte Blockformen:
 
 ```markdown
-## [greeting] Neue Ueberschrift
+## [@greeting] Neue Ueberschrift
 
 Neuer Abschnittsinhalt.
 
-<!-- greeting -->
+<!-- @greeting -->
 ## Auch ohne Tag in der Ueberschrift
 Der Tag wird automatisch wieder angeheftet.
-<!-- greeting -->
+<!-- @greeting -->
 
-<!-- tone --> foermlich <!-- tone -->
+<!-- @tone --> foermlich <!-- @tone -->
 ```
 
 Regeln:
@@ -165,25 +171,48 @@ Regeln:
 - Ob ein Tag als Abschnitt oder Zeichenkette ersetzt wird, entscheidet die
   Zieldatei (Ueberschrift vs. Platzhalter). Unbekannte Tags erzeugen eine
   Warnung.
-- `.tag.md`-Dateien werden beim Sync **konsumiert** und nie ins Ziel
-  kopiert.
-- Im fertigen Ergebnis werden alle Marker entfernt: `## [tag] T` wird zu
-  `## T`, `{{tag|wert}}` zum Wert.
+- `.overrides.md`-Dateien werden beim Sync **konsumiert** und nie ins Ziel
+  kopiert. Der alte Suffix `.tag.md` ist ein harter Fehler mit
+  Umbenennungshinweis.
+- Im fertigen Ergebnis werden alle Marker entfernt: `## [@tag] T` wird zu
+  `## T`, `{{@tag:wert}}` zum Wert. Die alte Notation (`[tag]`,
+  `{{tag|wert}}`) wird nicht mehr erkannt und bleibt woertlich stehen —
+  der Sync warnt bei eindeutigen Alt-Mustern mit Datei und Zeile.
 - Inhalte in Code-Fences und Inline-Code bleiben unangetastet — Beispiele
   fuer die Syntax gehoeren deshalb immer in Code-Bloecke, sonst werden sie
   beim Sync ersetzt.
 
-## Migration von 2.x
+## Globale Overrides (`global.overrides.md`)
 
-- Die Layer-Maps wandern in einen `dependencies:`-Block unter `dna:` —
-  die alte Syntax (Layer direkt unter `dna:`) wird mit einem
-  Migrationshinweis abgelehnt.
-- Die Subcommands `install-skills` und `apply-conventions` wurden entfernt;
-  gewuenschte CLAUDE.md-Includes und Skill-Ordner werden in
-  `dna: config: claude:` konfiguriert und von `gg_dna sync` ohne
-  Rueckfragen angewendet.
-- Einmal `gg_dna sync` ausfuehren: Der alte `gg_dna:conventions`-Block in
-  der CLAUDE.md wird ersetzt; Kopien unter `.claude/conventions/` werden
-  nicht mehr benutzt und koennen geloescht werden.
-- `.dna.json` hat ein neues Format (v3); `--check` meldet alte Manifeste
+Jede Schicht kann in der Wurzel ihrer `dna/src` eine `global.overrides.md`
+ablegen. Ihre **Zeichenketten-Bloecke** ersetzen `{{@tag:…}}`-Platzhalter
+in **allen** `.md`-Dateien des bis dahin gemergten Baums — nicht nur in
+der gleichnamigen Datei:
+
+```markdown
+<!-- @tone --> foermlich <!-- @tone -->
+```
+
+- Dateispezifische `X.overrides.md` **derselben Schicht gewinnen** ueber
+  die globale Datei; ueber Schichten hinweg gilt wie immer: spaetere
+  Schicht gewinnt, `<target>/dna/src` zuletzt.
+- Abschnitts-Bloecke (`## [@tag] …`) sind in der globalen Datei nicht
+  erlaubt und werden mit Warnung uebersprungen.
+- Der Name ist reserviert: eine Inhaltsdatei `global.md` kann nicht per
+  Overrides-Datei gepatcht werden (Warnung).
+
+## Migration von 3.x
+
+- Die mergebare DNA jedes DNA-Repos wandert von `dna/` nach `dna/src/`
+  (gilt auch fuer path-Schichten und gg_dna selbst).
+- Der Inhalt von `dna/_override` wandert nach `dna/src`; der zugehoerige
+  Layer-Eintrag in der Config entfaellt — `dna/src` wird automatisch als
+  letzte Schicht angewendet. Path-Schichten, die in `<target>/dna` zeigen,
+  sind jetzt ein Fehler.
+- `<datei>.tag.md` wird zu `<datei>.overrides.md` umbenannt (alter Suffix
+  ist ein harter Fehler).
+- Neue Tag-Notation: `## [@tag] …` statt `## [tag] …` und
+  `{{@tag:default}}` statt `{{tag|default}}` — auch in den Blockformen der
+  Overrides-Dateien (`<!-- @tag -->`).
+- `.dna.json` hat ein neues Format (v4); `--check` meldet alte Manifeste
   als veraltet — einmal `gg_dna sync` ausfuehren.

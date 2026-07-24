@@ -19,8 +19,8 @@ Starte mit `run`.
 Deps via pnpm.
 
 ```markdown
-## [setup] Beispiel im Fence
-{{package_manager|bleibt}}
+## [@setup] Beispiel im Fence
+{{@package_manager:bleibt}}
 ```
 
 Ende Acme-Projekt.
