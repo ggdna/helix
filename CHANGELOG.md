@@ -70,6 +70,8 @@ skills
 replaced; `.claude/conventions/` copies are no longer used and can be
 deleted.
 
+## [3.0.0] - 2026-07-24
+
 ## [2.1.1] - 2026-07-24
 
 ## [2.1.0] - 2026-07-15
@@ -144,7 +146,7 @@ failing the sync; `--check` agrees
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 
-[Unreleased]: https://github.com/ggsuite/gg_dna/compare/2.1.1...HEAD
+[3.0.0]: https://github.com/ggsuite/gg_dna/compare/2.1.1...3.0.0
 [2.1.1]: https://github.com/ggsuite/gg_dna/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/ggsuite/gg_dna/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/ggsuite/gg_dna/compare/1.1.0...2.0.0
