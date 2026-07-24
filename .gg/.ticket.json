@@ -1,0 +1,10 @@
+{
+  "issue_id": "dna_src_and_overrides_md",
+  "description": "gg_dna 4.0: <file>.tag.md wird zu <file>.overrides.md, DNA-Quellen liegen in allen Repos unter /dna/src (auch gg_dna-Basis und path-Layer), im Zielprojekt enthaelt /dna nur das gemergte Ergebnis plus /dna/src als implizite letzte Override-Schicht (ersetzt dna/_override).",
+  "repositories": [
+    {
+      "name": "gg_dna",
+      "url": "https://github.com/ggsuite/gg_dna.git"
+    }
+  ]
+}
