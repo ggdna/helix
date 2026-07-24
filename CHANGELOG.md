@@ -1,13 +1,13 @@
 # Changelog
 
-## [3.0.0] - 2026-07-24
+## \[3.0.0\] - 2026-07-24
 
 ### Added
 
 - `dna: config: claude:` section: `claude_md: include:` maintains a managed
 `@`-import block in the target's CLAUDE.md (files stay as-is, folders expand
 to their `.md` files); `skills: include:` mirrors skill folders into
-`.claude/skills` — only skills gg_dna installed are overwritten or removed,
+`.claude/skills` — only skills gg\_dna installed are overwritten or removed,
 hand-installed skills are never touched
 - `gg_dna sync` creates CLAUDE.md when missing and removes leftover pre-3.0
 `gg_dna:conventions` blocks
@@ -29,10 +29,12 @@ skills
 
 1. Move the layer maps into a `dependencies:` block under `dna:`.
 2. Add the desired CLAUDE.md includes and skill folders to
-   `dna: config: claude:`.
+`dna: config: claude:`.
 3. Run `gg_dna sync` once — the legacy conventions block in CLAUDE.md is
-   replaced; `.claude/conventions/` copies are no longer used and can be
-   deleted.
+replaced; `.claude/conventions/` copies are no longer used and can be
+deleted.
+
+## [2.1.1] - 2026-07-24
 
 ## [2.1.0] - 2026-07-15
 
@@ -106,6 +108,7 @@ failing the sync; `--check` agrees
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 
+[2.1.1]: https://github.com/ggsuite/gg_dna/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/ggsuite/gg_dna/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/ggsuite/gg_dna/compare/1.1.0...2.0.0
 [1.1.0]: https://github.com/ggsuite/gg_dna/tag/%tag
