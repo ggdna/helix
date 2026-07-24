@@ -51,19 +51,22 @@ class DnaLayerConfig {
 }
 
 // .............................................................................
-/// The folder and content root of a path layer: content is `<path>/dna`
-/// when that subfolder exists, else the folder itself — shared by sync and
-/// `--check` so both always hash and copy the same tree. Backslashes in the
-/// configured path are normalized so committed Windows-style paths work on
-/// every platform.
+/// The folder and content root of a path layer: content is always the
+/// `<path>/dna/src` subfolder — shared by sync and `--check` so both
+/// always hash and copy the same tree (the sync errors when it is
+/// missing, the check reports a hash mismatch). Backslashes in the
+/// configured path are normalized so committed Windows-style paths work
+/// on every platform.
 ({Directory folder, Directory content}) resolvePathLayer(
   String targetRoot,
   DnaLayerConfig layer,
 ) {
   final raw = layer.path!.replaceAll('\\', '/');
   final folder = Directory(p.normalize(p.join(targetRoot, raw)));
-  final dnaSub = Directory(p.join(folder.path, 'dna'));
-  return (folder: folder, content: dnaSub.existsSync() ? dnaSub : folder);
+  return (
+    folder: folder,
+    content: Directory(p.join(folder.path, 'dna', 'src')),
+  );
 }
 
 /// The `dna: config: claude:` section — which files/folders end up as
@@ -356,6 +359,13 @@ class DnaConfig {
       if (names.contains(entry)) {
         throw FormatException(
           '`dna: order:` in $source lists layer "$entry" twice.',
+        );
+      }
+      if (entry == 'src') {
+        throw FormatException(
+          '`dna: order:` in $source must not contain a layer named '
+          '"src" — <target>/dna/src is applied automatically as the '
+          'last layer.',
         );
       }
       names.add(entry);

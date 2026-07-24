@@ -21,7 +21,7 @@ void main() {
 
         expect(config, isNotNull);
         expect(config!.warnings, isEmpty);
-        expect(config.layers, hasLength(3));
+        expect(config.layers, hasLength(2));
 
         final company = config.layers[0];
         expect(company.name, 'dna_company');
@@ -43,10 +43,6 @@ void main() {
         expect(project.isGit, isFalse);
         expect(project.path, '../dna_project');
         expect(project.versionConstraint, isNull);
-
-        final repo = config.layers[2];
-        expect(repo.name, 'dna_repo');
-        expect(repo.path, 'dna/_override');
       });
 
       test('parses the real sample target_ts package.json', () {
@@ -54,11 +50,8 @@ void main() {
 
         expect(config, isNotNull);
         expect(config!.warnings, isEmpty);
-        expect(config.layers, hasLength(2));
-        expect(config.layers[0].name, 'dna_project');
-        expect(config.layers[0].path, '../dna_project');
-        expect(config.layers[1].name, 'dna_repo');
-        expect(config.layers[1].path, 'dna/_override');
+        expect(config.layers.single.name, 'dna_project');
+        expect(config.layers.single.path, '../dna_project');
       });
 
       test(
@@ -67,8 +60,8 @@ void main() {
         final config = DnaConfig.read(p.join(sampleRoot(), 'target_yaml'));
 
         expect(config, isNotNull);
-        expect(config!.layers.single.name, 'dna_repo');
-        expect(config.layers.single.path, 'dna/_override');
+        expect(config!.layers, isEmpty);
+        expect(config.warnings, isEmpty);
       });
 
       test('returns null when no config file exists', () {
@@ -515,35 +508,47 @@ void main() {
       });
 
       test('resolvePathLayer normalizes backslash paths', () {
-        const layer = DnaLayerConfig(name: 'repo', path: r'dna\_override');
+        const layer = DnaLayerConfig(name: 'project', path: r'..\dna_project');
         final resolved = resolvePathLayer(
           p.join(sampleRoot(), 'target'),
           layer,
         );
-        expect(p.basename(resolved.folder.path), '_override');
-        expect(p.basename(p.dirname(resolved.folder.path)), 'dna');
+        expect(p.basename(resolved.folder.path), 'dna_project');
       });
 
-      test('resolvePathLayer prefers the dna/ subfolder when present', () {
+      test('resolvePathLayer content is always <path>/dna/src', () {
         final config = DnaConfig.read(p.join(sampleRoot(), 'target'))!;
         final project = config.layers[1];
-        final repo = config.layers[2];
 
-        // Repo-style layer: content root is the dna/ subfolder.
         final projectRoot = resolvePathLayer(
           p.join(sampleRoot(), 'target'),
           project,
         );
         expect(p.basename(projectRoot.folder.path), 'dna_project');
-        expect(p.basename(projectRoot.content.path), 'dna');
-
-        // Direct-content layer: content root is the folder itself.
-        final repoRoot = resolvePathLayer(
-          p.join(sampleRoot(), 'target'),
-          repo,
+        expect(
+          projectRoot.content.path,
+          p.join(projectRoot.folder.path, 'dna', 'src'),
         );
-        expect(p.basename(repoRoot.folder.path), '_override');
-        expect(repoRoot.content.path, repoRoot.folder.path);
+      });
+
+      test('rejects a layer named src — dna/src is implicit', () {
+        expect(
+          () => DnaConfig.parse(
+            'dna:\n'
+            '  order:\n'
+            '    - src\n'
+            '  dependencies:\n'
+            '    src:\n'
+            '      path: ../src\n',
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('applied automatically'),
+            ),
+          ),
+        );
       });
 
       test('parseJson reads a package.json dna block', () {

@@ -1,6 +1,6 @@
 name: gg_dna
 description: Die DNA fuer Programmierprojekte - synchronisiert Anleitungen, Skills und Konventionen fuer KI-Agenten aus mehrschichtigen DNA-Repos in Zielprojekte.
-version: 2.1.1
+version: 4.0.0
 repository: https://github.com/ggsuite/gg_dna.git
 
 environment:
@@ -31,15 +31,12 @@ executables:
 #   order:
 #     - dna_company
 #     - dna_project
-#     - dna_repo
 #   dependencies:
 #     dna_company:
 #       git: https://github.com/acme/dna_company.git
 #       version: ^1.4.0
 #     dna_project:
 #       path: ../dna_project
-#     dna_repo:
-#       path: dna/_override
 #   config:
 #     claude:
 #       claude_md:

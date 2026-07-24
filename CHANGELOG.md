@@ -1,5 +1,41 @@
 # Changelog
 
+## \[4.0.0\] - 2026-07-24
+
+### Added
+
+- `global.overrides.md` in the src root of any layer: its string blocks
+rewrite `{{@tag:…}}` placeholders in every merged `.md` file; file-specific
+overrides of the same layer win, heading-form blocks warn
+- Warnings (file + line) for leftover pre-4.0 tag notation
+
+### Changed
+
+- BREAKING: every DNA source ships its mergeable DNA under `dna/src` —
+the gg\_dna base DNA, git layers, and path layers; sources without `dna/src`
+are an error with a migration hint
+- BREAKING: `<target>/dna/src` is the implicit last layer — it survives the
+sync verbatim, is never listed in the config (layer name `src` is
+reserved), and replaces `dna/_override`; path layers pointing into
+`<target>/dna` are an error
+- BREAKING: override files are named `<file>.overrides.md` — the old
+`.tag.md` suffix is a hard error with a rename hint
+- BREAKING: new tag notation `## [@tag] …` and `{{@tag:default}}`
+(comment markers `<!-- @tag -->`); the old notation without `@` is no
+longer recognized
+- BREAKING: `.dna.json` manifest format v4 (records the implicit src
+layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
+
+### Migration from 3.x
+
+1. Move the mergeable DNA of every DNA repo from `dna/` to `dna/src/`.
+2. Move the content of `dna/_override` to `dna/src` and delete the layer
+entry from the config.
+3. Rename `<file>.tag.md` to `<file>.overrides.md`.
+4. Update the tag notation: `[tag]` → `[@tag]`, `{{tag|default}}` →
+`{{@tag:default}}`, `<!-- tag -->` → `<!-- @tag -->`.
+5. Run `gg_dna sync` once.
+
 ## \[3.0.0\] - 2026-07-24
 
 ### Added
@@ -33,6 +69,12 @@ skills
 3. Run `gg_dna sync` once — the legacy conventions block in CLAUDE.md is
 replaced; `.claude/conventions/` copies are no longer used and can be
 deleted.
+
+## [Unreleased]
+
+### Changed
+
+- Move mergeable DNA from dna/ to dna/src (gg\_dna 4.0 layout)
 
 ## [2.1.1] - 2026-07-24
 
@@ -108,6 +150,7 @@ failing the sync; `--check` agrees
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 
+[Unreleased]: https://github.com/ggsuite/gg_dna/compare/2.1.1...HEAD
 [2.1.1]: https://github.com/ggsuite/gg_dna/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/ggsuite/gg_dna/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/ggsuite/gg_dna/compare/1.1.0...2.0.0

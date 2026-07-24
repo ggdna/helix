@@ -27,7 +27,8 @@ void main() {
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('sync_test_');
     pkgRoot = Directory(p.join(tmp.path, 'pkg'))..createSync();
-    pkgDna = Directory(p.join(pkgRoot.path, 'dna'))..createSync();
+    pkgDna = Directory(p.join(pkgRoot.path, 'dna', 'src'))
+      ..createSync(recursive: true);
     target = Directory(p.join(tmp.path, 'target'))..createSync();
     messages = <String>[];
   });
@@ -196,11 +197,11 @@ void main() {
         () async {
       writeFile(
         p.join(pkgDna.path, 'guides', 'a.md'),
-        '## [s] Alt\n\nWert: {{v|standard}}\n',
+        '## [@s] Alt\n\nWert: {{@v:standard}}\n',
       );
       writeFile(
-        p.join(pkgDna.path, 'guides', 'a.tag.md'),
-        '## [s] Neu\n\nInhalt.\n',
+        p.join(pkgDna.path, 'guides', 'a.overrides.md'),
+        '## [@s] Neu\n\nInhalt.\n',
       );
 
       await runSync(makeCmd());
@@ -211,7 +212,8 @@ void main() {
       );
       // Tag files are consumed, never copied.
       expect(
-        File(p.join(target.path, 'dna', 'guides', 'a.tag.md')).existsSync(),
+        File(p.join(target.path, 'dna', 'guides', 'a.overrides.md'))
+            .existsSync(),
         isFalse,
       );
     });
@@ -250,9 +252,18 @@ void main() {
     group('path layers', () {
       test('merges layers in order — later layers win', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
-        writeFile(p.join(tmp.path, 'layer1', 'dna', 'guides', 'a.md'), 'ONE');
-        writeFile(p.join(tmp.path, 'layer1', 'dna', 'guides', 'one.md'), '1');
-        writeFile(p.join(tmp.path, 'layer2', 'dna', 'guides', 'a.md'), 'TWO');
+        writeFile(
+          p.join(tmp.path, 'layer1', 'dna', 'src', 'guides', 'a.md'),
+          'ONE',
+        );
+        writeFile(
+          p.join(tmp.path, 'layer1', 'dna', 'src', 'guides', 'one.md'),
+          '1',
+        );
+        writeFile(
+          p.join(tmp.path, 'layer2', 'dna', 'src', 'guides', 'a.md'),
+          'TWO',
+        );
         writePubspec(
           'dna:\n'
           '  order:\n'
@@ -286,7 +297,7 @@ void main() {
         );
       });
 
-      test('supports direct-content layers without a dna/ subfolder', () async {
+      test('throws when a path layer has no dna/src folder', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
         writeFile(p.join(tmp.path, 'direct', 'guides', 'a.md'), 'DIRECT');
         writePubspec(
@@ -298,11 +309,15 @@ void main() {
           '      path: ../direct\n',
         );
 
-        await runSync(makeCmd());
-
-        expect(
-          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
-          'DIRECT',
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'message',
+              contains('does not contain a dna/src folder'),
+            ),
+          ),
         );
       });
 
@@ -361,36 +376,41 @@ void main() {
         );
       });
 
-      test('throws when a layer points at <target>/dna itself', () async {
+      test('throws when a layer points into <target>/dna', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
         writeFile(p.join(target.path, 'dna', 'guides', 'a.md'), 'A');
-        writePubspec(
-          'dna:\n'
-          '  order:\n'
-          '    - self\n'
-          '  dependencies:\n'
-          '    self:\n'
-          '      path: dna\n',
-        );
+        for (final path in ['dna', 'dna/_override']) {
+          writePubspec(
+            'dna:\n'
+            '  order:\n'
+            '    - self\n'
+            '  dependencies:\n'
+            '    self:\n'
+            '      path: $path\n',
+          );
 
-        await expectLater(
-          runSync(makeCmd()),
-          throwsA(
-            isA<Exception>().having(
-              (e) => '$e',
-              'message',
-              contains('must not point at'),
+          await expectLater(
+            runSync(makeCmd()),
+            throwsA(
+              isA<Exception>().having(
+                (e) => '$e',
+                'message',
+                allOf(
+                  contains('no longer supported'),
+                  contains('dna/src'),
+                ),
+              ),
             ),
-          ),
-        );
+          );
+        }
       });
 
       test('skips .git folders and layer manifests when copying', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
-        final layer = Directory(p.join(tmp.path, 'layer'));
-        writeFile(p.join(layer.path, 'guides', 'a.md'), 'LAYER');
-        writeFile(p.join(layer.path, '.git', 'config'), 'git stuff');
-        writeFile(p.join(layer.path, '.dna.json'), '{"version": 2}');
+        final layerSrc = Directory(p.join(tmp.path, 'layer', 'dna', 'src'));
+        writeFile(p.join(layerSrc.path, 'guides', 'a.md'), 'LAYER');
+        writeFile(p.join(layerSrc.path, '.git', 'config'), 'git stuff');
+        writeFile(p.join(layerSrc.path, '.dna.json'), '{"version": 2}');
         writePubspec(
           'dna:\n'
           '  order:\n'
@@ -407,32 +427,21 @@ void main() {
           isFalse,
         );
         // The layer's own manifest is not copied; the sync writes a fresh
-        // one after the merge.
+        // one after the merge. The implicit src layer is recorded last.
         final manifest = DnaManifest.read(
           Directory(p.join(target.path, 'dna')),
         );
-        expect(manifest!.layers.single.name, 'layer');
+        expect(manifest!.layers.map((l) => l.name), ['layer', 'src']);
+        expect(manifest.layers.last.path, 'dna/src');
       });
 
       test(
-          'a configured but missing in-dna layer is skipped as empty '
+          'a missing <target>/dna/src is skipped as empty '
           '(fresh clones: git does not track empty folders)', () async {
-        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
-        writePubspec(
-          'dna:\n'
-          '  order:\n'
-          '    - repo\n'
-          '  dependencies:\n'
-          '    repo:\n'
-          '      path: dna/_override\n',
-        );
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'Wert: {{@s:x}}\n');
 
         await runSync(makeCmd());
 
-        expect(
-          messages.any((m) => m.contains('does not exist yet')),
-          isTrue,
-        );
         expect(
           File(p.join(target.path, 'dna', 'guides', 'a.md')).existsSync(),
           isTrue,
@@ -443,10 +452,10 @@ void main() {
         await runSync(makeCmd(), extra: ['--check']);
         expect(messages.last, contains('up to date'));
 
-        // Creating the override later is reported as layer change …
+        // Creating dna/src later is reported as a layer change …
         writeFile(
-          p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
-          '<!-- s --> x <!-- s -->\n',
+          p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
+          '<!-- @s --> neu <!-- @s -->\n',
         );
         messages.clear();
         await expectLater(
@@ -454,12 +463,16 @@ void main() {
           throwsA(isA<Exception>()),
         );
         expect(
-          messages.any((m) => m.contains('layer "repo" has changed')),
+          messages.any((m) => m.contains('layer "src"')),
           isTrue,
         );
 
         // … and the next sync picks it up.
         await runSync(makeCmd());
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'Wert: neu\n',
+        );
         messages.clear();
         await runSync(makeCmd(), extra: ['--check']);
         expect(messages.last, contains('up to date'));
@@ -468,14 +481,14 @@ void main() {
       test('a later full-file override resets earlier tag patches', () async {
         writeFile(
           p.join(pkgDna.path, 'guides', 'a.md'),
-          '## [s] Basis\n\nx\n',
+          '## [@s] Basis\n\nx\n',
         );
         writeFile(
-          p.join(tmp.path, 'layer1', 'dna', 'guides', 'a.tag.md'),
-          '## [s] Gepatcht\n\ny\n',
+          p.join(tmp.path, 'layer1', 'dna', 'src', 'guides', 'a.overrides.md'),
+          '## [@s] Gepatcht\n\ny\n',
         );
         writeFile(
-          p.join(tmp.path, 'layer2', 'dna', 'guides', 'a.md'),
+          p.join(tmp.path, 'layer2', 'dna', 'src', 'guides', 'a.md'),
           '# Komplett neu\n',
         );
         writePubspec(
@@ -499,33 +512,41 @@ void main() {
         );
       });
 
-      test('in-dna layers may use a repo-style dna/ subfolder', () async {
+      test('dna/src is applied implicitly as the very last layer', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'BASE');
         writeFile(
-          p.join(target.path, 'dna', '_override', 'dna', 'guides', 'a.md'),
-          'OVERRIDE',
+          p.join(tmp.path, 'layer1', 'dna', 'src', 'guides', 'a.md'),
+          'ONE',
+        );
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'guides', 'a.md'),
+          'SRC',
         );
         writePubspec(
           'dna:\n'
           '  order:\n'
-          '    - repo\n'
+          '    - one\n'
           '  dependencies:\n'
-          '    repo:\n'
-          '      path: dna/_override\n',
+          '    one:\n'
+          '      path: ../layer1\n',
         );
 
         await runSync(makeCmd());
 
+        // The implicit src layer wins over all configured layers.
         expect(
           File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
-          'OVERRIDE',
+          'SRC',
+        );
+        expect(
+          messages.any((m) => m.contains('Applied layer "src"')),
+          isTrue,
         );
         // The layer source survived verbatim.
         expect(
-          File(
-            p.join(target.path, 'dna', '_override', 'dna', 'guides', 'a.md'),
-          ).existsSync(),
-          isTrue,
+          File(p.join(target.path, 'dna', 'src', 'guides', 'a.md'))
+              .readAsStringSync(),
+          'SRC',
         );
       });
 
@@ -557,27 +578,19 @@ void main() {
       });
 
       test('recovers the dna backup of an interrupted swap', () async {
-        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), '## [s] Alt\n\nx\n');
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), '## [@s] Alt\n\nx\n');
         // Simulate a sync that was killed between the two swap renames:
-        // dna/ is gone, the old tree (with the user's override layer)
-        // lives in the backup folder.
+        // dna/ is gone, the old tree (with the user's src layer) lives in
+        // the backup folder.
         writeFile(
           p.join(
             target.path,
             '.gg_dna_backup',
-            '_override',
+            'src',
             'guides',
-            'a.tag.md',
+            'a.overrides.md',
           ),
-          '## [s] Neu\n\nInhalt.\n',
-        );
-        writePubspec(
-          'dna:\n'
-          '  order:\n'
-          '    - repo\n'
-          '  dependencies:\n'
-          '    repo:\n'
-          '      path: dna/_override\n',
+          '## [@s] Neu\n\nInhalt.\n',
         );
 
         await runSync(makeCmd());
@@ -589,7 +602,7 @@ void main() {
         );
         expect(
           File(
-            p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+            p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
           ).existsSync(),
           isTrue,
         );
@@ -601,18 +614,10 @@ void main() {
 
       test('a failure while building leaves the target untouched', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
-        const tagFile = '## [s] Neu\n';
+        const tagFile = '## [@s] Neu\n';
         writeFile(
-          p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
           tagFile,
-        );
-        writePubspec(
-          'dna:\n'
-          '  order:\n'
-          '    - repo\n'
-          '  dependencies:\n'
-          '    repo:\n'
-          '      path: dna/_override\n',
         );
         await runSync(makeCmd());
         final before = File(p.join(target.path, 'dna', 'guides', 'a.md'))
@@ -634,7 +639,7 @@ void main() {
         );
         expect(
           File(
-            p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+            p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
           ).readAsStringSync(),
           tagFile,
         );
@@ -653,27 +658,19 @@ void main() {
       });
 
       test(
-          'in-dna layers survive the wipe verbatim and do not inherit '
+          'dna/src survives the wipe verbatim and does not inherit '
           'base content', () async {
         writeFile(
           p.join(pkgDna.path, 'guides', 'a.md'),
-          '## [s] Alt\n\nAlter Inhalt.\n',
+          '## [@s] Alt\n\nAlter Inhalt.\n',
         );
-        // The base ships junk below _override that must NOT leak into the
+        // The base ships junk below src that must NOT leak into the
         // restored layer source.
-        writeFile(p.join(pkgDna.path, '_override', 'junk.md'), 'junk');
-        const tagFile = '<!-- s -->\n## Neu\n\nNeuer Inhalt.\n<!-- s -->\n';
+        writeFile(p.join(pkgDna.path, 'src', 'junk.md'), 'junk');
+        const tagFile = '<!-- @s -->\n## Neu\n\nNeuer Inhalt.\n<!-- @s -->\n';
         writeFile(
-          p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+          p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
           tagFile,
-        );
-        writePubspec(
-          'dna:\n'
-          '  order:\n'
-          '    - repo\n'
-          '  dependencies:\n'
-          '    repo:\n'
-          '      path: dna/_override\n',
         );
 
         await runSync(makeCmd());
@@ -686,12 +683,12 @@ void main() {
         // The layer source survived verbatim — markers intact, no junk.
         expect(
           File(
-            p.join(target.path, 'dna', '_override', 'guides', 'a.tag.md'),
+            p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
           ).readAsStringSync(),
           tagFile,
         );
         expect(
-          File(p.join(target.path, 'dna', '_override', 'junk.md')).existsSync(),
+          File(p.join(target.path, 'dna', 'src', 'junk.md')).existsSync(),
           isFalse,
         );
 
@@ -722,7 +719,7 @@ void main() {
         await runSync(
           makeCmd(
             gitCloner: clonerWriting(
-              {'dna/guides/a.md': 'COMPANY'},
+              {'dna/src/guides/a.md': 'COMPANY'},
               urls: urls,
               refs: refs,
             ),
@@ -739,8 +736,8 @@ void main() {
         final manifest = DnaManifest.read(
           Directory(p.join(target.path, 'dna')),
         );
-        expect(manifest!.layers.single.commit, 'abc123');
-        expect(manifest.layers.single.resolvedVersion, isNull);
+        expect(manifest!.layers.first.commit, 'abc123');
+        expect(manifest.layers.first.resolvedVersion, isNull);
       });
 
       test('expands gg_* shorthands in the git field', () async {
@@ -757,7 +754,7 @@ void main() {
 
         await runSync(
           makeCmd(
-            gitCloner: clonerWriting({'dna/guides/a.md': 'X'}, urls: urls),
+            gitCloner: clonerWriting({'dna/src/guides/a.md': 'X'}, urls: urls),
             gitRevParse: (dir) async => 'abc123',
           ),
         );
@@ -785,7 +782,7 @@ void main() {
 
         await runSync(
           makeCmd(
-            gitCloner: clonerWriting({'dna/guides/a.md': 'X'}, refs: refs),
+            gitCloner: clonerWriting({'dna/src/guides/a.md': 'X'}, refs: refs),
             gitLsRemoteTags: (url) async => {
               '1.4.0': 'sha140',
               'v1.5.0': 'sha150',
@@ -799,7 +796,7 @@ void main() {
         final manifest = DnaManifest.read(
           Directory(p.join(target.path, 'dna')),
         );
-        final layer = manifest!.layers.single;
+        final layer = manifest!.layers.first;
         expect(layer.resolvedVersion, '1.5.0');
         expect(layer.resolvedTag, 'v1.5.0');
         expect(layer.commit, 'sha150');
@@ -897,7 +894,7 @@ void main() {
             isA<Exception>().having(
               (e) => '$e',
               'message',
-              contains('does not contain a dna/ folder'),
+              contains('does not contain a dna/src folder'),
             ),
           ),
         );
@@ -922,7 +919,7 @@ void main() {
         await expectLater(
           runSync(
             makeCmd(
-              gitCloner: clonerWriting({'dna/x.md': 'X'}, dests: dests),
+              gitCloner: clonerWriting({'dna/src/x.md': 'X'}, dests: dests),
               gitRevParse: (dir) async => 'abc123',
             ),
           ),
@@ -940,13 +937,13 @@ void main() {
         final layer = Directory(p.join(tmp.path, 'layer'));
         // No guides/none.md exists anywhere.
         writeFile(
-          p.join(layer.path, 'dna', 'guides', 'none.tag.md'),
-          '<!-- x --> y <!-- x -->\n',
+          p.join(layer.path, 'dna', 'src', 'guides', 'none.overrides.md'),
+          '<!-- @x --> y <!-- @x -->\n',
         );
         // Parse warning (stray content) + apply warning (unknown tag).
         writeFile(
-          p.join(layer.path, 'dna', 'guides', 'a.tag.md'),
-          'Streuner\n\n<!-- missing --> y <!-- missing -->\n',
+          p.join(layer.path, 'dna', 'src', 'guides', 'a.overrides.md'),
+          'Streuner\n\n<!-- @missing --> y <!-- @missing -->\n',
         );
         writePubspec(
           'dna:\n'
@@ -972,6 +969,245 @@ void main() {
           isTrue,
         );
       });
+
+      test('a pre-4.0 .tag.md file is a hard error with a rename hint',
+          () async {
+        writeFile(p.join(pkgDna.path, 'guides', 'a.md'), '# A\n');
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'guides', 'a.tag.md'),
+          '<!-- @s --> x <!-- @s -->\n',
+        );
+
+        await expectLater(
+          runSync(makeCmd()),
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'message',
+              allOf(contains('.tag.md'), contains('.overrides.md')),
+            ),
+          ),
+        );
+      });
+
+      test('warns about leftover pre-4.0 notation in merged files', () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          '## [alt] Abschnitt\n\nWert: {{alt|standard}}\n',
+        );
+        // Legacy notation inside an overrides file warns too.
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'guides', 'a.overrides.md'),
+          '<!-- @s --> {{alt|x}} <!-- @s -->\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          messages.any(
+            (m) =>
+                m.contains('a.overrides.md') && m.contains('legacy string tag'),
+          ),
+          isTrue,
+        );
+
+        expect(
+          messages.any(
+            (m) => m.contains('guides/a.md') && m.contains('legacy section'),
+          ),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('legacy string tag')),
+          isTrue,
+        );
+        // Old notation stays literal in the output.
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          '## [alt] Abschnitt\n\nWert: {{alt|standard}}\n',
+        );
+      });
+    });
+
+    // =========================================================================
+    group('global.overrides.md', () {
+      test('rewrites string tags in every file of the merged tree', () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          'A: {{@tone:neutral}}\n',
+        );
+        writeFile(
+          p.join(pkgDna.path, 'agents', 'b.md'),
+          'B: {{@tone:neutral}}\n',
+        );
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'global.overrides.md'),
+          '<!-- @tone --> förmlich <!-- @tone -->\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'A: förmlich\n',
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'agents', 'b.md')).readAsStringSync(),
+          'B: förmlich\n',
+        );
+        // The global overrides file is consumed, not copied — but the src
+        // source survives verbatim.
+        expect(
+          File(p.join(target.path, 'dna', 'global.overrides.md')).existsSync(),
+          isFalse,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'src', 'global.overrides.md'))
+              .existsSync(),
+          isTrue,
+        );
+
+        // The immediate check agrees with the sync.
+        messages.clear();
+        await runSync(makeCmd(), extra: ['--check']);
+        expect(messages.last, contains('up to date'));
+      });
+
+      test('file-specific overrides of the same layer win over global',
+          () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          'A: {{@tone:neutral}}\n',
+        );
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'b.md'),
+          'B: {{@tone:neutral}}\n',
+        );
+        final src = p.join(target.path, 'dna', 'src');
+        writeFile(
+          p.join(src, 'global.overrides.md'),
+          '<!-- @tone --> global <!-- @tone -->\n',
+        );
+        writeFile(
+          p.join(src, 'guides', 'a.overrides.md'),
+          '<!-- @tone --> spezifisch <!-- @tone -->\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'A: spezifisch\n',
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'b.md')).readAsStringSync(),
+          'B: global\n',
+        );
+      });
+
+      test('a later layer global override wins over an earlier one', () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          'A: {{@tone:neutral}}\n',
+        );
+        writeFile(
+          p.join(tmp.path, 'layer1', 'dna', 'src', 'global.overrides.md'),
+          '<!-- @tone --> eins <!-- @tone -->\n',
+        );
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'global.overrides.md'),
+          '<!-- @tone --> zwei <!-- @tone -->\n',
+        );
+        writePubspec(
+          'dna:\n'
+          '  order:\n'
+          '    - one\n'
+          '  dependencies:\n'
+          '    one:\n'
+          '      path: ../layer1\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'A: zwei\n',
+        );
+      });
+
+      test('warns about heading-form blocks, unknown tags, and global.md',
+          () async {
+        writeFile(
+          p.join(pkgDna.path, 'guides', 'a.md'),
+          'A: {{@tone:neutral}}\n',
+        );
+        writeFile(p.join(pkgDna.path, 'global.md'), '# Reserved\n');
+        writeFile(
+          p.join(target.path, 'dna', 'src', 'global.overrides.md'),
+          '## [@section] Nicht erlaubt\n'
+          '\n'
+          'Inhalt.\n'
+          '\n'
+          '<!-- @tone -->\n'
+          'zeile1\n'
+          'zeile2\n'
+          '<!-- @tone -->\n'
+          '<!-- @nowhere --> x <!-- @nowhere -->\n'
+          '<!-- @legacy --> {{alt|y}} <!-- @legacy -->\n'
+          '<!-- @broken --> kaputt}} <!-- @broken -->\n'
+          'Streuner\n',
+        );
+
+        await runSync(makeCmd());
+
+        expect(
+          messages.any((m) => m.contains('heading-form block')),
+          isTrue,
+        );
+        expect(
+          messages.any(
+            (m) =>
+                m.contains(r'global.overrides.md') &&
+                m.contains('legacy string tag'),
+          ),
+          isTrue,
+        );
+        expect(
+          messages.any(
+            (m) =>
+                m.contains(r'global.overrides.md') &&
+                m.contains('Stray content'),
+          ),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('spans multiple lines')),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('"}}"')),
+          isTrue,
+        );
+        expect(
+          messages.any(
+            (m) => m.contains('"nowhere"') && m.contains('not found in any'),
+          ),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('global.md is a reserved name')),
+          isTrue,
+        );
+        expect(
+          File(p.join(target.path, 'dna', 'guides', 'a.md')).readAsStringSync(),
+          'A: zeile1 zeile2\n',
+        );
+        // The reserved file is still copied.
+        expect(
+          File(p.join(target.path, 'dna', 'global.md')).existsSync(),
+          isTrue,
+        );
+      });
     });
 
     // =========================================================================
@@ -980,7 +1216,7 @@ void main() {
 
       /// Builds the three-layer sample workspace: base_pkg as base DNA,
       /// dna_company as a real local git repo with tags, dna_project as a
-      /// path layer, and the target repo with its dna/_override layer.
+      /// path layer, and the target repo with its implicit dna/src layer.
       Future<void> setUpSampleWorkspace() async {
         copyDirectory(
           Directory(p.join(sampleRoot(), 'base_pkg')),
@@ -1011,7 +1247,7 @@ void main() {
         // Real git: no cloner/lsRemoteTags stubs.
         await runSync(makeCmd());
 
-        // Section overridden by dna/_override (highest layer), string
+        // Section overridden by dna/src (implicit highest layer), string
         // overridden by dna_project, both rendered.
         expect(
           File(p.join(target.path, 'dna', 'guides', 'coding.md'))
@@ -1029,8 +1265,8 @@ void main() {
           '### Beispiel\n'
           '\n'
           '```markdown\n'
-          '### [example] So bleibt ein Beispiel erhalten\n'
-          '{{example|unberührt}}\n'
+          '### [@example] So bleibt ein Beispiel erhalten\n'
+          '{{@example:unberührt}}\n'
           '```\n',
         );
 
@@ -1041,29 +1277,29 @@ void main() {
           startsWith('# Company Guide (Projekt)'),
         );
 
-        // The in-dna layer source survived verbatim.
+        // The implicit src layer source survived verbatim.
         expect(
           File(
             p.join(
               target.path,
               'dna',
-              '_override',
+              'src',
               'guides',
-              'coding.tag.md',
+              'coding.overrides.md',
             ),
           ).readAsStringSync(),
-          contains('<!-- greeting -->'),
+          contains('<!-- @greeting -->'),
         );
 
-        // No consumed .tag.md files outside the override source.
+        // No consumed .overrides.md files outside the override source.
         final tagFiles = Directory(p.join(target.path, 'dna'))
             .listSync(recursive: true)
             .whereType<File>()
-            .where((f) => f.path.endsWith('.tag.md'))
+            .where((f) => f.path.endsWith('.overrides.md'))
             .map((f) => p.relative(f.path, from: target.path))
             .map((f) => f.replaceAll('\\', '/'))
             .toList();
-        expect(tagFiles, ['dna/_override/guides/coding.tag.md']);
+        expect(tagFiles, ['dna/src/guides/coding.overrides.md']);
 
         // Manifest: resolved version, tag, and commit of the git layer.
         final headSha =
@@ -1079,8 +1315,8 @@ void main() {
         expect(manifest.layers[0].commit, headSha);
         expect(manifest.layers[1].name, 'dna_project');
         expect(manifest.layers[1].hash, isNotNull);
-        expect(manifest.layers[2].name, 'dna_repo');
-        expect(manifest.layers[2].path, 'dna/_override');
+        expect(manifest.layers[2].name, 'src');
+        expect(manifest.layers[2].path, 'dna/src');
 
         // Immediate --check passes (hash computed after restore).
         messages.clear();
@@ -1112,11 +1348,11 @@ void main() {
         );
         expect(manifest!.layers[0].resolvedVersion, '1.6.0');
 
-        // A local edit of the override layer triggers both the local and
+        // A local edit of the src layer triggers both the local and
         // the layer problem.
         writeFile(
-          p.join(target.path, 'dna', '_override', 'guides', 'coding.tag.md'),
-          '<!-- greeting -->\n## Anders\n<!-- greeting -->\n',
+          p.join(target.path, 'dna', 'src', 'guides', 'coding.overrides.md'),
+          '<!-- @greeting -->\n## Anders\n<!-- @greeting -->\n',
         );
         messages.clear();
         await expectLater(
@@ -1129,7 +1365,7 @@ void main() {
         );
         expect(
           messages.any(
-            (m) => m.contains('layer "dna_repo" has changed'),
+            (m) => m.contains('layer "src"'),
           ),
           isTrue,
         );
@@ -1151,8 +1387,8 @@ void main() {
           '### Beispiel\n'
           '\n'
           '```markdown\n'
-          '### [example] So bleibt ein Beispiel erhalten\n'
-          '{{example|unberührt}}\n'
+          '### [@example] So bleibt ein Beispiel erhalten\n'
+          '{{@example:unberührt}}\n'
           '```\n';
 
       test('syncs a TypeScript repo configured via package.json', () async {
@@ -1169,7 +1405,7 @@ void main() {
         );
         expect(
           File(
-            p.join(target.path, 'dna', '_override', 'guides', 'coding.tag.md'),
+            p.join(target.path, 'dna', 'src', 'guides', 'coding.overrides.md'),
           ).existsSync(),
           isTrue,
         );
@@ -1179,7 +1415,7 @@ void main() {
         );
         expect(
           manifest!.layers.map((l) => l.name),
-          ['dna_project', 'dna_repo'],
+          ['dna_project', 'src'],
         );
 
         messages.clear();
@@ -1212,7 +1448,7 @@ void main() {
           '    - other\n'
           '  dependencies:\n'
           '    other:\n'
-          '      path: dna/_override\n',
+          '      path: ../other\n',
         );
         messages.clear();
         await expectLater(
@@ -1231,10 +1467,10 @@ void main() {
         writePubspec(
           'dna:\n'
           '  order:\n'
-          '    - dna_repo\n'
+          '    - dna_other\n'
           '  dependencies:\n'
-          '    dna_repo:\n'
-          '      path: dna/_override\n',
+          '    dna_other:\n'
+          '      path: ../somewhere\n',
         );
 
         await expectLater(
@@ -1276,7 +1512,7 @@ void main() {
         expect(messages.any((m) => m.contains('missing')), isTrue);
       });
 
-      test('throws when .dna.json is missing or has a pre-2.0 format',
+      test('throws when .dna.json is missing or has a pre-4.0 format',
           () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
         writeFile(p.join(target.path, 'dna', 'guides', 'a.md'), 'A');
@@ -1286,7 +1522,7 @@ void main() {
           throwsA(isA<Exception>()),
         );
         expect(
-          messages.any((m) => m.contains('missing or pre-2.0 format')),
+          messages.any((m) => m.contains('missing or pre-4.0 format')),
           isTrue,
         );
 
@@ -1301,7 +1537,7 @@ void main() {
           throwsA(isA<Exception>()),
         );
         expect(
-          messages.any((m) => m.contains('missing or pre-2.0 format')),
+          messages.any((m) => m.contains('missing or pre-4.0 format')),
           isTrue,
         );
       });
@@ -1338,8 +1574,8 @@ void main() {
 
       test('detects dna config drift against the manifest', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
-        writeFile(p.join(tmp.path, 'layerA', 'dna', 'x.md'), 'X');
-        writeFile(p.join(tmp.path, 'layerB', 'dna', 'x.md'), 'X');
+        writeFile(p.join(tmp.path, 'layerA', 'dna', 'src', 'x.md'), 'X');
+        writeFile(p.join(tmp.path, 'layerB', 'dna', 'src', 'x.md'), 'X');
         writePubspec(
           'dna:\n'
           '  order:\n'
@@ -1412,7 +1648,7 @@ void main() {
         );
         await runSync(
           makeCmd(
-            gitCloner: clonerWriting({'dna/x.md': 'X'}),
+            gitCloner: clonerWriting({'dna/src/x.md': 'X'}),
             gitLsRemoteTags: (url) async => {'1.0.0': 'sha1'},
           ),
         );
@@ -1453,7 +1689,7 @@ void main() {
         );
         await runSync(
           makeCmd(
-            gitCloner: clonerWriting({'dna/x.md': 'X'}),
+            gitCloner: clonerWriting({'dna/src/x.md': 'X'}),
             gitLsRemoteTags: (url) async => {'1.0.0': 'sha1'},
           ),
         );
@@ -1524,7 +1760,7 @@ void main() {
         );
         await runSync(
           makeCmd(
-            gitCloner: clonerWriting({'dna/x.md': 'X'}),
+            gitCloner: clonerWriting({'dna/src/x.md': 'X'}),
             gitRevParse: (dir) async => 'abc123',
           ),
         );
@@ -1568,7 +1804,7 @@ void main() {
 
       test('checks path layers by re-hashing', () async {
         writeFile(p.join(pkgDna.path, 'guides', 'a.md'), 'A');
-        writeFile(p.join(tmp.path, 'layerA', 'dna', 'x.md'), 'X');
+        writeFile(p.join(tmp.path, 'layerA', 'dna', 'src', 'x.md'), 'X');
         writePubspec(
           'dna:\n'
           '  order:\n'
@@ -1580,7 +1816,7 @@ void main() {
         await runSync(makeCmd());
 
         // Layer changed.
-        writeFile(p.join(tmp.path, 'layerA', 'dna', 'x.md'), 'X2');
+        writeFile(p.join(tmp.path, 'layerA', 'dna', 'src', 'x.md'), 'X2');
         messages.clear();
         await expectLater(
           runSync(makeCmd(), extra: ['--check']),

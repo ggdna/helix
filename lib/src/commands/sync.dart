@@ -40,8 +40,9 @@ typedef GitLsRemote = Future<String?> Function(String url);
 typedef GitLsRemoteTags = Future<Map<String, String>?> Function(String url);
 
 /// Mirrors the gg_dna `dna/` folder into the target, merges the DNA layers
-/// of the target repo's `dna:` config on top (later layers win, `X.tag.md`
-/// files patch sections/strings), then applies the `config: claude:`
+/// of the target repo's `dna:` config on top (later layers win,
+/// `X.overrides.md` files patch sections/strings), then applies the
+/// `config: claude:`
 /// section: the managed CLAUDE.md block and the configured skills — all
 /// non-interactive. All git access is injectable for tests.
 class Sync extends Command<dynamic> {
@@ -63,8 +64,8 @@ class Sync extends Command<dynamic> {
         'source',
         abbr: 's',
         help: 'Source folder containing the base gg_dna content. Defaults to '
-            'the root of the resolved gg_dna package. The `dna/` subfolder '
-            'of this path is mirrored into <target>/dna.',
+            'the root of the resolved gg_dna package. The `dna/src` '
+            'subfolder of this path is mirrored into <target>/dna.',
       )
       ..addOption(
         'target',
@@ -94,8 +95,9 @@ class Sync extends Command<dynamic> {
 
   @override
   final description =
-      'Mirror the gg_dna `dna/` folder into <target>/dna and merge the DNA '
-      'layers configured in the target repo on top — later layers win. '
+      'Mirror the gg_dna base DNA (dna/src) into <target>/dna and merge '
+      'the DNA layers configured in the target repo on top — later layers '
+      'win, <target>/dna/src is applied automatically as the last layer. '
       'Then apply the `config: claude:` section: maintain the managed '
       '@-import block in CLAUDE.md and install the configured skills into '
       "the project's .claude/skills folder — without prompting.\n"
@@ -107,13 +109,13 @@ class Sync extends Command<dynamic> {
       '  dna:\n'
       '    order:\n'
       '      - dna_company\n'
-      '      - dna_repo\n'
+      '      - dna_project\n'
       '    dependencies:\n'
       '      dna_company:\n'
       '        git: https://github.com/acme/dna_company.git\n'
       '        version: ^1.4.0\n'
-      '      dna_repo:\n'
-      '        path: dna/_override\n'
+      '      dna_project:\n'
+      '        path: ../dna_project\n'
       '    config:\n'
       '      claude:\n'
       '        claude_md:\n'
@@ -124,14 +126,17 @@ class Sync extends Command<dynamic> {
       '          include:\n'
       '            - dna/agents/skills\n'
       '\n'
+      '  * every layer ships its mergeable DNA under `dna/src`.\n'
       '  * `git:` layers are cloned; a `version:` semver constraint is\n'
       '    resolved against the repo tags (highest matching tag wins).\n'
       '    `gg_*` shorthands expand to https://github.com/ggsuite/<name>.\n'
       '  * `path:` layers are local folders (relative to the target root).\n'
-      '    A path inside <target>/dna (e.g. dna/_override) survives the\n'
-      '    sync verbatim.\n'
-      '  * `X.tag.md` files patch sections and strings of the merged\n'
-      '    `X.md`; they are consumed, not copied.\n'
+      '  * `<target>/dna/src` is the implicit last layer — it survives\n'
+      '    the sync verbatim and is never listed in the config.\n'
+      '  * `X.overrides.md` files patch sections (`## [@tag] …`) and\n'
+      '    strings (`{{@tag:default}}`) of the merged `X.md`; a\n'
+      '    `global.overrides.md` rewrites string tags in every file.\n'
+      '    Overrides files are consumed, not copied.\n'
       '  * `claude_md: include:` entries (files or folders) become\n'
       '    @-import lines in a managed block in CLAUDE.md.\n'
       '  * `skills: include:` folders are mirrored into .claude/skills;\n'
@@ -215,6 +220,8 @@ class Sync extends Command<dynamic> {
           cleanUp: _cleanupLayer,
         ),
       );
+      // <target>/dna/src is the implicit last layer.
+      resolved.add(_resolveImplicitSrcLayer(target, dnaDir));
       manifest = _buildAndSwap(
         sourceDna: sourceDna,
         dnaDir: dnaDir,
@@ -260,7 +267,7 @@ class Sync extends Command<dynamic> {
 
   Directory _resolveSourceDna(String? raw, String packageRoot) {
     final root = (raw != null && raw.isNotEmpty) ? raw : packageRoot;
-    return Directory(p.join(root, 'dna'));
+    return Directory(p.join(root, 'dna', 'src'));
   }
 
   Directory _resolveTarget(String? raw) {
@@ -366,7 +373,15 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Resolves a layer to a local content root (clone or snapshot temp).
+  /// The implicit last layer: `<target>/dna/src` — never configured in
+  /// the `dna:` block, always applied on top of all configured layers.
+  static const DnaLayerConfig implicitSrcLayer =
+      DnaLayerConfig(name: 'src', path: 'dna/src');
+
+  // ...........................................................................
+  /// Resolves a configured layer to a local content root (clone or the
+  /// `<path>/dna/src` folder). Layers pointing into `<target>/dna` are a
+  /// hard error — repo-local overrides live in the implicit `dna/src`.
   Future<_ResolvedLayer> _resolveLayer(
     DnaLayerConfig config,
     Directory target,
@@ -378,16 +393,15 @@ class Sync extends Command<dynamic> {
 
     final resolved = resolvePathLayer(target.path, config);
     final folder = resolved.folder;
+    if (p.equals(folder.path, dnaDir.path) ||
+        p.isWithin(dnaDir.path, folder.path)) {
+      throw Exception(
+        'Layer "${config.name}": path layers inside <target>/dna are no '
+        'longer supported — move the content to <target>/dna/src (applied '
+        'automatically as the last layer) and remove the layer entry.',
+      );
+    }
     if (!folder.existsSync()) {
-      // In-dna override layers may not exist yet — git does not track empty
-      // folders, so fresh clones of a consumer repo must still sync.
-      if (p.isWithin(dnaDir.path, folder.path)) {
-        ggLog(
-          'Layer "${config.name}": ${config.path} does not exist yet '
-          '— skipped.',
-        );
-        return _ResolvedLayer(config: config, contentRoot: folder);
-      }
       if (FileSystemEntity.isFileSync(folder.path)) {
         throw Exception(
           'Layer "${config.name}": path is a file, not a folder: '
@@ -398,27 +412,11 @@ class Sync extends Command<dynamic> {
         'Layer "${config.name}": path does not exist: ${folder.path}',
       );
     }
-    if (p.equals(folder.path, dnaDir.path) ||
-        p.equals(resolved.content.path, dnaDir.path)) {
+    if (!resolved.content.existsSync()) {
       throw Exception(
-        'Layer "${config.name}" must not point at <target>/dna itself.',
-      );
-    }
-
-    if (p.isWithin(dnaDir.path, folder.path)) {
-      // The layer source lives inside the folder that gets replaced —
-      // snapshot it now so the new tree can carry it over verbatim.
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_layer_');
-      copyDirectory(folder, tmp);
-      final tmpContent = p.equals(resolved.content.path, folder.path)
-          ? tmp
-          : Directory(p.join(tmp.path, 'dna'));
-      return _ResolvedLayer(
-        config: config,
-        contentRoot: tmpContent,
-        cleanup: tmp,
-        restoreRel: p.relative(folder.path, from: dnaDir.path),
-        hash: hashDnaDirectory(resolved.content),
+        'Layer "${config.name}" does not contain a dna/src folder: '
+        '${resolved.content.path} — since gg_dna 4.0 the mergeable DNA '
+        'of a layer lives under dna/src.',
       );
     }
 
@@ -426,6 +424,26 @@ class Sync extends Command<dynamic> {
       config: config,
       contentRoot: resolved.content,
       hash: hashDnaDirectory(resolved.content),
+    );
+  }
+
+  // ...........................................................................
+  /// Resolves the implicit `<target>/dna/src` layer: missing folders are
+  /// skipped as empty (git does not track empty folders); existing ones
+  /// are snapshotted so the new tree carries them over verbatim.
+  _ResolvedLayer _resolveImplicitSrcLayer(Directory target, Directory dnaDir) {
+    final folder = Directory(p.join(dnaDir.path, 'src'));
+    if (!folder.existsSync()) {
+      return _ResolvedLayer(config: implicitSrcLayer, contentRoot: folder);
+    }
+    final tmp = Directory.systemTemp.createTempSync('gg_dna_layer_');
+    copyDirectory(folder, tmp);
+    return _ResolvedLayer(
+      config: implicitSrcLayer,
+      contentRoot: tmp,
+      cleanup: tmp,
+      restoreRel: 'src',
+      hash: hashDnaDirectory(folder),
     );
   }
 
@@ -450,11 +468,12 @@ class Sync extends Command<dynamic> {
     try {
       ggLog('Cloning $url into ${tmp.path} …');
       await _gitCloner(url, tmp, ref: resolvedTag?.tag);
-      final dna = Directory(p.join(tmp.path, 'dna'));
+      final dna = Directory(p.join(tmp.path, 'dna', 'src'));
       if (!dna.existsSync()) {
         throw Exception(
-          'Layer "${config.name}" does not contain a dna/ folder: '
-          '${dna.path}',
+          'Layer "${config.name}" does not contain a dna/src folder: '
+          '${dna.path} — since gg_dna 4.0 the mergeable DNA of a layer '
+          'repo lives under dna/src.',
         );
       }
       final commit = resolvedTag?.sha ?? await _gitRevParse(tmp);
@@ -508,29 +527,52 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Copies one layer into [dnaDir], then applies its `.tag.md` patches.
+  /// Copies one layer into [dnaDir], applies its `global.overrides.md`
+  /// to every `.md` file, then its file-specific `X.overrides.md`
+  /// patches (file-specific wins within the layer).
   void _applyLayerContent(String name, Directory root, Directory dnaDir) {
     if (!root.existsSync()) return;
 
-    // Copy all dna content; collect the tag files instead of copying them.
-    final tagFiles = <String>[];
+    // Copy all dna content; collect the overrides files instead of
+    // copying them. The pre-4.0 suffix is a hard error, not a skip.
+    final overridesFiles = <String>[];
     copyDirectory(
       root,
       dnaDir,
       skip: (rel) {
         if (!isDnaContent(rel)) return true;
-        if (rel.endsWith(tagFileSuffix)) {
-          tagFiles.add(rel);
+        if (rel.endsWith(legacyOverridesFileSuffix)) {
+          throw Exception(
+            'Layer "$name": $rel uses the pre-4.0 suffix — rename '
+            '"$legacyOverridesFileSuffix" files to '
+            '"$overridesFileSuffix".',
+          );
+        }
+        if (rel.endsWith(overridesFileSuffix)) {
+          overridesFiles.add(rel);
           return true;
+        }
+        if (rel == 'global.md') {
+          ggLog(
+            'Layer "$name": global.md is a reserved name — the file is '
+            'copied, but it cannot be patched by an overrides file '
+            '($globalOverridesFilename is always the global one).',
+          );
         }
         return false;
       },
     );
-    tagFiles.sort();
+    overridesFiles.sort();
 
-    for (final rel in tagFiles) {
+    // The global overrides of this layer come first — file-specific
+    // overrides of the same layer win over them.
+    if (overridesFiles.remove(globalOverridesFilename)) {
+      _applyGlobalOverrides(name, root, dnaDir);
+    }
+
+    for (final rel in overridesFiles) {
       final targetRel =
-          '${rel.substring(0, rel.length - tagFileSuffix.length)}.md';
+          '${rel.substring(0, rel.length - overridesFileSuffix.length)}.md';
       final targetFile = File(p.join(dnaDir.path, targetRel));
       if (!targetFile.existsSync()) {
         ggLog(
@@ -538,8 +580,11 @@ class Sync extends Command<dynamic> {
         );
         continue;
       }
-      final parsed =
-          parseTagFile(File(p.join(root.path, rel)).readAsStringSync());
+      final content = File(p.join(root.path, rel)).readAsStringSync();
+      for (final finding in detectLegacyMarkers(content)) {
+        ggLog('Layer "$name" ($rel): $finding');
+      }
+      final parsed = parseTagFile(content);
       for (final warning in parsed.warnings) {
         ggLog('Layer "$name" ($rel): $warning');
       }
@@ -556,11 +601,80 @@ class Sync extends Command<dynamic> {
   }
 
   // ...........................................................................
-  /// Strips all tag markers from every `.md` file under [dnaDir].
+  /// Applies the string blocks of `<layer>/global.overrides.md` to every
+  /// `.md` file merged so far. Heading-form blocks warn and are skipped;
+  /// tags that match no placeholder in any file warn once.
+  void _applyGlobalOverrides(String name, Directory root, Directory dnaDir) {
+    final content =
+        File(p.join(root.path, globalOverridesFilename)).readAsStringSync();
+    for (final finding in detectLegacyMarkers(content)) {
+      ggLog('Layer "$name" ($globalOverridesFilename): $finding');
+    }
+    final parsed = parseTagFile(content);
+    for (final warning in parsed.warnings) {
+      ggLog('Layer "$name" ($globalOverridesFilename): $warning');
+    }
+
+    final blocks = <TagBlock>[];
+    for (final block in parsed.blocks) {
+      if (block.isHeadingForm) {
+        ggLog(
+          'Layer "$name" ($globalOverridesFilename): heading-form block '
+          '"[@${block.tag}]" is not supported in global overrides — '
+          'skipped.',
+        );
+        continue;
+      }
+      if (block.content.contains('\n')) {
+        ggLog(
+          'Layer "$name" ($globalOverridesFilename): replacement for tag '
+          '"${block.tag}" spans multiple lines — collapsed to a single '
+          'line.',
+        );
+      }
+      if (block.content.contains('}}')) {
+        ggLog(
+          'Layer "$name" ($globalOverridesFilename): replacement value '
+          'for tag "${block.tag}" contains "}}" — later overrides and '
+          'rendering may truncate it.',
+        );
+      }
+      blocks.add(block);
+    }
+    if (blocks.isEmpty) return;
+
+    final foundTags = <String>{};
+    for (final entity in dnaDir.listSync(recursive: true, followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.md')) continue;
+      final original = entity.readAsStringSync();
+      final updated =
+          applyGlobalStringBlocks(original, blocks, foundTags: foundTags);
+      if (updated != original) {
+        entity.writeAsStringSync(updated);
+      }
+    }
+    for (final block in blocks) {
+      if (!foundTags.contains(block.tag)) {
+        ggLog(
+          'Layer "$name" ($globalOverridesFilename): tag "${block.tag}" '
+          'not found in any file — skipped.',
+        );
+      }
+    }
+  }
+
+  // ...........................................................................
+  /// Strips all tag markers from every `.md` file under [dnaDir] and
+  /// warns about leftover pre-4.0 notation (which stays literal).
   void _renderAll(Directory dnaDir) {
     for (final entity in dnaDir.listSync(recursive: true, followLinks: false)) {
       if (entity is! File || !entity.path.endsWith('.md')) continue;
       final content = entity.readAsStringSync();
+      final rel =
+          p.relative(entity.path, from: dnaDir.path).replaceAll('\\', '/');
+      for (final finding in detectLegacyMarkers(content)) {
+        ggLog('$rel: $finding');
+      }
       final rendered = renderMarkers(content);
       if (rendered != content) {
         entity.writeAsStringSync(rendered);
@@ -582,7 +696,7 @@ class Sync extends Command<dynamic> {
     final manifest = DnaManifest.read(dest);
     if (manifest == null) {
       ggLog(
-        '  - missing or pre-2.0 format: '
+        '  - missing or pre-4.0 format: '
         '${p.join(dest.path, dnaManifestFilename)}',
       );
       throw Exception(
@@ -610,8 +724,12 @@ class Sync extends Command<dynamic> {
       );
     }
 
-    // 3) Config drift: the configured dna: block must match the manifest.
-    final layers = config?.layers ?? const <DnaLayerConfig>[];
+    // 3) Config drift: the configured dna: block plus the implicit
+    // <target>/dna/src layer must match the manifest.
+    final layers = <DnaLayerConfig>[
+      ...config?.layers ?? const <DnaLayerConfig>[],
+      implicitSrcLayer,
+    ];
     final drifted = layers.length != manifest.layers.length ||
         [
           for (var i = 0; i < layers.length; i++)
@@ -758,13 +876,25 @@ class Sync extends Command<dynamic> {
       return const [];
     }
 
+    // The implicit src layer: hash <target>/dna/src itself. A missing
+    // folder hashes to null — consistent with a sync that skipped it.
+    if (config.name == implicitSrcLayer.name) {
+      final hashNow = hashDnaDirectory(Directory(p.join(dest.path, 'src')));
+      if (hashNow != stored.hash) {
+        return [
+          'layer "src" (<target>/dna/src) has changed '
+              '(${stored.hash} -> $hashNow)',
+        ];
+      }
+      return const [];
+    }
+
     final resolved = resolvePathLayer(dest.parent.path, config);
-    if (!resolved.folder.existsSync() &&
-        !p.isWithin(dest.path, resolved.folder.path)) {
+    if (!resolved.folder.existsSync()) {
       return ['layer "${config.name}" path no longer exists: ${config.path}'];
     }
-    // Missing in-dna layers hash to null — consistent with a sync that
-    // skipped them as empty.
+    // A missing dna/src content folder hashes to null and is reported as
+    // a mismatch against the stored hash.
     final hashNow = hashDnaDirectory(resolved.content);
     if (hashNow != stored.hash) {
       return [

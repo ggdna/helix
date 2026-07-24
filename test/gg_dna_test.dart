@@ -33,7 +33,7 @@ void main() {
       test('should allow to run a subcommand from the command line', () async {
         final tmp = await Directory.systemTemp.createTemp('gg_dna_test_');
         try {
-          final source = Directory('${tmp.path}/pkg/dna');
+          final source = Directory('${tmp.path}/pkg/dna/src');
           await source.create(recursive: true);
           await File('${source.path}/a.md').writeAsString('A');
           final target = Directory('${tmp.path}/target');
