@@ -2,7 +2,7 @@
 
 **Breaking Change → Version 3.0.0**
 
-Referenz-Projekt mit dem Ziel-Format: `P:\workspace_grace_cloud\.master\testproject_dna_project`
+Referenz-Projekt mit dem Ziel-Format: `P:\workspace_grace_cloud\.ocean\testproject_dna_project`
 (bzw. dessen Remote), insbesondere dessen `dna.yaml`.
 
 ## 1. Neues Config-Format (harter Bruch)

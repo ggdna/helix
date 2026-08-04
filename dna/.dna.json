@@ -1,0 +1,23 @@
+{
+  "version": 4,
+  "layers": [
+    {
+      "name": "src",
+      "git": null,
+      "path": "dna/src",
+      "versionConstraint": null,
+      "resolvedVersion": null,
+      "resolvedTag": null,
+      "commit": null,
+      "hash": "0x9b069ab8821b866a"
+    }
+  ],
+  "claude": {
+    "claudeMdInclude": null,
+    "skillsInclude": null,
+    "installedSkills": []
+  },
+  "baseVersion": "3.0.0",
+  "baseHash": "0x9b069ab8821b866a",
+  "hash": "0xd8248357c02f3a92"
+}
