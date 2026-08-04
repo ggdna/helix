@@ -1,6 +1,12 @@
 # Changelog
 
-## \[4.0.0\] - 2026-07-24
+## Unreleased
+
+### Changed
+
+- Rename .master to .ocean with automatic migration at next start
+
+## 4.0.0 - 2026-07-24
 
 ### Added
 
@@ -12,7 +18,7 @@ overrides of the same layer win, heading-form blocks warn
 ### Changed
 
 - BREAKING: every DNA source ships its mergeable DNA under `dna/src` —
-the gg\_dna base DNA, git layers, and path layers; sources without `dna/src`
+the gg_dna base DNA, git layers, and path layers; sources without `dna/src`
 are an error with a migration hint
 - BREAKING: `<target>/dna/src` is the implicit last layer — it survives the
 sync verbatim, is never listed in the config (layer name `src` is
@@ -26,24 +32,14 @@ longer recognized
 - BREAKING: `.dna.json` manifest format v4 (records the implicit src
 layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
 
-### Migration from 3.x
-
-1. Move the mergeable DNA of every DNA repo from `dna/` to `dna/src/`.
-2. Move the content of `dna/_override` to `dna/src` and delete the layer
-entry from the config.
-3. Rename `<file>.tag.md` to `<file>.overrides.md`.
-4. Update the tag notation: `[tag]` → `[@tag]`, `{{tag|default}}` →
-`{{@tag:default}}`, `<!-- tag -->` → `<!-- @tag -->`.
-5. Run `gg_dna sync` once.
-
-## \[3.0.0\] - 2026-07-24
+## 3.0.0 - 2026-07-24
 
 ### Added
 
 - `dna: config: claude:` section: `claude_md: include:` maintains a managed
 `@`-import block in the target's CLAUDE.md (files stay as-is, folders expand
 to their `.md` files); `skills: include:` mirrors skill folders into
-`.claude/skills` — only skills gg\_dna installed are overwritten or removed,
+`.claude/skills` — only skills gg_dna installed are overwritten or removed,
 hand-installed skills are never touched
 - `gg_dna sync` creates CLAUDE.md when missing and removes leftover pre-3.0
 `gg_dna:conventions` blocks
@@ -61,27 +57,16 @@ skills
 - BREAKING: `.dna.json` manifest format v3 (adds the `claude` section;
 `--check` reports older manifests as outdated — run `gg_dna sync` once)
 
-### Migration from 2.x
+## 2.1.1 - 2026-07-24
 
-1. Move the layer maps into a `dependencies:` block under `dna:`.
-2. Add the desired CLAUDE.md includes and skill folders to
-`dna: config: claude:`.
-3. Run `gg_dna sync` once — the legacy conventions block in CLAUDE.md is
-replaced; `.claude/conventions/` copies are no longer used and can be
-deleted.
-
-## [3.0.0] - 2026-07-24
-
-## [2.1.1] - 2026-07-24
-
-## [2.1.0] - 2026-07-15
+## 2.1.0 - 2026-07-15
 
 ### Changed
 
 - Support dna config via dna.yaml and package.json for non-Dart repos
 - Harden dna config discovery: require dna block in dna.yaml, tolerate foreign package.json dna fields and undecodable sibling files
 
-## [2.0.0] - 2026-07-15
+## 2.0.0 - 2026-07-15
 
 ### Added
 
@@ -129,7 +114,7 @@ failing the sync; `--check` agrees
 - Backslash `path:` values in the pubspec work on every platform
 - Fix negative hex hash rendering and cwd race between parallel test suites
 
-## [1.1.0] - 2026-05-26
+## 1.1.0 - 2026-05-26
 
 ### Added
 
@@ -145,9 +130,3 @@ failing the sync; `--check` agrees
 
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
-
-[3.0.0]: https://github.com/ggsuite/gg_dna/compare/2.1.1...3.0.0
-[2.1.1]: https://github.com/ggsuite/gg_dna/compare/2.1.0...2.1.1
-[2.1.0]: https://github.com/ggsuite/gg_dna/compare/2.0.0...2.1.0
-[2.0.0]: https://github.com/ggsuite/gg_dna/compare/1.1.0...2.0.0
-[1.1.0]: https://github.com/ggsuite/gg_dna/tag/%tag

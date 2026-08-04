@@ -20,7 +20,7 @@ Welche konkreten Tools dafür eingesetzt werden, ist projekt-spezifisch. Beispie
 
 ### 1. In den Workspace wechseln
 
-Der Workspace ist der Ordner, in dem die beteiligten Repos versammelt werden (oft als `.master/` mit eigenem `tickets/`-Ordner organisiert). Der Pfad ist von Maschine zu Maschine verschieden — frage den Nutzer entweder explizit danach, oder finde den Workspace selbst mit `Glob` nach plausiblen Markern (`.master/`, `tickets/`, `workspace.yaml`).
+Der Workspace ist der Ordner, in dem die beteiligten Repos versammelt werden (oft als `.ocean/` — bei älteren Installationen noch `.master/` — mit eigenem `tickets/`-Ordner organisiert). Der Pfad ist von Maschine zu Maschine verschieden — frage den Nutzer entweder explizit danach, oder finde den Workspace selbst mit `Glob` nach plausiblen Markern (`.ocean/`, veraltet `.master/`, `tickets/`, `workspace.yaml`).
 
 ### 2. Verfügbare Repositories ermitteln
 
