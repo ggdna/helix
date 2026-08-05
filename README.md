@@ -1,218 +1,253 @@
 # gg_dna
 
-gg_dna ist ein Repository, in dem verschiedene Anleitungen, Scripts und Konfigurationen fuer KI-Agenten liegen. Es stellt Anleitungen sowie Anweisungen fuer Code-Struktur, Test, Deployment und Programmierprinzipien dar. Es ist sozusagen die DNA, also der Aufbauplan fuer Programmierprojekte, die damit erzeugt werden.
+gg_dna is the **DNA engine** — it is not the DNA itself. The DNA (the
+guides, scripts, configurations and agent skills a project inherits)
+lives in separate **DNA packages**: `base_dna`, `dna_dart`, `dna-ts`,
+`ds-dna`, … Each of them ships a `dna/` folder that mirrors a project
+root.
 
-## Sync
+This engine resolves the DNA packages a project depends on, merges their
+`dna/` folders into one tree and copies the result to its real locations
+(`.vscode/settings.json`, `LICENSE`, `doc/`, `.claude/skills/`, …).
+These copies are called **instances** — and a placed test guarantees on
+every test run that they always match the generated originals.
 
-`gg_dna sync` spiegelt die Basis-DNA dieses Packages (`dna/src`) in das
-Zielrepo (`<target>/dna`) und legt darueber die **DNA-Schichten**, die im
-Zielrepo konfiguriert sind. Spaetere Schichten gewinnen bei
-Pfad-Kollisionen; die Basis-DNA aus gg_dna ist immer die unterste Schicht,
-`<target>/dna/src` ist immer die oberste (implizit, ohne Config-Eintrag).
+## Quick start
 
-In **allen DNA-Quellen** liegt die mergebare DNA unter `dna/src` — im
-gg_dna-Package selbst, in git-Schichten und in path-Schichten. Im Zielrepo
-enthaelt `/dna` nur das fertig gemergte Ergebnis (plus Manifest und den
-eigenen `src`-Ordner).
+1. Declare DNA packages as dev-dependencies:
 
-Die Konfiguration ist ein `dna:`-Block und darf in **genau einer** dieser
-Dateien in der Repo-Wurzel liegen (mehrere gleichzeitig sind ein Fehler):
+   ```jsonc
+   // package.json (TypeScript projects)
+   { "devDependencies": { "dna-ts": "^1.0.0" } }
+   ```
 
-1. `dna.yaml` — neutrale Datei, funktioniert fuer jede Sprache
-2. `package.json` — `"dna"`-Key, fuer TypeScript-/JavaScript-Repos
-3. `pubspec.yaml` — fuer Dart-/Flutter-Repos
+   ```yaml
+   # pubspec.yaml (Dart projects)
+   dev_dependencies:
+     dna_dart: ^1.0.0
+     gg_dna: ^5.0.0
+   ```
 
-Eine vorhandene `dna.yaml` ohne `dna:`-Block ist ein harter Fehler (statt
-eines stillen Basis-Syncs, der lokale Schichten loeschen wuerde). Ein
-`"dna"`-Feld in der package.json zaehlt nur, wenn es ein Objekt ist —
-Fremdfelder anderer Tools werden ignoriert. Nicht parsebare Dateien
-blockieren den Sync nur, wenn keine andere Datei die Konfiguration
-liefert; sonst gibt es eine Warnung.
+2. Install (`pnpm install` / `dart pub get`) and run once:
 
-```yaml
-dna:
-  order:
-    - dna_company
-    - dna_project
-  dependencies:
-    dna_company:
-      git: https://github.com/acme/dna_company.git
-      version: ^1.4.0
-    dna_project:
-      path: ../dna_project
-  config:
-    claude:
-      claude_md:
-        include:
-          - dna/agents/conventions
-          - project_structure.md
-      skills:
-        include:
-          - dna/agents/skills
-```
+   ```bash
+   gg_dna init
+   ```
 
-Dasselbe als `"dna"`-Key in einer `package.json`:
+   This places the DNA wrapper test (`test/dna/dna_test.dart` and/or
+   `test/dna/dna.spec.ts`), a `.gg/dna.json` skeleton and the
+   `!.gg/dna.json` gitignore exception. Commit.
 
-```json
+3. Run your tests. The first run instantiates the DNA (and fails once
+   with _"DNA instances updated — review & commit"_); the second run is
+   green. From now on every test run keeps the project in sync.
+
+## Distribution: dev-dependencies + inheritance tree
+
+DNAs are normal packages (npm, for Dart-reachable DNAs additionally
+pub). A DNA declares its **parent DNAs as regular dependencies** — npm
+and pub therefore install the whole inheritance tree transitively;
+gg_dna clones nothing. The engine locates packages via `node_modules/`
+and `.dart_tool/package_config.json`, reads each DNA's own
+`.gg/dna.json` and expands the tree recursively: parents before
+children, diamonds deduplicated (first topological position wins),
+cycles are errors.
+
+**Order**: by default DNAs apply in the order they appear in
+`package.json`/`pubspec.yaml` (a dependency counts as DNA when the
+installed package contains a `dna/` folder). An explicit `order` in
+`.gg/dna.json` overrides this. **The last override wins.**
+
+## Configuration: `.gg/dna.json`
+
+The only place DNA configuration lives (all keys optional, JSONC
+tolerated):
+
+```jsonc
 {
-  "name": "my-ts-project",
-  "dna": {
-    "order": ["dna_company"],
-    "dependencies": {
-      "dna_company": { "git": "gg_dna_company", "version": "^1.4.0" }
-    },
-    "config": {
-      "claude": {
-        "claude_md": { "include": ["dna/agents/conventions"] },
-        "skills": { "include": ["dna/agents/skills"] }
-      }
-    }
-  }
+  "role": "project", // "dna" for DNA packages themselves
+  "order": ["base_dna", "dna_dart"],
+  "vars": { "projectName": "my_project" },
+  "fileNaming": "snake_case", // camelCase | kebab-case | keep
+  "dependencies": { "base_dna": { "path": "../base_dna" } },
+  "config": {
+    "claude": { "claude_md": { "include": ["doc/conventions"] } },
+  },
 }
 ```
 
-- **git-Schichten** werden geklont; die DNA kommt aus `<clone>/dna/src`
-  (fehlt der Ordner, ist das ein Fehler mit Migrationshinweis). Ein
-  optionales `version:` ist ein Semver-Constraint (pub-Semantik), das
-  gegen die Git-Tags des Repos aufgeloest wird — der hoechste passende Tag
-  wird ausgecheckt. Tags mit und ohne `v`-Praefix werden erkannt.
-  `gg_*`-Kurzformen expandieren zu `https://github.com/ggsuite/<name>.git`.
-- **path-Schichten** sind lokale Ordner, relativ zur Wurzel des Zielrepos
-  (Vorwaerts- wie Rueckwaerts-Schraegstriche funktionieren auf allen
-  Plattformen); die DNA kommt aus `<pfad>/dna/src`.
-- **`<target>/dna/src`** ist die repo-eigene Override-Schicht: Sie wird
-  automatisch als **allerletzte Schicht** angewendet und darf nicht in der
-  Config stehen (der Layername `src` ist reserviert). Sie ueberlebt den
-  Sync woertlich — ihre Marker bleiben erhalten, damit der naechste Sync
-  sie erneut anwenden kann. Existiert der Ordner (noch) nicht — etwa auf
-  einem frischen Clone, weil Git leere Ordner nicht uebertraegt — wird die
-  Schicht als leer uebersprungen. Path-Schichten, die in `<target>/dna`
-  zeigen (frueher `dna/_override`), sind ein Fehler.
+- `role: "project"` (default): `dna/` is fully generated by the engine.
+- `role: "dna"`: the repo authors its `dna/` by hand; it is the last
+  (winning) layer of its own instantiation and is never overwritten.
+- `dependencies` holds **path overrides only** (local development
+  workspaces) — versions live in the package manifests.
+- `dna:` blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are
+  migration errors since 5.0.
 
-Nach dem Sync schreibt `gg_dna sync` ein Manifest `dna/.dna.json` —
-`dna/` und das Manifest gehoeren mit ins Repo committet, damit `--check`
-in der CI laufen kann. `gg_dna sync --check` prueft ohne zu schreiben, ob
-`dna/` aktuell ist: lokale Aenderungen, neue Basis-Inhalte,
-Konfigurations-Drift, neue passende Git-Tags bzw. Commits und geaenderte
-lokale Schichten werden gemeldet. Bei `version:`-Constraints gewinnt der
-hoechste passende **stabile** Tag; Prereleases werden nur gewaehlt, wenn
-nichts Stabiles passt oder der Constraint selbst eine Prerelease anpeilt.
+## The replica layout
 
-Der Sync baut den neuen Baum in `<target>/.gg_dna_staging` und tauscht ihn
-atomar ein; nach einem abgebrochenen Lauf raeumt der naechste Sync die
-Ordner `.gg_dna_staging`/`.gg_dna_backup` auf bzw. stellt `dna/` aus dem
-Backup wieder her. Beide Ordner sind fluechtig und gehoeren nicht ins Repo.
+`dna/` mirrors the project root:
 
-## Claude-Konfiguration (`config: claude:`)
+| Path in the DNA                    | Instantiated to                |
+| ---------------------------------- | ------------------------------ |
+| `dna/.vscode/settings.json`        | `.vscode/settings.json`        |
+| `dna/LICENSE`                      | `LICENSE`                      |
+| `dna/doc/develop.md`               | `doc/develop.md`               |
+| `dna/scripts/create-branch.js`     | `scripts/create_branch.js`¹    |
+| `dna/.claude/skills/init/SKILL.md` | `.claude/skills/init/SKILL.md` |
+| `dna/_vars.json`                   | — (private)                    |
 
-Der Sync ist vollstaendig **non-interaktiv** — was frueher die Subcommands
-`install-skills`/`apply-conventions` per Rueckfrage erledigten, steuert
-jetzt der optionale `config: claude:`-Block:
+¹ file naming converted for a Dart project, see below.
 
-- **`claude_md: include:`** — Liste aus Dateien und/oder Ordnern (relativ
-  zur Zielrepo-Wurzel). Der Sync pflegt in `<target>/CLAUDE.md` einen
-  verwalteten Block zwischen `<!-- gg_dna:claude_md:start -->` und
-  `<!-- gg_dna:claude_md:end -->` mit einer `@pfad`-Import-Zeile pro Datei
-  (Ordner werden rekursiv zu ihren `.md`-Dateien expandiert, alphabetisch
-  sortiert). Claude Code laedt diese Imports beim Session-Start (relative
-  Pfade, maximal vier Ebenen tief; Imports in Code-Bloecken werden
-  ignoriert). Fehlt die `CLAUDE.md`, wird sie angelegt; handgeschriebener
-  Inhalt vor/nach dem Block bleibt unangetastet. Ein uebrig gebliebener
-  pre-3.0-`gg_dna:conventions`-Block wird entfernt. Fehlende Include-Pfade
-  sind ein Fehler — kaputte `@`-Imports entstehen nie.
-- **`skills: include:`** — Liste von Ordnern, deren Skills
-  (`<name>/SKILL.md`) nach `.claude/skills/<name>` gespiegelt werden.
-  gg_dna verwaltet nur die von ihm installierten Skills (gemerkt im
-  Manifest): Diese werden aktualisiert bzw. — wenn nicht mehr
-  konfiguriert — geloescht. Handinstallierte Skills werden **nie**
-  angefasst; eine Namenskollision erzeugt nur eine Warnung.
+- **Private**: path segments starting with `_` (e.g. `_vars.json`) stay
+  inside `dna/` and are never instantiated.
+- **Public**: everything else — including dotfiles — becomes an
+  instance.
+- Consumed by the engine itself: `*.overrides.md`, `*.overrides.json`
+  sidecars and the manifest `dna/.dna.json`.
+- Forbidden instance targets: `.git/**` and `CLAUDE.md` (the latter is
+  managed via the `claude_md` block below).
 
-Ohne `config: claude:` fasst der Sync weder `CLAUDE.md` noch
-`.claude/skills` an (zuvor von gg_dna installierte Skills werden dann als
-nicht mehr konfiguriert entfernt).
+## The placed test: instantiate + verify in one
 
-## Tag-Overrides in Markdown-Dateien
+Every test run executes the engine (Dart: in-process via the `gg_dna`
+dev-dependency; TypeScript: via the npm package `@tssuite/gg-dna`, the
+gg_dna engine compiled to WebAssembly with node callbacks injected):
 
-Schichten koennen `.md`-Dateien nicht nur komplett ersetzen, sondern auch
-gezielt einzelne Abschnitte oder Zeichenketten ueberschreiben.
+- **Instance modified by hand** → the test fails and leaves the file
+  untouched. The report names the DNA source the file is generated from,
+  so the fix is obvious:
 
-In der Quelldatei (z. B. `guide.md`) markieren Tags die Override-Punkte:
+  ```text
+  These files are generated by the DNA and were modified by hand. …
+    - .vscode/settings.json
+        edit instead: dna_dart/dna/.vscode/settings.overrides.json
+  ```
+- **DNA updated** (new dependency versions, changed local DNA) → the
+  engine rewrites `dna/`, the instances and the manifest and fails once
+  with _"DNA instances updated — review & commit"_. The second run is
+  green. Because DNA versions are pinned by the lockfile, CI never sees
+  surprise updates.
+- **Everything up to date** → green, no writes.
+- **Per-file guard**: every existing file a run would overwrite or
+  delete must be committed. If one of them carries uncommitted work
+  (modified, staged or untracked), the run fails without writing and
+  reports each file together with the DNA source it is produced from —
+  put the change there instead. Unrelated dirty files never block a run,
+  so every overwrite stays recoverable via git.
 
-```markdown
-## [@greeting] Begruessung
+Existing project files that a DNA also ships are **adopted**
+(overwritten — git history is the backup, which is exactly what the
+per-file guard enforces). Instances no longer produced by any DNA are
+removed; locally modified ones are kept with a warning.
 
-Sag {{@tone:freundlich}} hallo.
+## Markdown overrides
+
+Unchanged from 4.0, now across the whole replica: `## [@tag] Heading`
+marks a replaceable section, `{{@tag:default}}` a replaceable string. A
+higher layer ships `X.overrides.md` next to the same path with
+heading-form or `<!-- @tag --> … <!-- @tag -->` blocks;
+`global.overrides.md` in the `dna/` root rewrites string placeholders in
+all merged `.md` files. Markers survive layer application; the final
+render strips them. Content in code fences and inline code is immune.
+
+## JSON overrides
+
+A same-path `X.json` in a later layer replaces the file. A sidecar
+`X.overrides.json` merges field-wise:
+
+- objects deep-merge (default), scalars replace
+- `null` deletes the key
+- `"key!"` **replaces** the value outright (no merge)
+- `"key+"` **joins arrays** (append, deduplicated)
+
+```jsonc
+// base_dna: dna/.vscode/extensions.json
+{ "recommendations": ["esbenp.prettier-vscode"] }
+// dna_dart: dna/.vscode/extensions.overrides.json
+{ "recommendations+": ["dart-code.dart-code"] }
+// instance: .vscode/extensions.json
+{ "recommendations": ["esbenp.prettier-vscode", "dart-code.dart-code"] }
 ```
 
-- `## [@tag] Ueberschrift` markiert einen **ersetzbaren Abschnitt** — von
-  der Ueberschrift bis zur naechsten Ueberschrift gleicher oder hoeherer
-  Ebene.
-- `{{@tag:Standardwert}}` markiert eine **ersetzbare Zeichenkette** (auch
-  `{{@tag}}` fuer einen leeren Standardwert).
+JSONC input (comments, trailing commas) is tolerated; structurally
+patched files are re-emitted comment-free, untouched files are copied
+byte-identical. YAML supports whole-file replacement only —
+`X.overrides.yaml` is an error.
 
-Eine hoehere Schicht legt daneben eine Datei `guide.overrides.md` mit den
-Ersetzungen ab. Erlaubte Blockformen:
+## Variables
 
-```markdown
-## [@greeting] Neue Ueberschrift
+Defined in `dna/_vars.json` (camelCase keys **without** prefix), deep-
+merged across all layers, finally overridden by `vars` in the target's
+`.gg/dna.json`:
 
-Neuer Abschnittsinhalt.
-
-<!-- @greeting -->
-## Auch ohne Tag in der Ueberschrift
-Der Tag wird automatisch wieder angeheftet.
-<!-- @greeting -->
-
-<!-- @tone --> foermlich <!-- @tone -->
+```json
+{ "copyrightHolder": "ggsuite", "projectName": "unnamed" }
 ```
 
-Regeln:
+References carry the `dna` prefix and are replaced case-adaptively in
+every text file of the merged tree:
 
-- Ob ein Tag als Abschnitt oder Zeichenkette ersetzt wird, entscheidet die
-  Zieldatei (Ueberschrift vs. Platzhalter). Unbekannte Tags erzeugen eine
-  Warnung.
-- `.overrides.md`-Dateien werden beim Sync **konsumiert** und nie ins Ziel
-  kopiert. Der alte Suffix `.tag.md` ist ein harter Fehler mit
-  Umbenennungshinweis.
-- Im fertigen Ergebnis werden alle Marker entfernt: `## [@tag] T` wird zu
-  `## T`, `{{@tag:wert}}` zum Wert. Die alte Notation (`[tag]`,
-  `{{tag|wert}}`) wird nicht mehr erkannt und bleibt woertlich stehen —
-  der Sync warnt bei eindeutigen Alt-Mustern mit Datei und Zeile.
-- Inhalte in Code-Fences und Inline-Code bleiben unangetastet — Beispiele
-  fuer die Syntax gehoeren deshalb immer in Code-Bloecke, sonst werden sie
-  beim Sync ersetzt.
+| Reference          | Replacement                            |
+| ------------------ | -------------------------------------- |
+| `dnaProjectName`   | camelCase (`myProject`)                |
+| `DnaProjectName`   | PascalCase (`MyProject`) — class names |
+| `dna_project_name` | snake_case (`my_project`)              |
+| `DNA_PROJECT_NAME` | SCREAMING_SNAKE (`MY_PROJECT`)         |
+| `dna-project-name` | kebab-case (`my-project`)              |
 
-## Globale Overrides (`global.overrides.md`)
+Non-identifier values (spaces, sentences — e.g. `"MEGA TARGET"`) are
+inserted verbatim for every form. Unknown references stay literal.
 
-Jede Schicht kann in der Wurzel ihrer `dna/src` eine `global.overrides.md`
-ablegen. Ihre **Zeichenketten-Bloecke** ersetzen `{{@tag:…}}`-Platzhalter
-in **allen** `.md`-Dateien des bis dahin gemergten Baums — nicht nur in
-der gleichnamigen Datei:
+## File naming conversion
 
-```markdown
-<!-- @tone --> foermlich <!-- @tone -->
+DNA files are authored in canonical **kebab-case**. At instantiation
+they are converted to the target standard — `pubspec.yaml` present →
+`snake_case`, otherwise `package.json` → `camelCase`, otherwise `keep`
+(overridable via `fileNaming`). Only the part before the first dot of
+purely lowercase segments converts (`dna-test.dart` → `dna_test.dart`;
+`.spec.ts`, `.code-snippets`, `LICENSE`, `README.md` stay untouched).
+References to renamed files are rewritten inside text instances; the
+`dna/` originals keep canonical names.
+
+## CLAUDE.md and skills
+
+- Skills are plain instances: `dna/.claude/skills/<name>/SKILL.md` →
+  `.claude/skills/<name>/SKILL.md`.
+- `CLAUDE.md` keeps the managed block: `config.claude.claude_md.include`
+  lists files/folders (human documentation!) that get one `@`-import
+  line each between `<!-- gg_dna:claude_md:start/end -->`. Content
+  outside the block is never touched. All documentation is written for
+  humans — the AI consumes the same files.
+
+## Engine API
+
+```dart
+import 'package:gg_dna/gg_dna.dart';
+
+await runDnaTest();                  // what the placed test calls
+final result = instantiateDna(       // programmatic access
+  host: IoDnaHost(),
+  targetRoot: '.',
+  baseVersion: ggDnaVersion,
+);
 ```
 
-- Dateispezifische `X.overrides.md` **derselben Schicht gewinnen** ueber
-  die globale Datei; ueber Schichten hinweg gilt wie immer: spaetere
-  Schicht gewinnt, `<target>/dna/src` zuletzt.
-- Abschnitts-Bloecke (`## [@tag] …`) sind in der globalen Datei nicht
-  erlaubt und werden mit Warnung uebersprungen.
-- Der Name ist reserviert: eine Inhaltsdatei `global.md` kann nicht per
-  Overrides-Datei gepatcht werden (Warnung).
+The engine core is free of `dart:io`/`Process` — all host access goes
+through the injectable `DnaHost` interface (`IoDnaHost` for the CLI and
+Dart tests, callback-based hosts for the WebAssembly bridge
+`@tssuite/gg-dna`).
 
-## Migration von 3.x
+## Migration from 4.x
 
-- Die mergebare DNA jedes DNA-Repos wandert von `dna/` nach `dna/src/`
-  (gilt auch fuer path-Schichten und gg_dna selbst).
-- Der Inhalt von `dna/_override` wandert nach `dna/src`; der zugehoerige
-  Layer-Eintrag in der Config entfaellt — `dna/src` wird automatisch als
-  letzte Schicht angewendet. Path-Schichten, die in `<target>/dna` zeigen,
-  sind jetzt ein Fehler.
-- `<datei>.tag.md` wird zu `<datei>.overrides.md` umbenannt (alter Suffix
-  ist ein harter Fehler).
-- Neue Tag-Notation: `## [@tag] …` statt `## [tag] …` und
-  `{{@tag:default}}` statt `{{tag|default}}` — auch in den Blockformen der
-  Overrides-Dateien (`<!-- @tag -->`).
-- `.dna.json` hat ein neues Format (v4); `--check` meldet alte Manifeste
-  als veraltet — einmal `gg_dna sync` ausfuehren.
+1. Move `dna/src/*` to `dna/*` in every DNA repo (`dna/src` is a hard
+   error). Prefix DNA-internal folders with `_`.
+2. Move the `dna:` block from `pubspec.yaml`/`package.json`/`dna.yaml`
+   to `.gg/dna.json`; drop `git:` layers and `version:` entries —
+   declare DNAs as dev-dependencies instead.
+3. Replace `gg_dna sync` invocations with `gg_dna init` (once) and your
+   normal test run.
+4. `config: claude: skills:` is gone — ship skills at
+   `dna/.claude/skills/<name>` instead.
+5. `.gg_dna_staging`/`.gg_dna_backup` are no longer created and can be
+   removed from `.gitignore`.

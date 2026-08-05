@@ -31,9 +31,9 @@ void main() {
       if (!file.readAsStringSync().contains(expected)) {
         file.writeAsStringSync(
           file.readAsStringSync().replaceFirst(
-            RegExp("$declaration'[^']*';"),
-            expected,
-          ),
+                RegExp("$declaration'[^']*';"),
+                expected,
+              ),
         );
       }
 

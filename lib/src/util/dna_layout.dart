@@ -1,0 +1,147 @@
+// @license
+// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+import 'dna_tree_hash.dart';
+import 'json_merge.dart';
+import 'md_tags.dart';
+
+/// Name of the replica folder every DNA layer ships.
+const String dnaDirname = 'dna';
+
+// .............................................................................
+/// Whether [relPosix] is private per the `_` convention: any path segment
+/// starting with `_` stays inside `dna/` and is never instantiated.
+bool isPrivatePath(String relPosix) =>
+    relPosix.split('/').any((s) => s.startsWith('_'));
+
+// .............................................................................
+/// Whether [relPosix] is consumed by the engine itself and therefore never
+/// copied nor instantiated: override sidecars and the manifest.
+bool isConsumedPath(String relPosix) {
+  final name = relPosix.split('/').last;
+  if (relPosix == dnaManifestFilename) return true;
+  if (name == globalOverridesFilename) return true;
+  if (name.endsWith(overridesFileSuffix)) return true;
+  if (name.endsWith(jsonOverridesSuffix)) return true;
+  for (final suffix in yamlOverridesSuffixes) {
+    if (name.endsWith(suffix)) return true;
+  }
+  return false;
+}
+
+// .............................................................................
+/// Whether instantiating to [relPosix] is forbidden: git internals and the
+/// managed `CLAUDE.md` (which mixes project-owned content with the managed
+/// block).
+bool isForbiddenInstanceTarget(String relPosix) =>
+    relPosix == '.git' ||
+    relPosix.startsWith('.git/') ||
+    relPosix == 'CLAUDE.md';
+
+// .............................................................................
+/// The file naming standard instances are converted to.
+enum FileNaming {
+  /// `my_file.dart` — Dart projects.
+  snakeCase,
+
+  /// `myFile.ts` — TypeScript projects.
+  camelCase,
+
+  /// `my-file.md` — canonical DNA form.
+  kebabCase,
+
+  /// No conversion.
+  keep,
+}
+
+// .............................................................................
+/// Parses the `fileNaming` config value; `null` when [value] is `null`,
+/// throws [FormatException] on unknown values.
+FileNaming? parseFileNaming(String? value) {
+  switch (value) {
+    case null:
+      return null;
+    case 'snake_case':
+      return FileNaming.snakeCase;
+    case 'camelCase':
+      return FileNaming.camelCase;
+    case 'kebab-case':
+      return FileNaming.kebabCase;
+    case 'keep':
+      return FileNaming.keep;
+    default:
+      throw FormatException(
+        'fileNaming must be one of snake_case, camelCase, kebab-case, '
+        'keep — got "$value".',
+      );
+  }
+}
+
+// .............................................................................
+/// Converts one path segment to [naming]. Only the part before the first
+/// dot is converted (`dna-test.dart` → `dna_test.dart`, `.spec.ts` and
+/// `.code-snippets` survive) and only for purely lowercase names — names
+/// with uppercase letters (`LICENSE`, `README.md`) and dotfiles stay
+/// untouched.
+String convertSegmentNaming(String segment, FileNaming naming) {
+  if (segment.startsWith('.')) return segment;
+  final dot = segment.indexOf('.');
+  final base = dot < 0 ? segment : segment.substring(0, dot);
+  final ext = dot < 0 ? '' : segment.substring(dot);
+  if (base.contains(RegExp('[A-Z]'))) return segment;
+  if (!base.contains(RegExp('[a-z]'))) return segment;
+  final words = base.split(RegExp('[-_]+')).where((w) => w.isNotEmpty).toList();
+  if (words.length < 2) return segment;
+  final String converted;
+  switch (naming) {
+    case FileNaming.snakeCase:
+      converted = words.join('_');
+    case FileNaming.camelCase:
+      converted = words.first +
+          words.skip(1).map((w) => w[0].toUpperCase() + w.substring(1)).join();
+    case FileNaming.kebabCase:
+      converted = words.join('-');
+    case FileNaming.keep:
+      converted = base;
+  }
+  return '$converted$ext';
+}
+
+// .............................................................................
+/// Converts every segment of the relative posix path [relPosix] to
+/// [naming] via [convertSegmentNaming]. Paths rooted in a dot-folder
+/// (`.claude/`, `.vscode/`, `.github/`, …) keep their canonical names —
+/// they are tool configuration, not ecosystem source, and e.g. skill
+/// folder names must stay identical across all projects.
+String convertPathNaming(String relPosix, FileNaming naming) {
+  if (naming == FileNaming.keep) return relPosix;
+  if (relPosix.startsWith('.')) return relPosix;
+  return relPosix
+      .split('/')
+      .map((s) => convertSegmentNaming(s, naming))
+      .join('/');
+}
+
+// .............................................................................
+/// Rewrites references to renamed files in a text instance: every key of
+/// [renames] (old segment name) is replaced literally by its value, longest
+/// keys first.
+String rewriteRenamedReferences(String content, Map<String, String> renames) {
+  if (renames.isEmpty) return content;
+  var result = content;
+  final keys = renames.keys.toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  for (final key in keys) {
+    result = result.replaceAll(key, renames[key]!);
+  }
+  return result;
+}
+
+// .............................................................................
+/// Migration error for layers still shipping the pre-5.0 `dna/src` layout.
+String legacySrcLayoutError(String layerLabel) =>
+    'Layer "$layerLabel" still ships dna/src — since gg_dna 5.0 the dna/ '
+    'folder itself mirrors the project root. Move dna/src/* to dna/*.';
