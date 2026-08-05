@@ -20,14 +20,14 @@ void main() {
 
   group('isConsumedPath', () {
     test('sidecars and manifest are consumed', () {
-      expect(isConsumedPath('.dna.json'), isTrue);
+      expect(isConsumedPath('_dna.json'), isTrue);
       expect(isConsumedPath('doc/develop.overrides.md'), isTrue);
       expect(isConsumedPath('global.overrides.md'), isTrue);
       expect(isConsumedPath('.vscode/settings.overrides.json'), isTrue);
       expect(isConsumedPath('a/b.overrides.yaml'), isTrue);
       expect(isConsumedPath('a/b.overrides.yml'), isTrue);
       expect(isConsumedPath('doc/develop.md'), isFalse);
-      expect(isConsumedPath('sub/.dna.json'), isFalse);
+      expect(isConsumedPath('sub/_dna.json'), isFalse);
     });
   });
 

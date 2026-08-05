@@ -57,6 +57,12 @@ abstract class DnaHost {
   /// committed. Used to protect individual files from being overwritten
   /// (see `instantiateDna`).
   Set<String> uncommittedPaths(String repoRoot);
+
+  /// Commits exactly [paths] (relative to [repoRoot]) with [message],
+  /// leaving every other change in the working tree untouched. Throws
+  /// when committing is not possible (no repository, no git identity) —
+  /// the caller then reports the files for a manual commit instead.
+  void commitPaths(String repoRoot, List<String> paths, String message);
 }
 
 // .............................................................................
@@ -78,6 +84,13 @@ class MemoryDnaHost extends DnaHost {
 
   /// What [uncommittedPaths] reports.
   final Set<String> uncommitted;
+
+  /// Commits recorded by [commitPaths], newest last.
+  final List<({List<String> paths, String message})> commits = [];
+
+  /// When set, [commitPaths] throws this message — simulates a
+  /// repository without git or without a configured identity.
+  String? commitError;
 
   String _norm(String path) {
     final parts = <String>[];
@@ -161,4 +174,11 @@ class MemoryDnaHost extends DnaHost {
 
   @override
   Set<String> uncommittedPaths(String repoRoot) => uncommitted;
+
+  @override
+  void commitPaths(String repoRoot, List<String> paths, String message) {
+    if (commitError != null) throw Exception(commitError);
+    commits.add((paths: paths, message: message));
+    uncommitted.removeAll(paths);
+  }
 }

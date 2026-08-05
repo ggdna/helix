@@ -72,9 +72,9 @@ Outcomes (golden-update semantics):
 | Situation | Result |
 |---|---|
 | Everything up to date | Test passes |
-| The DNA produced updates | Files are written; the test fails once with "review & commit" |
+| The DNA produced updates | Files are written and committed as `#gg: generated DNA` |
 | An instance was edited by hand | Test fails, nothing is written |
-| A file to be overwritten has uncommitted changes | Test fails without writing |
+| A file to be overwritten carries invalid changes | Test fails without writing |
 | `LICENSE` missing | Test fails |
 
 Two rules follow from this:
@@ -87,8 +87,12 @@ Two rules follow from this:
 - **Instances belong to the DNA**: to change one, edit the DNA layer that
   owns it (or `dna/` in a `role: dna` repo) — the next test run
   propagates the change. When a generated file was edited by hand, the
-  test names the DNA source file to edit instead, for example
-  `edit instead: base_dna/dna/doc/develop.md`.
+  test names both files:
+
+  ```text
+  Generated files modified by hand:
+  Move edits from doc/develop.md to base_dna/dna/doc/develop.md.
+  ```
 
 Getting started in a consumer:
 

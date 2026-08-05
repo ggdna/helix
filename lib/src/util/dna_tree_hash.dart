@@ -11,14 +11,38 @@ import 'package:gg_hash/gg_hash.dart';
 
 import 'dna_fs.dart';
 
-/// Filename that holds the manifest inside `<target>/dna/`.
-const String dnaManifestFilename = '.dna.json';
+/// Filename that holds the manifest inside `<target>/dna/`. Private per
+/// the `_` convention — it is engine bookkeeping, never an instance.
+const String dnaManifestFilename = '_dna.json';
+
+/// Filename that holds the list of DNA-owned instances inside
+/// `<target>/dna/`. Engine bookkeeping like the manifest, never an
+/// instance itself.
+const String dnaInstancesFilename = '_instances.json';
+
+/// Bookkeeping filenames of earlier gg_dna versions — read once so the
+/// ownership survives, then removed.
+const List<String> legacyDnaBookkeepingFilenames = [
+  legacyDnaManifestFilename,
+  legacyDnaInstancesFilename,
+];
+
+/// Manifest filename used before gg_dna 5.0.0.
+const String legacyDnaManifestFilename = '.dna.json';
+
+/// Instance-list filename used before the `_` convention was applied.
+const String legacyDnaInstancesFilename = '.instances.json';
 
 // .............................................................................
-/// Whether the relative posix path [rel] counts as dna content — the root
-/// manifest and `.git/` never do, so hashing and copying agree on scope.
+/// Whether the relative posix path [rel] counts as dna content — the
+/// engine's own bookkeeping files and `.git/` never do, so hashing and
+/// copying agree on scope.
 bool isDnaContent(String rel) =>
-    rel != dnaManifestFilename && rel != '.git' && !rel.startsWith('.git/');
+    rel != dnaManifestFilename &&
+    rel != dnaInstancesFilename &&
+    !legacyDnaBookkeepingFilenames.contains(rel) &&
+    rel != '.git' &&
+    !rel.startsWith('.git/');
 
 // .............................................................................
 /// Stable [fnv1] hash of a single file's [bytes], EOL-normalized so CRLF

@@ -25,13 +25,13 @@ void main() {
       final a = MemoryDnaHost(
         files: {
           '/r/dna/doc/x.md': 'line1\nline2\n',
-          '/r/dna/.dna.json': '{"version": 5}',
+          '/r/dna/_dna.json': '{"version": 5}',
         },
       );
       final b = MemoryDnaHost(
         files: {
           '/r/dna/doc/x.md': 'line1\r\nline2\r\n',
-          '/r/dna/.dna.json': '{"different": true}',
+          '/r/dna/_dna.json': '{"different": true}',
         },
       );
       expect(hashTree(a, '/r/dna'), hashTree(b, '/r/dna'));

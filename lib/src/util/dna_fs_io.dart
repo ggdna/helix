@@ -115,6 +115,16 @@ class IoDnaHost extends DnaHost {
     ]);
     return parseGitStatusPaths(status, prefix: prefix);
   }
+
+  @override
+  void commitPaths(String repoRoot, List<String> paths, String message) {
+    if (paths.isEmpty) return;
+    // `-A --` stages content, additions and deletions of exactly these
+    // paths; the path-limited commit leaves everything else untouched,
+    // including whatever else is already staged.
+    _git(repoRoot, ['add', '-A', '--', ...paths]);
+    _git(repoRoot, ['commit', '-m', message, '--', ...paths]);
+  }
 }
 
 // .............................................................................

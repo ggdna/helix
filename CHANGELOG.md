@@ -5,6 +5,7 @@
 ### Changed
 
 - Rework DNA repos
+- Provide first DNA, i.e. installation and .vscode settings
 
 ## 5.0.0 - 2026-08-05
 
@@ -38,6 +39,10 @@ and compilable to WebAssembly (host access via injectable `DnaHost`)
 - Per-file guard: an existing file that carries uncommitted work is
 never overwritten or deleted — the run names those files and writes
 nothing; unrelated dirty files do not block it
+- Everything the DNA generates is committed right away as
+`#gg: generated DNA` (path-limited, so unrelated changes stay in the
+working tree); without a repository or git identity the files are kept
+for a manual commit
 - Provenance in every failure report: generated files are reported with
 the DNA source they are produced from (`edit instead: base_dna/dna/doc/develop.md`), so hand edits go into the DNA instead of
 the generated copy (`DnaInstantiationResult.sources`)
@@ -51,12 +56,16 @@ blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are migration
 errors
 - BREAKING: `gg_dna sync` was replaced by `gg_dna init` — the
 instantiation runs inside the placed test on every test run
-(golden-update semantics: hand-modified instances fail, DNA updates are
-written and fail once with "review & commit")
+(hand-modified instances fail, DNA updates are written and committed)
 - BREAKING: git layers were removed — declare DNAs as dev-dependencies;
 `path:` overrides in `.gg/dna.json` remain for local development
-- BREAKING: manifest format v5 (`layers` with `package`/`via`,
-`instances`, `vars`; `skillsInclude`/`installedSkills` removed)
+- BREAKING: the bookkeeping is split in two and renamed —
+`dna/_dna.json` (format v5: `layers` with `package`/`via`, hashes) and
+`dna/_instances.json` (the files the DNA owns); leftover `.dna.json` /
+`.instances.json` files are read once, so ownership survives, and then
+removed
+- BREAKING: the effective variables are no longer duplicated into the
+bookkeeping — `dna/_vars.json` is their only home
 - BREAKING: `config: claude: skills:` was removed — skills ship as
 normal instances at `dna/.claude/skills/<name>`; only the managed
 CLAUDE.md block (`claude_md: include:`) remains special

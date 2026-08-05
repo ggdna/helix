@@ -4,6 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:gg_dna/src/engine/instantiate.dart';
@@ -143,7 +144,6 @@ Run dart pub upgrade.
         manifest.instances.map((i) => i.path),
         contains('.vscode/settings.json'),
       );
-      expect(manifest.vars!['projectName'], 'my_project');
       expect(manifest.hash, isNotNull);
 
       // Second run is a no-op.
@@ -302,6 +302,127 @@ Run dart pub upgrade.
       );
       expect(healed.modifiedInstances, isEmpty);
       expect(healed.updated, isNotEmpty);
+    });
+
+    test('commits everything it generated, path-limited', () {
+      final host = makeHost();
+      final r = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '5.0.0',
+      );
+      expect(r.committed, isTrue);
+      expect(r.upToDate, isTrue);
+      expect(host.commits.single.message, generatedDnaCommitMessage);
+      expect(host.commits.single.paths, contains('LICENSE'));
+      // Decorated report entries never reach git.
+      expect(
+        host.commits.single.paths.any((p) => p.contains('(removed)')),
+        isFalse,
+      );
+      expect(
+        r.messages,
+        contains('committed as "$generatedDnaCommitMessage"'),
+      );
+    });
+
+    test('keeps the files when committing is impossible', () {
+      final host = makeHost()..commitError = 'not a git repository';
+      final r = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '5.0.0',
+      );
+      expect(r.committed, isFalse);
+      expect(r.upToDate, isFalse);
+      expect(r.updated, isNotEmpty);
+      expect(host.existsFile('$root/LICENSE'), isTrue);
+      expect(
+        r.warnings.any((w) => w.contains('Could not commit')),
+        isTrue,
+      );
+    });
+
+    test('migrates a pre-rename .dna.json away', () {
+      final host = makeHost(
+        extra: {
+          // A repository instantiated before the rename.
+          '$root/dna/.dna.json': '{"version": 5, "instances": [ '
+              '{"path": "LICENSE", "hash": "0xstale"}]}',
+        },
+      );
+      final r = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '5.0.0',
+      );
+      // The old file is gone, the two new ones are in place …
+      expect(host.existsFile('$root/dna/.dna.json'), isFalse);
+      expect(host.existsFile('$root/dna/_instances.json'), isTrue);
+      expect(host.existsFile('$root/dna/_dna.json'), isTrue);
+      expect(host.existsFile('$root/dna/_instances.json'), isTrue);
+      expect(
+        r.updated.any((u) => u.contains('.dna.json (removed)')),
+        isTrue,
+      );
+      // … and neither of them carries the variables.
+      expect(
+        host.readString('$root/dna/_dna.json'),
+        isNot(contains('copyrightHolder')),
+      );
+      expect(
+        host.readString('$root/dna/_vars.json'),
+        contains('copyrightHolder'),
+      );
+    });
+
+    test('migrates a pre-rename .instances.json away', () {
+      final host = makeHost();
+      instantiateDna(host: host, targetRoot: root, baseVersion: '5.0.0');
+      // Rebuild the intermediate layout: instances under the dot name.
+      host.writeString(
+        '$root/dna/.instances.json',
+        host.readString('$root/dna/_instances.json'),
+      );
+      host.deleteFile('$root/dna/_instances.json');
+
+      final r = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '5.0.0',
+      );
+      expect(host.existsFile('$root/dna/.instances.json'), isFalse);
+      expect(host.existsFile('$root/dna/_instances.json'), isTrue);
+      // Ownership survived — nothing was re-adopted.
+      expect(r.messages.any((m) => m.contains('adopted')), isFalse);
+    });
+
+    test('reads the instance list of a pre-split manifest', () {
+      final host = makeHost();
+      instantiateDna(host: host, targetRoot: root, baseVersion: '5.0.0');
+
+      // Rebuild the pre-split layout: one .dna.json carrying both.
+      final manifest = jsonDecode(host.readString('$root/dna/_dna.json'))
+          as Map<String, dynamic>;
+      final instances = jsonDecode(host.readString('$root/dna/_instances.json'))
+          as Map<String, dynamic>;
+      manifest['instances'] = instances['instances'];
+      host.deleteFile('$root/dna/_dna.json');
+      host.deleteFile('$root/dna/_instances.json');
+      host.writeString('$root/dna/.dna.json', jsonEncode(manifest));
+
+      // The ownership survives the migration: nothing is re-adopted.
+      final r = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '5.0.0',
+      );
+      expect(
+        r.messages.any((m) => m.contains('adopted')),
+        isFalse,
+        reason: r.messages.join('\n'),
+      );
+      expect(host.existsFile('$root/dna/.dna.json'), isFalse);
     });
 
     test('unrelated dirty files never block the run', () {
@@ -784,6 +905,16 @@ Not allowed globally.
       );
       expect(host.existsFile('$root/dna/doc/base-doc.md'), isTrue);
       expect(host.existsFile('$root/doc/base_doc.md'), isTrue);
+      // The engine's built-in base DNA points at the repo's dna/ folder,
+      // never at a gg_dna package path.
+      host.writeString('$root/doc/base_doc.md', 'hand edited\n');
+      final modified = instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseDnaRoot: '/gg',
+        baseVersion: '5.0.0',
+      );
+      expect(modified.sources['doc/base_doc.md'], 'dna/doc/base-doc.md');
       final manifest = DnaManifest.read(host, root)!;
       expect(manifest.layers.first.name, 'base');
       expect(manifest.baseHash, isNotNull);

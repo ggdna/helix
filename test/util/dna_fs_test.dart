@@ -64,6 +64,29 @@ void main() {
       expect(() => host.readBytes('/repo/nope'), throwsArgumentError);
     });
 
+    test('commitPaths records the commit and clears the paths', () {
+      final dirty = MemoryDnaHost(uncommitted: {'a.md', 'b.md'});
+      dirty.commitPaths('/repo', ['a.md'], '#gg: generated DNA');
+      expect(dirty.commits.single.paths, ['a.md']);
+      expect(dirty.commits.single.message, '#gg: generated DNA');
+      expect(dirty.uncommittedPaths('/repo'), {'b.md'});
+    });
+
+    test('commitPaths throws when commitError is set', () {
+      final failing = MemoryDnaHost()..commitError = 'no git identity';
+      expect(
+        () => failing.commitPaths('/repo', ['a.md'], 'msg'),
+        throwsA(
+          isA<Exception>().having(
+            (e) => '$e',
+            'message',
+            contains('no git identity'),
+          ),
+        ),
+      );
+      expect(failing.commits, isEmpty);
+    });
+
     test('uncommittedPaths reflects the seeded set', () {
       expect(host.uncommittedPaths('/repo'), isEmpty);
       final dirty = MemoryDnaHost(uncommitted: {'LICENSE'});

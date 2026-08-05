@@ -114,7 +114,7 @@ packages:
     source: hosted
     version: "1.0.9"
   gg_console_colors:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: gg_console_colors
       sha256: "937a99228fb60796f53b24dcbe580cbc17ef0c1ceed6877df58a881d3d8d930b"

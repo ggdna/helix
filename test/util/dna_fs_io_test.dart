@@ -81,6 +81,60 @@ void main() {
     });
   });
 
+  group('IoDnaHost.commitPaths', () {
+    test('stages and commits exactly the given paths', () {
+      final calls = <List<String>>[];
+      final probe = IoDnaHost(
+        git: (dir, args) {
+          calls.add(args);
+          return '';
+        },
+      );
+      probe.commitPaths('/repo', ['a.txt', 'dna/b.md'], '#gg: generated DNA');
+      expect(calls, [
+        ['add', '-A', '--', 'a.txt', 'dna/b.md'],
+        ['commit', '-m', '#gg: generated DNA', '--', 'a.txt', 'dna/b.md'],
+      ]);
+    });
+
+    test('does nothing without paths', () {
+      var called = false;
+      final probe = IoDnaHost(
+        git: (_, __) {
+          called = true;
+          return '';
+        },
+      );
+      probe.commitPaths('/repo', const [], 'msg');
+      expect(called, isFalse);
+    });
+
+    test('really commits in a git repository', () {
+      final tmp = Directory.systemTemp.createTempSync('gg_dna_commit_test_');
+      try {
+        final host = IoDnaHost();
+        String git(List<String> args) => Process.runSync(
+              'git',
+              args,
+              workingDirectory: tmp.path,
+            ).stdout.toString();
+        git(['init', '-q']);
+        git(['config', 'user.email', 't@t']);
+        git(['config', 'user.name', 't']);
+        host.writeString('${tmp.path}/generated.md', '# generated\n');
+        host.writeString('${tmp.path}/mine.md', '# mine\n');
+
+        host.commitPaths(tmp.path, ['generated.md'], '#gg: generated DNA');
+
+        expect(git(['log', '-1', '--pretty=%s']).trim(), '#gg: generated DNA');
+        // The unrelated file stayed in the working tree.
+        expect(host.uncommittedPaths(tmp.path), {'mine.md'});
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
+  });
+
   group('parseGitStatusPaths', () {
     test('reads every porcelain status code', () {
       expect(
