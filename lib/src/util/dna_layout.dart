@@ -141,6 +141,26 @@ String rewriteRenamedReferences(String content, Map<String, String> renames) {
 }
 
 // .............................................................................
+/// All ancestor folders of [paths], deepest first — the candidates to
+/// prune after their files were deleted. The paths themselves and the
+/// root (empty string) are not part of the result.
+List<String> ancestorDirs(Iterable<String> paths) {
+  final dirs = <String>{};
+  for (final path in paths) {
+    final parts = path.split('/')..removeLast();
+    while (parts.isNotEmpty) {
+      dirs.add(parts.join('/'));
+      parts.removeLast();
+    }
+  }
+  return dirs.toList()
+    ..sort((a, b) {
+      final byDepth = b.split('/').length.compareTo(a.split('/').length);
+      return byDepth != 0 ? byDepth : a.compareTo(b);
+    });
+}
+
+// .............................................................................
 /// Migration error for layers still shipping the pre-5.0 `dna/src` layout.
 String legacySrcLayoutError(String layerLabel) =>
     'Layer "$layerLabel" still ships dna/src — since gg_dna 5.0 the dna/ '

@@ -183,7 +183,7 @@ DNA files use **canonical kebab-case** names (`code-conventions.md`). At
 instantiation, names are converted to the target's standard:
 
 - `pubspec.yaml` present → snake_case (`code_conventions.md`)
-- `package.json` present → camelCase (`codeConventions.md`)
+- `package.json` present → kebab-case (`code-conventions.md`)
 - configurable via `"fileNaming"` in `.gg/dna.json`
   (`snake_case`, `camelCase`, `kebab-case`, `keep`)
 

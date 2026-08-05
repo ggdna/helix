@@ -458,6 +458,21 @@ DnaInstantiationResult instantiateDna({
     note(rel, removed: true);
   }
 
+  // A folder that only existed to hold generated files goes with them —
+  // git does not track directories, so this is a working-tree cleanup
+  // and never part of the commit.
+  for (final dir in ancestorDirs(
+    updated.where((u) => u.endsWith(' (removed)')).map(
+          (u) => u.substring(0, u.length - ' (removed)'.length),
+        ),
+  )) {
+    final path = '$targetRoot/$dir';
+    if (!host.existsDir(path)) continue;
+    if (host.listFilesRecursive(path).isNotEmpty) continue;
+    host.deleteDir(path);
+    messages.add('- removed empty folder $dir');
+  }
+
   // 13. Commit what the DNA generated — it is machine-owned, so it never
   // belongs in the developer's working tree. A repository without git or
   // without an identity keeps the files for a manual commit.
@@ -666,7 +681,7 @@ FileNaming _defaultNaming(DnaHost host, String targetRoot) {
     return FileNaming.snakeCase;
   }
   if (host.existsFile('$targetRoot/package.json')) {
-    return FileNaming.camelCase;
+    return FileNaming.kebabCase;
   }
   return FileNaming.keep;
 }

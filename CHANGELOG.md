@@ -8,8 +8,12 @@
 
 ### Changed
 
+- BREAKING: TypeScript projects instantiate with `kebab-case` file names
+— `package.json` no longer defaults to `camelCase` (the value stays
+selectable via `fileNaming`); Dart projects keep `snake_case`
 - Rework DNA repos
 - Provide first DNA, i.e. installation and .vscode settings
+- Define dna repos
 
 ## 5.0.0 - 2026-08-05
 
@@ -17,8 +21,8 @@
 
 - Instances: every public file of the merged `dna/` replica (path
 segments not starting with `_`) is copied to its project location, with
-ownership tracking, adoption of existing files and removal of files no
-longer produced
+ownership tracking, adoption of existing files, and removal of files the
+DNA no longer produces — including the folders they leave empty
 - Inheritance tree: DNAs are declared as dev-dependencies
 (npm/pub); parent DNAs are regular dependencies of their child DNA;
 gg_dna resolves the tree recursively from `node_modules/` and

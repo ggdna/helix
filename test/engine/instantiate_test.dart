@@ -5,10 +5,12 @@
 // found in the LICENSE file in the root of this package.
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:gg_dna/src/engine/instantiate.dart';
 import 'package:gg_dna/src/util/dna_fs.dart';
+import 'package:gg_dna/src/util/dna_fs_io.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
 import 'package:test/test.dart';
 
@@ -69,6 +71,63 @@ Run dart pub upgrade.
           ...extra,
         },
       );
+
+  group('instantiateDna on the real file system', () {
+    late Directory tmp;
+
+    setUp(() {
+      tmp = Directory.systemTemp.createTempSync('gg_dna_prune_test_');
+    });
+
+    tearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+
+    test('a folder emptied by the DNA is removed as well', () {
+      final host = IoDnaHost(git: (_, __) => '');
+      final project = '${tmp.path}/project';
+      final layer = '${tmp.path}/a-dna';
+      host
+        ..writeString('$layer/package.json', '{"name": "a-dna"}')
+        ..writeString('$layer/dna/doc/keep.md', '# keep\n')
+        ..writeString('$layer/dna/doc/guides/doomed.md', '# doomed\n')
+        ..writeString('$project/pubspec.yaml', 'name: consumer\n')
+        ..writeString(
+          '$project/.gg/dna.json',
+          '{"order": ["a-dna"], "dependencies": '
+              '{"a-dna": {"path": "../a-dna"}}}',
+        );
+
+      instantiateDna(
+        host: host,
+        targetRoot: project,
+        baseVersion: '5.0.0',
+      );
+      expect(Directory('$project/doc/guides').existsSync(), isTrue);
+
+      // The DNA drops the only file of that folder …
+      host.deleteFile('$layer/dna/doc/guides/doomed.md');
+      final r = instantiateDna(
+        host: host,
+        targetRoot: project,
+        baseVersion: '5.0.0',
+      );
+
+      // … so neither the instance nor its now empty folder survive —
+      // in the project and in the generated dna/ replica.
+      expect(File('$project/doc/guides/doomed.md').existsSync(), isFalse);
+      expect(Directory('$project/doc/guides').existsSync(), isFalse);
+      expect(Directory('$project/dna/doc/guides').existsSync(), isFalse);
+      // Folders that still hold files stay.
+      expect(File('$project/doc/keep.md').existsSync(), isTrue);
+      expect(Directory('$project/doc').existsSync(), isTrue);
+      expect(
+        r.messages.any((m) => m.contains('removed empty folder doc/guides')),
+        isTrue,
+        reason: r.messages.join('\n'),
+      );
+    });
+  });
 
   group('instantiateDna — end to end', () {
     test('merges layers, renders, substitutes, instantiates', () {
@@ -605,7 +664,7 @@ Run dart pub upgrade.
       expect(second.upToDate, isTrue);
     });
 
-    test('camelCase naming for package.json-only projects', () {
+    test('kebab-case naming for package.json-only projects', () {
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"devDependencies": {"dna-ts": "^1.0.0"}}',
@@ -617,7 +676,7 @@ Run dart pub upgrade.
       );
       instantiateDna(host: host, targetRoot: root, baseVersion: '5.0.0');
       expect(
-        host.existsFile('$root/test/dna/mySpecHelper.ts'),
+        host.existsFile('$root/test/dna/my-spec-helper.ts'),
         isTrue,
       );
     });

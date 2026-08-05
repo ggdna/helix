@@ -142,7 +142,8 @@ gg_dna engine compiled to WebAssembly with node callbacks injected):
 Existing project files that a DNA also ships are **adopted**
 (overwritten — git history is the backup, which is exactly what the
 per-file guard enforces). Instances no longer produced by any DNA are
-removed; locally modified ones are kept with a warning.
+removed, together with folders they leave empty; locally modified ones
+are kept with a warning.
 
 ## Markdown overrides
 
@@ -206,8 +207,8 @@ inserted verbatim for every form. Unknown references stay literal.
 
 DNA files are authored in canonical **kebab-case**. At instantiation
 they are converted to the target standard — `pubspec.yaml` present →
-`snake_case`, otherwise `package.json` → `camelCase`, otherwise `keep`
-(overridable via `fileNaming`). Only the part before the first dot of
+`snake_case`, otherwise `package.json` present → `kebab-case`, otherwise
+`keep` (overridable via `fileNaming`). Only the part before the first dot of
 purely lowercase segments converts (`dna-test.dart` → `dna_test.dart`;
 `.spec.ts`, `.code-snippets`, `LICENSE`, `README.md` stay untouched).
 References to renamed files are rewritten inside text instances; the
