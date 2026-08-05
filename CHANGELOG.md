@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Add .prettierignore and .prettierrc to dna
+
 ### Changed
 
 - Rework DNA repos
