@@ -1,6 +1,0 @@
-name: dna_company
-description: Sample company DNA layer used by tests as a git layer.
-version: 1.5.0
-
-environment:
-  sdk: ">=3.3.0 <4.0.0"

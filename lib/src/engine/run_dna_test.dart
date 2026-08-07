@@ -1,0 +1,119 @@
+// @license
+// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+import 'dart:io';
+import 'dart:isolate';
+
+import 'package:gg_console_colors/gg_console_colors.dart';
+
+import '../gg_dna_version.dart';
+import '../util/dna_fs.dart';
+import '../util/dna_fs_io.dart';
+import 'instantiate.dart';
+
+/// Entry point for the placed DNA test (`test/dna/dna_test.dart` imports
+/// gg_dna as dev-dependency and calls this). Runs one instantiation over
+/// the current project and throws when the project is not in a clean,
+/// up-to-date DNA state:
+///
+/// - hand-modified instances → fails, files stay untouched
+/// - DNA updates → writes them and fails once ("review & commit")
+/// - a file to be overwritten carries uncommitted work → fails without
+///   writing (unrelated dirty files do not block)
+/// - missing LICENSE → fails
+Future<void> runDnaTest({
+  String? targetRoot,
+  DnaHost? host,
+  String? baseDnaRoot,
+  void Function(String message)? log,
+}) async {
+  final effectiveHost = host ?? IoDnaHost();
+  final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
+  final base = baseDnaRoot ?? await ggDnaPackageRoot();
+  final emit = log ?? print; // coverage:ignore-line
+
+  final result = instantiateDna(
+    host: effectiveHost,
+    targetRoot: root,
+    baseDnaRoot: base,
+    baseVersion: ggDnaVersion,
+  );
+
+  for (final warning in result.warnings) {
+    emit('warning: $warning');
+  }
+  for (final message in result.messages) {
+    emit(message);
+  }
+
+  if (result.modifiedInstances.isNotEmpty) {
+    throw Exception(
+      '\n${cError(modifiedInstancesMessage)}\n'
+      '${describeDnaSources(result.modifiedInstances, result.sources)}',
+    );
+  }
+  if (result.blocked) {
+    throw Exception(
+      '\n${cError(uncommittedTargetsMessage)}\n'
+      '${describeDnaSources(result.uncommittedTargets, result.sources)}',
+    );
+  }
+  if (result.updated.isNotEmpty && !result.committed) {
+    final lines = result.updated
+        .map((path) => '${cAction('Commit')} ${cCmd(path)}.')
+        .join('\n');
+    throw Exception('\n${cError(needsCommitMessage)}\n$lines');
+  }
+  if (!effectiveHost.existsFile('$root/LICENSE')) {
+    throw Exception(
+      'LICENSE is missing — ship it via a DNA layer or add it manually.',
+    );
+  }
+}
+
+// .............................................................................
+/// Colors of the DNA report — the problem in [cError], files in [cCmd],
+/// what to do in [cAction].
+String cError(Object message) => red(message);
+
+/// Color of a file path or command in the DNA report.
+String cCmd(Object message) => blue(message);
+
+/// Color of an instruction in the DNA report.
+String cAction(Object message) => yellow(message);
+
+// .............................................................................
+/// Renders one instruction per reported path: move the edits from the
+/// generated file to the DNA file it is produced from.
+String describeDnaSources(
+  List<String> paths,
+  Map<String, String> sources,
+) =>
+    paths.map((path) {
+      final source = sources[path];
+      return source == null
+          ? '${cAction('Commit or stash')} ${cCmd(path)}.'
+          : '${cAction('Move edits from')} ${cCmd(path)} '
+              '${cAction('to')} ${cCmd(source)}.';
+    }).join('\n');
+
+// .............................................................................
+/// Resolves the root folder of the installed gg_dna package (its own
+/// `dna/` folder is the implicit base layer).
+Future<String> ggDnaPackageRoot() async {
+  final uri = await Isolate.resolvePackageUri(
+    Uri.parse('package:gg_dna/gg_dna.dart'),
+  );
+  if (uri == null) {
+    // coverage:ignore-start
+    throw Exception(
+      'Cannot resolve the gg_dna package root — pass baseDnaRoot '
+      'explicitly.',
+    );
+    // coverage:ignore-end
+  }
+  return File(uri.toFilePath()).parent.parent.path.replaceAll(r'\', '/');
+}

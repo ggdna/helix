@@ -1,15 +1,44 @@
 # Changelog
 
-## 3.1.0 - 2026-08-04
-
-### Changed
-
-- Rename .master to .ocean with automatic migration at next start
-
-## 4.0.0 - 2026-07-24
+## 4.0.0 - 2026-08-07
 
 ### Added
 
+- Instances: every public file of the merged `dna/` replica (path
+segments not starting with `_`) is copied to its project location, with
+ownership tracking, adoption of existing files, and removal of files the
+DNA no longer produces — including the folders they leave empty
+- Inheritance tree: DNAs are declared as dev-dependencies
+(npm/pub); parent DNAs are regular dependencies of their child DNA;
+gg_dna resolves the tree recursively from `node_modules/` and
+`.dart_tool/package_config.json` (diamond dedup, cycle detection)
+- JSON overrides: sidecar `X.overrides.json` merges into `X.json` —
+objects deep-merge, `null` deletes, `"key!"` replaces outright,
+`"key+"` joins arrays (deduplicated); JSONC (comments, trailing
+commas) is tolerated
+- Variables: `dna/_vars.json` (deep-merged across layers, overridable
+via `vars` in `.gg/dna.json`); references `dnaMyVar`, `DnaMyVar`,
+`dna_my_var`, `DNA_MY_VAR`, `dna-my-var` are replaced case-adaptively;
+non-identifier values verbatim
+- File-naming conversion: DNA files are canonical kebab-case and are
+converted per target (`pubspec.yaml` → snake_case, `package.json` →
+camelCase, configurable via `fileNaming`); references to renamed files
+are rewritten in text instances
+- `gg_dna init`: places the DNA wrapper test (Dart and/or vitest), a
+`.gg/dna.json` skeleton and the `!.gg/dna.json` gitignore exception
+- Public engine API: `instantiateDna()` and `runDnaTest()`
+(`package:gg_dna/gg_dna.dart`); the engine core is free of `dart:io`
+and compilable to WebAssembly (host access via injectable `DnaHost`)
+- Per-file guard: an existing file that carries uncommitted work is
+never overwritten or deleted — the run names those files and writes
+nothing; unrelated dirty files do not block it
+- Everything the DNA generates is committed right away as
+`#gg: generated DNA` (path-limited, so unrelated changes stay in the
+working tree); without a repository or git identity the files are kept
+for a manual commit
+- Provenance in every failure report: generated files are reported with
+the DNA source they are produced from (`edit instead: base_dna/dna/doc/develop.md`), so hand edits go into the DNA instead of
+the generated copy (`DnaInstantiationResult.sources`)
 - `global.overrides.md` in the src root of any layer: its string blocks
 rewrite `{{@tag:…}}` placeholders in every merged `.md` file; file-specific
 overrides of the same layer win, heading-form blocks warn
@@ -17,6 +46,28 @@ overrides of the same layer win, heading-form blocks warn
 
 ### Changed
 
+- BREAKING: `dna/src` is gone — a DNA's `dna/` folder itself mirrors
+the project root (public/private via the `_` prefix convention)
+- BREAKING: DNA configuration lives only in `.gg/dna.json`; `dna:`
+blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are migration
+errors
+- BREAKING: `gg_dna sync` was replaced by `gg_dna init` — the
+instantiation runs inside the placed test on every test run
+(hand-modified instances fail, DNA updates are written and committed)
+- BREAKING: git layers were removed — declare DNAs as dev-dependencies;
+`path:` overrides in `.gg/dna.json` remain for local development
+- BREAKING: the bookkeeping is split in two and renamed —
+`dna/_dna.json` (format v5: `layers` with `package`/`via`, hashes) and
+`dna/_instances.json` (the files the DNA owns); leftover `.dna.json` /
+`.instances.json` files are read once, so ownership survives, and then
+removed
+- BREAKING: the effective variables are no longer duplicated into the
+bookkeeping — `dna/_vars.json` is their only home
+- BREAKING: `config: claude: skills:` was removed — skills ship as
+normal instances at `dna/.claude/skills/<name>`; only the managed
+CLAUDE.md block (`claude_md: include:`) remains special
+- Base DNA restructured: human documentation at `dna/doc/**`
+(conventions, guides — English), skills at `dna/.claude/skills/**`
 - BREAKING: every DNA source ships its mergeable DNA under `dna/src` —
 the gg_dna base DNA, git layers, and path layers; sources without `dna/src`
 are an error with a migration hint
@@ -31,6 +82,36 @@ reserved), and replaces `dna/_override`; path layers pointing into
 longer recognized
 - BREAKING: `.dna.json` manifest format v4 (records the implicit src
 layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
+
+### Removed
+
+- `gg_dna sync` (including `--check`, `--source`, `--target`), git tag
+resolution, the skills mirroring and the staging/backup folders
+(`.gg_dna_staging`, `.gg_dna_backup` are no longer created)
+
+## 3.1.1 - 2026-08-07
+
+### Added
+
+- Add .prettierignore and .prettierrc to dna
+
+### Changed
+
+- BREAKING: TypeScript projects instantiate with `kebab-case` file names
+— `package.json` no longer defaults to `camelCase` (the value stays
+selectable via `fileNaming`); Dart projects keep `snake_case`
+- Rework DNA repos
+- Provide first DNA, i.e. installation and .vscode settings
+- Define dna repos
+
+## 3.1.0 - 2026-08-04
+
+Note: released out of order — this version shipped after 4.0.0 and
+contains the rename below on top of the 4.0.0 changes.
+
+### Changed
+
+- Rename .master to .ocean with automatic migration at next start
 
 ## 3.0.0 - 2026-07-24
 

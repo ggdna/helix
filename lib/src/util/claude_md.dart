@@ -4,9 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
+import 'dna_fs.dart';
 
 /// Marker that opens the managed CLAUDE.md block.
 const String claudeMdStartMarker = '<!-- gg_dna:claude_md:start -->';
@@ -23,34 +21,48 @@ const String legacyConventionsEndMarker = '<!-- gg_dna:conventions:end -->';
 
 // .............................................................................
 /// Expands the `claude_md: include:` entries to the files that get one
-/// `@`-import line each: files stay as-is, folders expand to all their
-/// `.md` files (recursive, sorted). Paths are relative to [targetRoot]
-/// and returned posix-style. Missing entries throw — a sync must never
-/// generate broken `@`-imports.
-List<String> expandClaudeMdIncludes(String targetRoot, List<String> include) {
+/// `@`-import line each. Entries are matched against [projectedFiles]
+/// (the files the instantiation is about to produce) first, then against
+/// the file system via [host]: files stay as-is, folders expand to all
+/// their `.md` files (sorted). Missing entries throw — an instantiation
+/// must never generate broken `@`-imports.
+List<String> expandClaudeMdIncludes({
+  required DnaHost host,
+  required String targetRoot,
+  required List<String> include,
+  Set<String> projectedFiles = const {},
+}) {
   final result = <String>[];
   for (final entry in include) {
-    final rel = entry.replaceAll('\\', '/');
-    final path = p.normalize(p.join(targetRoot, rel));
-    if (FileSystemEntity.isFileSync(path)) {
-      result.add(_relPosix(path, targetRoot));
+    final rel = entry.replaceAll(r'\', '/');
+    if (projectedFiles.contains(rel)) {
+      result.add(rel);
       continue;
     }
-    final dir = Directory(path);
-    if (!dir.existsSync()) {
-      throw Exception(
-        'claude_md include does not exist: "$entry" '
-        '(resolved to $path)',
-      );
+    final folderMatches = projectedFiles
+        .where((f) => f.startsWith('$rel/') && f.toLowerCase().endsWith('.md'))
+        .toList()
+      ..sort();
+    if (folderMatches.isNotEmpty) {
+      result.addAll(folderMatches);
+      continue;
     }
-    final files = <String>[];
-    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
-      if (entity is File && entity.path.toLowerCase().endsWith('.md')) {
-        files.add(_relPosix(entity.path, targetRoot));
-      }
+    final path = '$targetRoot/$rel';
+    if (host.existsFile(path)) {
+      result.add(rel);
+      continue;
     }
-    files.sort();
-    result.addAll(files);
+    if (host.existsDir(path)) {
+      final files = host
+          .listFilesRecursive(path)
+          .where((f) => f.toLowerCase().endsWith('.md'))
+          .map((f) => '$rel/$f')
+          .toList()
+        ..sort();
+      result.addAll(files);
+      continue;
+    }
+    throw Exception('claude_md include does not exist: "$entry"');
   }
   return result;
 }
@@ -92,22 +104,19 @@ String upsertClaudeMdBlock(String content, String block) {
 }
 
 // .............................................................................
-/// Upserts the managed block for [importPaths] into `<targetRoot>/CLAUDE.md`,
-/// creating the file when it does not exist. Returns `true` when the file
-/// changed.
-bool writeClaudeMd(String targetRoot, Iterable<String> importPaths) {
-  final file = File(p.join(targetRoot, 'CLAUDE.md'));
-  final existing = file.existsSync() ? file.readAsStringSync() : '';
+/// The updated content of `<targetRoot>/CLAUDE.md` for [importPaths], or
+/// `null` when the file already carries exactly this block.
+String? updatedClaudeMd(
+  DnaHost host,
+  String targetRoot,
+  Iterable<String> importPaths,
+) {
+  final path = '$targetRoot/CLAUDE.md';
+  final existing = host.existsFile(path) ? host.readString(path) : '';
   final updated =
       upsertClaudeMdBlock(existing, buildClaudeMdBlock(importPaths));
-  if (existing == updated) return false;
-  file.writeAsStringSync(updated);
-  return true;
+  return existing == updated ? null : updated;
 }
-
-// .............................................................................
-String _relPosix(String path, String from) =>
-    p.relative(path, from: from).replaceAll('\\', '/');
 
 // .............................................................................
 String _removeLegacyBlock(String content) {

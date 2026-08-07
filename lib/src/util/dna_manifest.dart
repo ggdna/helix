@@ -5,262 +5,238 @@
 // found in the LICENSE file in the root of this package.
 
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'dna_fs.dart';
+import 'dna_tree_hash.dart';
+import 'json_merge.dart';
 
-import 'dna_config.dart';
-import 'dna_hash.dart';
+/// Manifest format written by gg_dna 5.x.
+const int dnaManifestFormatVersion = 5;
 
-/// One layer entry in the sync manifest: the raw dna: config values (for
-/// machine-independent drift detection via [matchesConfig]) plus the
-/// resolution results of the last sync.
+// .............................................................................
+/// One resolved layer of the inheritance tree.
 class DnaManifestLayer {
-  /// Constructor.
+  /// Creates the layer record.
   const DnaManifestLayer({
     required this.name,
-    this.git,
+    this.package,
     this.path,
-    this.versionConstraint,
     this.resolvedVersion,
-    this.resolvedTag,
-    this.commit,
+    this.via,
     this.hash,
   });
 
-  /// Creates the entry for [config] plus its resolution results.
-  factory DnaManifestLayer.fromConfig(
-    DnaLayerConfig config, {
-    String? resolvedVersion,
-    String? resolvedTag,
-    String? commit,
-    String? hash,
-  }) =>
+  /// Reads a layer from decoded JSON.
+  factory DnaManifestLayer.fromJson(Map<String, dynamic> json) =>
       DnaManifestLayer(
-        name: config.name,
-        git: config.git,
-        path: config.path,
-        versionConstraint: config.rawVersionConstraint,
-        resolvedVersion: resolvedVersion,
-        resolvedTag: resolvedTag,
-        commit: commit,
-        hash: hash,
+        name: json['name'] as String,
+        package: json['package'] as String?,
+        path: json['path'] as String?,
+        resolvedVersion: json['resolvedVersion'] as String?,
+        via: json['via'] as String?,
+        hash: json['hash'] as String?,
       );
 
-  /// Restores a layer from [toJson]; fields of unexpected type are absent.
-  factory DnaManifestLayer.fromJson(Map<String, dynamic> data) =>
-      DnaManifestLayer(
-        name: _string(data, 'name') ?? '',
-        git: _string(data, 'git'),
-        path: _string(data, 'path'),
-        versionConstraint: _string(data, 'versionConstraint'),
-        resolvedVersion: _string(data, 'resolvedVersion'),
-        resolvedTag: _string(data, 'resolvedTag'),
-        commit: _string(data, 'commit'),
-        hash: _string(data, 'hash'),
-      );
-
-  /// Layer name as listed in `dna: order:`.
+  /// Canonical layer name (kebab package name or override name).
   final String name;
 
-  /// Raw `git:` value from the dna: config. `null` for path layers.
-  final String? git;
+  /// Resolved package name (`null` for path overrides and the base layer).
+  final String? package;
 
-  /// Raw `path:` value from the dna: config. `null` for git layers.
+  /// Path override relative to the target root (`null` for packages).
   final String? path;
 
-  /// Raw `version:` constraint from the config. `null` when unconstrained.
-  final String? versionConstraint;
-
-  /// The version the constraint resolved to at sync time, e.g. `1.5.0`.
+  /// The version the package manager resolved (`null` when unknown).
   final String? resolvedVersion;
 
-  /// The git tag [resolvedVersion] came from, e.g. `v1.5.0`.
-  final String? resolvedTag;
+  /// Name of the layer that pulled this one in recursively; `null` for
+  /// directly configured layers.
+  final String? via;
 
-  /// Commit SHA of the cloned layer. `null` for path layers.
-  final String? commit;
-
-  /// Content hash of the layer's dna root at sync time.
+  /// Content hash of the layer's `dna/` tree at instantiation time.
   final String? hash;
 
-  /// Whether this entry was produced by [config] (drift detection).
-  bool matchesConfig(DnaLayerConfig config) =>
-      name == config.name &&
-      git == config.git &&
-      path == config.path &&
-      versionConstraint == config.rawVersionConstraint;
-
-  /// JSON representation used by [DnaManifest.write] and tests.
-  Map<String, dynamic> toJson() => <String, dynamic>{
+  /// JSON representation.
+  Map<String, dynamic> toJson() => {
         'name': name,
-        'git': git,
+        'package': package,
         'path': path,
-        'versionConstraint': versionConstraint,
         'resolvedVersion': resolvedVersion,
-        'resolvedTag': resolvedTag,
-        'commit': commit,
+        'via': via,
         'hash': hash,
       };
 }
 
-/// The `claude` section of the manifest: the raw `config: claude:` values
-/// of the last sync (drift detection) plus the skills gg_dna installed —
-/// only those are overwritten or removed by later syncs.
-class DnaManifestClaude {
-  /// Constructor.
-  const DnaManifestClaude({
-    this.claudeMdInclude,
-    this.skillsInclude,
-    this.installedSkills = const [],
-  });
+// .............................................................................
+/// One instantiated (public) file owned by the DNA.
+class DnaManifestInstance {
+  /// Creates the instance record.
+  const DnaManifestInstance({required this.path, required this.hash});
 
-  /// Restores the section from [toJson].
-  factory DnaManifestClaude.fromJson(Map<String, dynamic> data) =>
-      DnaManifestClaude(
-        claudeMdInclude: _stringList(data, 'claudeMdInclude'),
-        skillsInclude: _stringList(data, 'skillsInclude'),
-        installedSkills: _stringList(data, 'installedSkills') ?? const [],
+  /// Reads an instance from decoded JSON.
+  factory DnaManifestInstance.fromJson(Map<String, dynamic> json) =>
+      DnaManifestInstance(
+        path: json['path'] as String,
+        hash: json['hash'] as String,
       );
 
-  /// `claude_md: include:` as configured at sync time; `null` when absent.
-  final List<String>? claudeMdInclude;
+  /// Project-relative posix path of the instance (converted naming).
+  final String path;
 
-  /// `skills: include:` as configured at sync time; `null` when absent.
-  final List<String>? skillsInclude;
+  /// Content hash of the instance at instantiation time.
+  final String hash;
 
-  /// Skills gg_dna installed into `.claude/skills/` — gg_dna's ownership
-  /// list; hand-installed skills never appear here.
-  final List<String> installedSkills;
-
-  /// Whether this section was produced by [config] (drift detection).
-  bool matchesConfig(DnaClaudeConfig? config) =>
-      _sameList(claudeMdInclude, config?.claudeMdInclude) &&
-      _sameList(skillsInclude, config?.skillsInclude);
-
-  /// JSON representation used by [DnaManifest.write] and tests.
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'claudeMdInclude': claudeMdInclude,
-        'skillsInclude': skillsInclude,
-        'installedSkills': installedSkills,
-      };
-
-  static bool _sameList(List<String>? a, List<String>? b) {
-    if (a == null || b == null) return (a == null) == (b == null);
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
+  /// JSON representation.
+  Map<String, dynamic> toJson() => {'path': path, 'hash': hash};
 }
 
-/// Sync manifest at `<target>/dna/.dna.json` — everything a later `--check`
-/// needs to verify the target is still in sync (base and result hashes plus
-/// per-layer config and resolution data).
+// .............................................................................
+/// The Claude section of the manifest.
+class DnaManifestClaude {
+  /// Creates the record.
+  const DnaManifestClaude({this.claudeMdInclude});
+
+  /// Reads the section from decoded JSON.
+  factory DnaManifestClaude.fromJson(Map<String, dynamic> json) =>
+      DnaManifestClaude(
+        claudeMdInclude: (json['claudeMdInclude'] as List?)?.cast<String>(),
+      );
+
+  /// The configured CLAUDE.md includes at instantiation time.
+  final List<String>? claudeMdInclude;
+
+  /// JSON representation.
+  Map<String, dynamic> toJson() => {'claudeMdInclude': claudeMdInclude};
+}
+
+// .............................................................................
+/// The bookkeeping gg_dna writes below `<target>/dna/`.
+///
+/// Two files, because they answer two questions:
+/// - `_dna.json` — which layers produced the current state, and their
+///   hashes.
+/// - `_instances.json` — which project files the DNA owns.
+///
+/// The effective variables are part of neither: they live in
+/// `dna/_vars.json`, the merged file the DNA itself ships.
 class DnaManifest {
-  /// Constructor.
+  /// Creates the manifest.
   const DnaManifest({
-    this.layers = const [],
+    required this.layers,
+    required this.instances,
     this.claude = const DnaManifestClaude(),
-    this.baseVersion,
+    required this.baseVersion,
     this.baseHash,
     this.hash,
   });
 
-  /// Manifest format version; [read] rejects all others (e.g. pre-4.0).
-  static const int formatVersion = 4;
-
-  /// The layers that were merged during the last sync, in order.
+  /// The resolved layers in application order.
   final List<DnaManifestLayer> layers;
 
-  /// The `config: claude:` state of the last sync.
+  /// All DNA-owned instances with their generated hashes.
+  final List<DnaManifestInstance> instances;
+
+  /// The Claude section.
   final DnaManifestClaude claude;
 
-  /// `version:` field of the gg_dna package that produced the last sync.
-  final String? baseVersion;
+  /// gg_dna version that wrote the manifest.
+  final String baseVersion;
 
-  /// Content hash of the gg_dna package's `dna/` folder at sync time.
+  /// Hash of gg_dna's own base DNA at instantiation time.
   final String? baseHash;
 
-  /// Content hash of `<target>/dna/` after the completed sync.
+  /// Hash of the generated `dna/` tree (`null` for role: dna).
   final String? hash;
 
-  /// Reads `<dnaDir>/.dna.json`; `null` when missing, invalid, or not v2.
-  static DnaManifest? read(Directory dnaDir) {
-    final file = File(p.join(dnaDir.path, dnaManifestFilename));
-    if (!file.existsSync()) return null;
-    final Object? data;
-    try {
-      data = jsonDecode(file.readAsStringSync());
-    } on FormatException {
-      return null;
-    }
-    if (data is! Map<String, dynamic>) return null;
-    if (data['version'] != formatVersion) return null;
-    final rawLayers = data['layers'];
-    final layers = <DnaManifestLayer>[];
-    if (rawLayers is List) {
-      for (final layer in rawLayers) {
-        if (layer is! Map<String, dynamic>) return null;
-        layers.add(DnaManifestLayer.fromJson(layer));
-      }
-    }
-    final rawClaude = data['claude'];
-    return DnaManifest(
-      layers: layers,
-      claude: rawClaude is Map<String, dynamic>
-          ? DnaManifestClaude.fromJson(rawClaude)
-          : const DnaManifestClaude(),
-      baseVersion: _string(data, 'baseVersion'),
-      baseHash: _string(data, 'baseHash'),
-      hash: _string(data, 'hash'),
-    );
-  }
-
-  /// Writes `this` to `<dnaDir>/.dna.json` as pretty-printed JSON.
-  void write(Directory dnaDir) {
-    final file = File(p.join(dnaDir.path, dnaManifestFilename));
-    file.parent.createSync(recursive: true);
-    const encoder = JsonEncoder.withIndent('  ');
-    file.writeAsStringSync('${encoder.convert(toJson())}\n');
-  }
-
-  /// JSON representation used by [write] and tests.
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'version': formatVersion,
-        'layers': [for (final layer in layers) layer.toJson()],
+  /// JSON representation of `_dna.json` — layers and hashes.
+  Map<String, dynamic> toJson() => {
+        'version': dnaManifestFormatVersion,
+        'layers': layers.map((l) => l.toJson()).toList(),
         'claude': claude.toJson(),
         'baseVersion': baseVersion,
         'baseHash': baseHash,
         'hash': hash,
       };
-}
 
-/// Returns [key] from [data] when it is a string, `null` otherwise.
-String? _string(Map<String, dynamic> data, String key) {
-  final value = data[key];
-  return value is String ? value : null;
-}
+  /// JSON representation of `_instances.json` — the files the DNA owns.
+  Map<String, dynamic> instancesToJson() => {
+        'version': dnaManifestFormatVersion,
+        'instances': instances.map((i) => i.toJson()).toList(),
+      };
 
-/// Returns [key] from [data] as a string list, `null` when absent or of
-/// unexpected shape.
-List<String>? _stringList(Map<String, dynamic> data, String key) {
-  final value = data[key];
-  if (value is! List) return null;
-  final result = <String>[];
-  for (final entry in value) {
-    if (entry is! String) return null;
-    result.add(entry);
+  // ...........................................................................
+  /// Reads the manifest of [targetRoot]; `null` when missing or not
+  /// format v5.
+  static DnaManifest? read(DnaHost host, String targetRoot) {
+    var path = '$targetRoot/dna/$dnaManifestFilename';
+    if (!host.existsFile(path)) {
+      // Repositories written before the rename still carry the old file.
+      path = '$targetRoot/dna/$legacyDnaManifestFilename';
+      if (!host.existsFile(path)) return null;
+    }
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(host.readString(path));
+    } on FormatException {
+      return null;
+    }
+    if (decoded is! Map<String, dynamic>) return null;
+    if (decoded['version'] != dnaManifestFormatVersion) return null;
+    return DnaManifest(
+      layers: [
+        for (final l in (decoded['layers'] as List?) ?? const [])
+          DnaManifestLayer.fromJson(l as Map<String, dynamic>),
+      ],
+      // Instances live in their own file; repositories written before
+      // the split still carry them inside the manifest.
+      instances: _readInstances(host, targetRoot) ??
+          [
+            for (final i in (decoded['instances'] as List?) ?? const [])
+              DnaManifestInstance.fromJson(i as Map<String, dynamic>),
+          ],
+      claude: decoded['claude'] is Map<String, dynamic>
+          ? DnaManifestClaude.fromJson(
+              decoded['claude'] as Map<String, dynamic>,
+            )
+          : const DnaManifestClaude(),
+      baseVersion: decoded['baseVersion'] as String? ?? 'unknown',
+      baseHash: decoded['baseHash'] as String?,
+      hash: decoded['hash'] as String?,
+    );
   }
-  return result;
+
+  // ...........................................................................
+  /// Writes both bookkeeping files below `<targetRoot>/dna/`.
+  void write(DnaHost host, String targetRoot) {
+    host.writeString(
+      '$targetRoot/dna/$dnaManifestFilename',
+      encodeJsonPretty(toJson()),
+    );
+    host.writeString(
+      '$targetRoot/dna/$dnaInstancesFilename',
+      encodeJsonPretty(instancesToJson()),
+    );
+  }
 }
 
-/// Returns the pubspec `version:` at [packageRoot], `null` when absent.
-String? readPackageVersion(String packageRoot) {
-  final file = File(p.join(packageRoot, 'pubspec.yaml'));
-  if (!file.existsSync()) return null;
-  final match = RegExp(r'^version:\s*(.+)$', multiLine: true)
-      .firstMatch(file.readAsStringSync());
-  return match?.group(1)?.trim();
+// .............................................................................
+List<DnaManifestInstance>? _readInstances(DnaHost host, String targetRoot) {
+  var path = '$targetRoot/dna/$dnaInstancesFilename';
+  if (!host.existsFile(path)) {
+    // Written before the `_` convention was applied to this file.
+    path = '$targetRoot/dna/$legacyDnaInstancesFilename';
+    if (!host.existsFile(path)) return null;
+  }
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(host.readString(path));
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map<String, dynamic>) return null;
+  if (decoded['version'] != dnaManifestFormatVersion) return null;
+  return [
+    for (final i in (decoded['instances'] as List?) ?? const [])
+      DnaManifestInstance.fromJson(i as Map<String, dynamic>),
+  ];
 }

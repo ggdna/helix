@@ -4,290 +4,111 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:gg_dna/src/util/dna_config.dart';
+import 'package:gg_dna/src/util/dna_fs.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
 import 'package:test/test.dart';
 
 void main() {
+  const root = '/repo';
+
+  const manifest = DnaManifest(
+    layers: [
+      DnaManifestLayer(
+        name: 'base-dna',
+        package: 'base-dna',
+        resolvedVersion: '1.0.0',
+        via: 'dna-dart',
+        hash: '0x1',
+      ),
+      DnaManifestLayer(name: 'local', path: '../local', hash: '0x2'),
+    ],
+    instances: [
+      DnaManifestInstance(path: '.vscode/settings.json', hash: '0x3'),
+      DnaManifestInstance(path: 'LICENSE', hash: '0x4'),
+    ],
+    claude: DnaManifestClaude(claudeMdInclude: ['doc/conventions']),
+    baseVersion: '5.0.0',
+    baseHash: '0x5',
+    hash: '0x6',
+  );
+
   group('DnaManifest', () {
-    test('read returns null when the manifest file is missing', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        expect(DnaManifest.read(tmp), isNull);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
+    test('round-trips through write and read', () {
+      final host = MemoryDnaHost();
+      manifest.write(host, root);
+      expect(host.existsFile('$root/dna/_dna.json'), isTrue);
+
+      final read = DnaManifest.read(host, root)!;
+      expect(read.layers, hasLength(2));
+      expect(read.layers.first.name, 'base-dna');
+      expect(read.layers.first.via, 'dna-dart');
+      expect(read.layers.first.resolvedVersion, '1.0.0');
+      expect(read.layers.last.path, '../local');
+      expect(read.instances, hasLength(2));
+      expect(read.instances.first.path, '.vscode/settings.json');
+      expect(read.claude.claudeMdInclude, ['doc/conventions']);
+      // Instances live in their own file, layers in the manifest.
+      expect(host.existsFile('$root/dna/_instances.json'), isTrue);
+      expect(manifest.toJson().containsKey('instances'), isFalse);
+      expect(manifest.toJson().containsKey('vars'), isFalse);
+      expect(manifest.instancesToJson()['instances'], hasLength(2));
+      expect(read.baseVersion, '5.0.0');
+      expect(read.baseHash, '0x5');
+      expect(read.hash, '0x6');
     });
 
-    test('write and read round-trip preserves all fields', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        const original = DnaManifest(
-          layers: [
-            DnaManifestLayer(
-              name: 'dna_company',
-              git: 'https://example.com/dna_company.git',
-              versionConstraint: '^1.4.0',
-              resolvedVersion: '1.5.0',
-              resolvedTag: 'v1.5.0',
-              commit: 'abc123',
-              hash: '0xdeadbeef',
-            ),
-            DnaManifestLayer(
-              name: 'dna_repo',
-              path: 'dna/_override',
-              hash: '0xfeedface',
-            ),
-          ],
-          claude: DnaManifestClaude(
-            claudeMdInclude: ['dna/agents/conventions', 'notes.md'],
-            skillsInclude: ['dna/agents/skills'],
-            installedSkills: ['demo'],
-          ),
-          baseVersion: '1.2.3',
-          baseHash: '0xcafef00d',
-          hash: '0x0000000000000001',
-        );
-        original.write(tmp);
-        final loaded = DnaManifest.read(tmp);
-        expect(loaded, isNotNull);
-        expect(loaded!.toJson(), equals(original.toJson()));
-        expect(loaded.layers, hasLength(2));
-        expect(loaded.layers.first.resolvedTag, 'v1.5.0');
-        expect(loaded.layers.last.path, 'dna/_override');
-        expect(loaded.claude.installedSkills, ['demo']);
-        expect(loaded.claude.skillsInclude, ['dna/agents/skills']);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
+    test('toJson carries the format version', () {
+      expect(manifest.toJson()['version'], dnaManifestFormatVersion);
     });
 
-    test('writes the format version', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        const DnaManifest().write(tmp);
-        final data = jsonDecode(
-          File('${tmp.path}/.dna.json').readAsStringSync(),
-        ) as Map<String, dynamic>;
-        expect(data['version'], DnaManifest.formatVersion);
-        expect(data['layers'], isEmpty);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-
-    test('read returns null on invalid JSON', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        File('${tmp.path}/.dna.json').writeAsStringSync('not json');
-        expect(DnaManifest.read(tmp), isNull);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-
-    test('read returns null on pre-4.0 manifests', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        // A gg_dna 1.x manifest has no version field.
-        File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"overlay": "gg_foo", "hash": "0x01"}',
-        );
-        expect(DnaManifest.read(tmp), isNull);
-
-        // A gg_dna 2.x manifest has version 2.
-        File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 2, "layers": [], "hash": "0x01"}',
-        );
-        expect(DnaManifest.read(tmp), isNull);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-
-    test('read tolerates a missing layers list and layer names', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 4, "hash": "0x01"}',
-        );
-        final manifest = DnaManifest.read(tmp);
-        expect(manifest!.layers, isEmpty);
-        expect(manifest.hash, '0x01');
-        expect(manifest.claude.claudeMdInclude, isNull);
-        expect(manifest.claude.installedSkills, isEmpty);
-
-        File('${tmp.path}/.dna.json').writeAsStringSync(
-          '{"version": 4, "layers": [{}]}',
-        );
-        expect(DnaManifest.read(tmp)!.layers.single.name, '');
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-
-    test('read returns null on structurally malformed manifests', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_manifest_');
-      try {
-        final file = File('${tmp.path}/.dna.json');
-
-        // Valid JSON, but not an object.
-        file.writeAsStringSync('[1, 2, 3]');
-        expect(DnaManifest.read(tmp), isNull);
-
-        // A layers element that is not an object.
-        file.writeAsStringSync('{"version": 4, "layers": [42]}');
-        expect(DnaManifest.read(tmp), isNull);
-
-        // A non-list layers value is treated as absent.
-        file.writeAsStringSync('{"version": 4, "layers": "nope"}');
-        expect(DnaManifest.read(tmp)!.layers, isEmpty);
-
-        // Non-string fields are treated as absent.
-        file.writeAsStringSync(
-          '{"version": 4, "hash": 42, "layers": [{"name": 7, "git": []}]}',
-        );
-        final manifest = DnaManifest.read(tmp);
-        expect(manifest!.hash, isNull);
-        expect(manifest.layers.single.name, '');
-        expect(manifest.layers.single.git, isNull);
-
-        // A malformed claude section is treated as absent.
-        file.writeAsStringSync(
-          '{"version": 4, "layers": [], "claude": '
-          '{"installedSkills": [42], "claudeMdInclude": "x"}}',
-        );
-        final claude = DnaManifest.read(tmp)!.claude;
-        expect(claude.installedSkills, isEmpty);
-        expect(claude.claudeMdInclude, isNull);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-  });
-
-  group('DnaManifestLayer', () {
-    const config = DnaLayerConfig(
-      name: 'company',
-      git: 'gg_dna_company',
-      rawVersionConstraint: '^1.4.0',
-    );
-
-    test('fromConfig copies the raw config values', () {
-      final layer = DnaManifestLayer.fromConfig(
-        config,
-        resolvedVersion: '1.5.0',
-        resolvedTag: 'v1.5.0',
-        commit: 'abc',
-        hash: '0x01',
-      );
-      expect(layer.name, 'company');
-      expect(layer.git, 'gg_dna_company');
-      expect(layer.path, isNull);
-      expect(layer.versionConstraint, '^1.4.0');
-      expect(layer.resolvedTag, 'v1.5.0');
-    });
-
-    test('DnaManifestClaude.matchesConfig detects drift', () {
-      const stored = DnaManifestClaude(
-        claudeMdInclude: ['a.md'],
-        skillsInclude: ['skills'],
-        installedSkills: ['demo'],
-      );
+    test('read returns null for missing, invalid or outdated manifests', () {
+      expect(DnaManifest.read(MemoryDnaHost(), root), isNull);
       expect(
-        stored.matchesConfig(
-          const DnaClaudeConfig(
-            claudeMdInclude: ['a.md'],
-            skillsInclude: ['skills'],
-          ),
+        DnaManifest.read(
+          MemoryDnaHost(files: {'$root/dna/_dna.json': '{broken'}),
+          root,
         ),
-        isTrue,
+        isNull,
       );
       expect(
-        stored.matchesConfig(
-          const DnaClaudeConfig(
-            claudeMdInclude: ['b.md'],
-            skillsInclude: ['skills'],
-          ),
+        DnaManifest.read(
+          MemoryDnaHost(files: {'$root/dna/_dna.json': '{"version": 4}'}),
+          root,
         ),
-        isFalse,
+        isNull,
       );
       expect(
-        stored.matchesConfig(
-          const DnaClaudeConfig(skillsInclude: ['skills']),
+        DnaManifest.read(
+          MemoryDnaHost(files: {'$root/dna/_dna.json': '[1]'}),
+          root,
         ),
-        isFalse,
-      );
-      expect(
-        stored.matchesConfig(
-          const DnaClaudeConfig(
-            claudeMdInclude: ['a.md'],
-            skillsInclude: ['skills', 'more'],
-          ),
-        ),
-        isFalse,
-      );
-      expect(stored.matchesConfig(null), isFalse);
-      expect(const DnaManifestClaude().matchesConfig(null), isTrue);
-      expect(
-        const DnaManifestClaude().matchesConfig(const DnaClaudeConfig()),
-        isTrue,
+        isNull,
       );
     });
 
-    test('matchesConfig detects drift in any config field', () {
-      final layer = DnaManifestLayer.fromConfig(config);
-      expect(layer.matchesConfig(config), isTrue);
-      expect(
-        layer.matchesConfig(const DnaLayerConfig(name: 'x', git: 'g')),
-        isFalse,
-      );
-      expect(
-        layer.matchesConfig(const DnaLayerConfig(name: 'company', git: 'g')),
-        isFalse,
-      );
-      expect(
-        layer.matchesConfig(
-          const DnaLayerConfig(name: 'company', path: 'dna/_override'),
-        ),
-        isFalse,
-      );
-      expect(
-        layer.matchesConfig(
-          const DnaLayerConfig(
-            name: 'company',
-            git: 'gg_dna_company',
-            rawVersionConstraint: '^2.0.0',
-          ),
-        ),
-        isFalse,
-      );
-    });
-  });
-
-  group('readPackageVersion', () {
-    test('returns null when pubspec.yaml is missing', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_version_');
-      try {
-        expect(readPackageVersion(tmp.path), isNull);
-      } finally {
-        tmp.deleteSync(recursive: true);
-      }
-    });
-
-    test('returns the version field from pubspec.yaml', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_version_');
-      try {
-        File('${tmp.path}/pubspec.yaml').writeAsStringSync(
-          'name: foo\nversion: 4.5.6\n',
+    test('an unusable instances file falls back to the manifest', () {
+      for (final broken in ['{broken', '[1]', '{"version": 4}']) {
+        final host = MemoryDnaHost(
+          files: {
+            '$root/dna/_dna.json': '{"version": 5, "instances": [ '
+                '{"path": "a.md", "hash": "0x1"}]}',
+            '$root/dna/_instances.json': broken,
+          },
         );
-        expect(readPackageVersion(tmp.path), equals('4.5.6'));
-      } finally {
-        tmp.deleteSync(recursive: true);
+        final read = DnaManifest.read(host, root)!;
+        expect(read.instances.single.path, 'a.md', reason: broken);
       }
+    });
+
+    test('read tolerates missing optional fields', () {
+      final host = MemoryDnaHost(
+        files: {'$root/dna/_dna.json': '{"version": 5}'},
+      );
+      final read = DnaManifest.read(host, root)!;
+      expect(read.layers, isEmpty);
+      expect(read.instances, isEmpty);
+      expect(read.claude.claudeMdInclude, isNull);
+      expect(read.baseVersion, 'unknown');
     });
   });
 }

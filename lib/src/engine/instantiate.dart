@@ -1,0 +1,714 @@
+// @license
+// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+import 'dart:convert';
+import 'dart:typed_data';
+
+import '../util/claude_md.dart';
+import '../util/dna_config.dart';
+import '../util/dna_fs.dart';
+import '../util/dna_layout.dart';
+import '../util/dna_manifest.dart';
+import '../util/dna_tree_hash.dart';
+import '../util/dna_vars.dart';
+import '../util/json_merge.dart';
+import '../util/jsonc.dart';
+import '../util/layer_graph.dart';
+import '../util/md_tags.dart';
+
+/// Headline shown when generated files were edited by hand.
+const String modifiedInstancesMessage = 'Generated files modified by hand:';
+
+/// Headline of the per-file guard failure.
+const String uncommittedTargetsMessage =
+    'Generated files carry invalid changes:';
+
+/// Headline when the generated files could not be committed.
+const String needsCommitMessage = 'Generated files need a commit:';
+
+/// Commit message of the automatic commit that carries everything the
+/// DNA generated.
+const String generatedDnaCommitMessage = '#gg: generated DNA';
+
+// .............................................................................
+/// Outcome of one instantiation run (see the golden-update semantics in
+/// the README): hand-modified instances fail without writing, pending
+/// updates are written and reported once, an up-to-date project passes.
+class DnaInstantiationResult {
+  /// Creates the result.
+  const DnaInstantiationResult({
+    this.messages = const [],
+    this.warnings = const [],
+    this.modifiedInstances = const [],
+    this.updated = const [],
+    this.uncommittedTargets = const [],
+    this.sources = const {},
+    this.committed = false,
+  });
+
+  /// Progress and adoption log lines.
+  final List<String> messages;
+
+  /// Non-fatal findings of config parsing and merging.
+  final List<String> warnings;
+
+  /// Instances whose content was changed by hand — the run fails and
+  /// leaves them untouched.
+  final List<String> modifiedInstances;
+
+  /// Paths written by this run (instances, dna/ files, CLAUDE.md,
+  /// manifest).
+  final List<String> updated;
+
+  /// Whether [updated] was committed automatically as
+  /// [generatedDnaCommitMessage]. `false` means the files are written
+  /// but still need a manual commit (no repository, no git identity).
+  final bool committed;
+
+  /// Existing files this run had to overwrite or delete that carry
+  /// uncommitted work — the run fails and writes nothing.
+  final List<String> uncommittedTargets;
+
+  /// For every reported path: the DNA source file it is produced from,
+  /// e.g. `base-dna/dna/doc/develop.md` — the file to edit instead of
+  /// the generated one. Paths without a DNA source (the manifest, the
+  /// managed CLAUDE.md block) are absent.
+  final Map<String, String> sources;
+
+  /// Whether pending writes were blocked by the per-file guard.
+  bool get blocked => uncommittedTargets.isNotEmpty;
+
+  /// Whether the project was already fully up to date.
+  bool get upToDate =>
+      modifiedInstances.isEmpty && !blocked && (updated.isEmpty || committed);
+}
+
+// .............................................................................
+/// Runs one instantiation over [targetRoot]: expands the inheritance
+/// tree, merges all `dna/` replicas (last override wins), renders markdown
+/// markers, substitutes variables, converts file naming and reconciles the
+/// generated state with the project — honoring instance ownership from the
+/// manifest and the per-file guard (no existing file with uncommitted work
+/// is ever overwritten).
+DnaInstantiationResult instantiateDna({
+  required DnaHost host,
+  required String targetRoot,
+  String? baseDnaRoot,
+  required String baseVersion,
+}) {
+  final messages = <String>[];
+  final warnings = <String>[];
+
+  // 1. Config and inheritance tree.
+  final configResult = readDnaConfig(host, targetRoot);
+  final config = configResult.config;
+  warnings.addAll(configResult.warnings);
+
+  final graph = expandLayerGraph(
+    host: host,
+    targetRoot: targetRoot,
+    config: config,
+  );
+  warnings.addAll(graph.warnings);
+
+  // `display` names the layer the way a developer opens it: the local
+  // folder for path overrides and the repo's own `dna/`, the package
+  // name for installed DNAs.
+  final sources = <({String label, String root, String display})>[
+    if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
+      // The engine's built-in base DNA is not a package a developer
+      // opens — point at the `dna/` folder that overrides it instead.
+      (label: 'base', root: baseDnaRoot, display: dnaDirname),
+    for (final layer in graph.layers)
+      (
+        label: layer.name,
+        root: layer.root,
+        // The package name as installed (`base_dna`), not the canonical
+        // identity (`base-dna`) — this is what a developer opens.
+        display: '${layer.path ?? layer.package ?? layer.name}/$dnaDirname',
+      ),
+    if (config.role == DnaRole.dna)
+      (label: 'self', root: targetRoot, display: dnaDirname),
+  ];
+
+  // 2. Merge all replicas in order, tracking which DNA file each merged
+  // path last came from.
+  final merged = <String, Uint8List>{};
+  final provenance = <String, String>{};
+  var varsChain = <String, Object?>{};
+  for (final source in sources) {
+    varsChain = _applyLayer(
+      host: host,
+      merged: merged,
+      varsChain: varsChain,
+      label: source.label,
+      dnaRoot: '${source.root}/$dnaDirname',
+      displayRoot: source.display,
+      provenance: provenance,
+      messages: messages,
+      warnings: warnings,
+    );
+  }
+
+  // 3. Render markdown markers.
+  for (final rel in merged.keys.toList()) {
+    if (!rel.toLowerCase().endsWith('.md')) continue;
+    final text = _decodeText(merged[rel]!);
+    if (text == null) continue;
+    merged[rel] = _encodeText(renderMarkers(text));
+  }
+
+  // 4. Substitute variables, then materialize the merged _vars.json.
+  varsChain = mergeDnaVarEntries(varsChain, config.vars);
+  final vars = DnaVars.fromEntries(varsChain);
+  for (final rel in merged.keys.toList()) {
+    final text = _decodeText(merged[rel]!);
+    if (text == null) continue;
+    merged[rel] = _encodeText(substituteDnaVars(text, vars));
+  }
+  merged[dnaVarsFilename] = _encodeText(encodeJsonPretty(vars.toJson()));
+
+  // 5. Plan instances (naming conversion + rename map).
+  final naming = config.fileNaming ?? _defaultNaming(host, targetRoot);
+  final instancePlan = <String, String>{}; // instance path -> merged rel
+  final renames = <String, String>{};
+  for (final rel in merged.keys) {
+    if (isPrivatePath(rel)) continue;
+    final instancePath = convertPathNaming(rel, naming);
+    if (isForbiddenInstanceTarget(instancePath)) {
+      warnings.add(
+        'Instance target "$instancePath" is forbidden — skipped.',
+      );
+      continue;
+    }
+    final collision = instancePlan[instancePath];
+    if (collision != null) {
+      throw FormatException(
+        'Instance collision: "$rel" and "$collision" both map to '
+        '"$instancePath".',
+      );
+    }
+    instancePlan[instancePath] = rel;
+    final relSegments = rel.split('/');
+    final instSegments = instancePath.split('/');
+    for (var i = 0; i < relSegments.length; i++) {
+      if (relSegments[i] != instSegments[i]) {
+        renames[relSegments[i]] = instSegments[i];
+      }
+    }
+  }
+
+  // 6. Produce instance contents (rewriting renamed references).
+  final instanceBytes = <String, Uint8List>{};
+  for (final entry in instancePlan.entries) {
+    final bytes = merged[entry.value]!;
+    final text = _decodeText(bytes);
+    instanceBytes[entry.key] = text == null
+        ? bytes
+        : _encodeText(rewriteRenamedReferences(text, renames));
+  }
+
+  // 6b. Where each project path comes from — the DNA file to edit
+  // instead of the generated one.
+  final pathSources = <String, String>{
+    for (final entry in provenance.entries)
+      '$dnaDirname/${entry.key}': entry.value,
+    for (final entry in instancePlan.entries)
+      if (provenance[entry.value] != null) entry.key: provenance[entry.value]!,
+  };
+
+  // 7. Reconcile with the current project state.
+  final previous = DnaManifest.read(host, targetRoot);
+  final previousHashes = {
+    for (final i in previous?.instances ?? const <DnaManifestInstance>[])
+      i.path: i.hash,
+  };
+
+  final dnaWrites = <String>[];
+  final dnaDeletes = <String>[];
+  if (config.role == DnaRole.project) {
+    final dnaRoot = '$targetRoot/$dnaDirname';
+    final existing =
+        host.listFilesRecursive(dnaRoot).where(isDnaContent).toSet();
+    for (final entry in merged.entries) {
+      final path = '$dnaRoot/${entry.key}';
+      if (!host.existsFile(path) ||
+          !_bytesEqual(host.readBytes(path), entry.value)) {
+        dnaWrites.add(entry.key);
+      }
+    }
+    for (final rel in existing) {
+      if (!merged.containsKey(rel)) dnaDeletes.add(rel);
+    }
+  }
+
+  final instanceWrites = <String>[];
+  final modified = <String>[];
+  for (final entry in instanceBytes.entries) {
+    final path = entry.key;
+    final full = '$targetRoot/$path';
+    final newBytes = entry.value;
+    if (!host.existsFile(full)) {
+      instanceWrites.add(path);
+      if (!previousHashes.containsKey(path)) {
+        messages.add('+ instantiated $path');
+      } else {
+        messages.add('+ restored missing $path');
+      }
+      continue;
+    }
+    final currentBytes = host.readBytes(full);
+    if (_bytesEqual(currentBytes, newBytes)) {
+      if (!previousHashes.containsKey(path)) {
+        messages.add('adopted $path (already up to date)');
+      }
+      continue;
+    }
+    final ownedHash = previousHashes[path];
+    if (ownedHash == null) {
+      instanceWrites.add(path);
+      messages.add(
+        'adopted $path (overwritten — previous content is in git '
+        'history)',
+      );
+      continue;
+    }
+    if (hashFileBytes(currentBytes) == ownedHash) {
+      instanceWrites.add(path);
+      messages.add('~ updated $path');
+      continue;
+    }
+    modified.add(path);
+  }
+
+  final instanceDeletes = <String>[];
+  for (final entry in previousHashes.entries) {
+    final path = entry.key;
+    if (instanceBytes.containsKey(path)) continue;
+    final full = '$targetRoot/$path';
+    if (!host.existsFile(full)) continue;
+    if (hashFileBytes(host.readBytes(full)) == entry.value) {
+      instanceDeletes.add(path);
+      messages.add('- removed $path (no longer produced by the DNA)');
+    } else {
+      warnings.add(
+        '$path was modified locally and is no longer produced by the '
+        'DNA — left in place, remove manually.',
+      );
+    }
+  }
+
+  // 8. CLAUDE.md managed block.
+  String? claudeMdContent;
+  List<String>? claudeImports;
+  if (config.claude.claudeMdInclude != null) {
+    claudeImports = expandClaudeMdIncludes(
+      host: host,
+      targetRoot: targetRoot,
+      include: config.claude.claudeMdInclude!,
+      projectedFiles: {
+        ...instanceBytes.keys,
+        ...merged.keys.map((rel) => '$dnaDirname/$rel'),
+      },
+    );
+    claudeMdContent = updatedClaudeMd(host, targetRoot, claudeImports);
+  }
+
+  // 9. New manifest.
+  final manifest = DnaManifest(
+    layers: [
+      if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
+        DnaManifestLayer(
+          name: 'base',
+          package: 'gg_dna',
+          resolvedVersion: baseVersion,
+          hash: hashTree(host, '$baseDnaRoot/$dnaDirname'),
+        ),
+      for (final layer in graph.layers)
+        DnaManifestLayer(
+          name: layer.name,
+          package: layer.package,
+          path: layer.path,
+          resolvedVersion: layer.version,
+          via: layer.via,
+          hash: hashTree(host, '${layer.root}/$dnaDirname'),
+        ),
+      if (config.role == DnaRole.dna)
+        DnaManifestLayer(
+          name: 'self',
+          path: dnaDirname,
+          hash: hashTree(host, '$targetRoot/$dnaDirname'),
+        ),
+    ],
+    instances: [
+      for (final path in instanceBytes.keys.toList()..sort())
+        DnaManifestInstance(
+          path: path,
+          hash: hashFileBytes(instanceBytes[path]!),
+        ),
+    ],
+    claude: DnaManifestClaude(claudeMdInclude: claudeImports),
+    baseVersion: baseVersion,
+    baseHash:
+        baseDnaRoot == null ? null : hashTree(host, '$baseDnaRoot/$dnaDirname'),
+    hash: config.role == DnaRole.project ? _hashMerged(merged) : null,
+  );
+  final bookkeeping = <String, String>{
+    '$dnaDirname/$dnaManifestFilename': encodeJsonPretty(manifest.toJson()),
+    '$dnaDirname/$dnaInstancesFilename':
+        encodeJsonPretty(manifest.instancesToJson()),
+  };
+  final bookkeepingChanged = bookkeeping.entries.any((e) {
+    final path = '$targetRoot/${e.key}';
+    return !host.existsFile(path) || host.readString(path) != e.value;
+  });
+  // Repositories written by earlier versions keep orphan bookkeeping.
+  final legacyBookkeeping = [
+    for (final name in legacyDnaBookkeepingFilenames)
+      if (host.existsFile('$targetRoot/$dnaDirname/$name')) '$dnaDirname/$name',
+  ];
+
+  // 10. Hand-modified instances fail without writing anything.
+  if (modified.isNotEmpty) {
+    return DnaInstantiationResult(
+      messages: messages,
+      warnings: warnings,
+      modifiedInstances: modified,
+      sources: _sourcesFor(modified, pathSources),
+    );
+  }
+
+  final hasChanges = dnaWrites.isNotEmpty ||
+      dnaDeletes.isNotEmpty ||
+      instanceWrites.isNotEmpty ||
+      instanceDeletes.isNotEmpty ||
+      claudeMdContent != null ||
+      bookkeepingChanged ||
+      legacyBookkeeping.isNotEmpty;
+  if (!hasChanges) {
+    return DnaInstantiationResult(messages: messages, warnings: warnings);
+  }
+
+  // 11. Per-file guard: every *existing* file this run would overwrite or
+  // delete must be committed, so the change stays recoverable via git.
+  // Unrelated dirty files in the repo do not block the run.
+  final touched = <String>{
+    for (final rel in dnaWrites) '$dnaDirname/$rel',
+    for (final rel in dnaDeletes) '$dnaDirname/$rel',
+    ...instanceWrites,
+    ...instanceDeletes,
+    if (claudeMdContent != null) 'CLAUDE.md',
+    if (bookkeepingChanged) ...bookkeeping.keys,
+    ...legacyBookkeeping,
+  };
+  final existingTouched =
+      touched.where((path) => host.existsFile('$targetRoot/$path')).toSet();
+  if (existingTouched.isNotEmpty) {
+    final uncommitted = host.uncommittedPaths(targetRoot);
+    final blocked = existingTouched.intersection(uncommitted).toList()..sort();
+    if (blocked.isNotEmpty) {
+      // Nothing was written — the planning messages would only mislead.
+      return DnaInstantiationResult(
+        messages: [uncommittedTargetsMessage],
+        warnings: warnings,
+        uncommittedTargets: blocked,
+        sources: _sourcesFor(blocked, pathSources),
+      );
+    }
+  }
+
+  // 12. Write. `updated` reads well in reports, `touchedPaths` is what
+  // git gets.
+  final updated = <String>[];
+  final touchedPaths = <String>[];
+  void note(String path, {bool removed = false}) {
+    updated.add(removed ? '$path (removed)' : path);
+    touchedPaths.add(path);
+  }
+
+  for (final rel in dnaWrites) {
+    host.writeBytes('$targetRoot/$dnaDirname/$rel', merged[rel]!);
+    note('$dnaDirname/$rel');
+  }
+  for (final rel in dnaDeletes) {
+    host.deleteFile('$targetRoot/$dnaDirname/$rel');
+    note('$dnaDirname/$rel', removed: true);
+  }
+  for (final path in instanceWrites) {
+    host.writeBytes('$targetRoot/$path', instanceBytes[path]!);
+    note(path);
+  }
+  for (final path in instanceDeletes) {
+    host.deleteFile('$targetRoot/$path');
+    note(path, removed: true);
+  }
+  if (claudeMdContent != null) {
+    host.writeString('$targetRoot/CLAUDE.md', claudeMdContent);
+    note('CLAUDE.md');
+  }
+  bookkeeping.forEach((rel, content) {
+    host.writeString('$targetRoot/$rel', content);
+    if (bookkeepingChanged) note(rel);
+  });
+  for (final rel in legacyBookkeeping) {
+    host.deleteFile('$targetRoot/$rel');
+    note(rel, removed: true);
+  }
+
+  // A folder that only existed to hold generated files goes with them —
+  // git does not track directories, so this is a working-tree cleanup
+  // and never part of the commit.
+  for (final dir in ancestorDirs(
+    updated.where((u) => u.endsWith(' (removed)')).map(
+          (u) => u.substring(0, u.length - ' (removed)'.length),
+        ),
+  )) {
+    final path = '$targetRoot/$dir';
+    if (!host.existsDir(path)) continue;
+    if (host.listFilesRecursive(path).isNotEmpty) continue;
+    host.deleteDir(path);
+    messages.add('- removed empty folder $dir');
+  }
+
+  // 13. Commit what the DNA generated — it is machine-owned, so it never
+  // belongs in the developer's working tree. A repository without git or
+  // without an identity keeps the files for a manual commit.
+  var committed = false;
+  try {
+    host.commitPaths(targetRoot, touchedPaths, generatedDnaCommitMessage);
+    committed = true;
+    messages.add('committed as "$generatedDnaCommitMessage"');
+  } on Object catch (e) {
+    warnings.add(
+      'Could not commit the generated files ($e) — commit them manually.',
+    );
+  }
+
+  return DnaInstantiationResult(
+    messages: messages,
+    warnings: warnings,
+    updated: updated,
+    committed: committed,
+  );
+}
+
+// .............................................................................
+Map<String, String> _sourcesFor(
+  List<String> paths,
+  Map<String, String> pathSources,
+) =>
+    {
+      for (final path in paths)
+        if (pathSources[path] != null) path: pathSources[path]!,
+    };
+
+// .............................................................................
+Map<String, Object?> _applyLayer({
+  required DnaHost host,
+  required Map<String, Uint8List> merged,
+  required Map<String, Object?> varsChain,
+  required String label,
+  required String dnaRoot,
+  required String displayRoot,
+  required Map<String, String> provenance,
+  required List<String> messages,
+  required List<String> warnings,
+}) {
+  var chain = varsChain;
+  final files = host.listFilesRecursive(dnaRoot).where(isDnaContent).toList()
+    ..sort();
+
+  final mdOverrides = <String>[];
+  final jsonOverrides = <String>[];
+  String? globalOverrides;
+
+  for (final rel in files) {
+    final name = rel.split('/').last;
+    if (name.endsWith(legacyOverridesFileSuffix)) {
+      throw FormatException(
+        '"$rel" ($label) uses the removed $legacyOverridesFileSuffix '
+        'suffix — rename it to X$overridesFileSuffix.',
+      );
+    }
+    for (final suffix in yamlOverridesSuffixes) {
+      if (name.endsWith(suffix)) {
+        throw FormatException(
+          '"$rel" ($label): structural YAML overrides are not supported '
+          'yet — replace the whole file in a later layer instead.',
+        );
+      }
+    }
+    if (rel == dnaVarsFilename) {
+      final parsed = parseDnaVarEntries(
+        host.readString('$dnaRoot/$rel'),
+        sourceLabel: '$label:$rel',
+      );
+      warnings.addAll(parsed.warnings);
+      chain = mergeDnaVarEntries(chain, parsed.entries);
+      continue;
+    }
+    if (rel == globalOverridesFilename) {
+      globalOverrides = host.readString('$dnaRoot/$rel');
+      continue;
+    }
+    if (name == globalOverridesFilename) {
+      warnings.add(
+        '"$rel" ($label): $globalOverridesFilename is only supported at '
+        'the dna/ root — ignored.',
+      );
+      continue;
+    }
+    if (name.endsWith(overridesFileSuffix)) {
+      mdOverrides.add(rel);
+      continue;
+    }
+    if (name.endsWith(jsonOverridesSuffix)) {
+      jsonOverrides.add(rel);
+      continue;
+    }
+    final bytes = host.readBytes('$dnaRoot/$rel');
+    merged[rel] = bytes;
+    provenance[rel] = '$displayRoot/$rel';
+    if (rel.toLowerCase().endsWith('.md')) {
+      final text = _decodeText(bytes);
+      if (text != null) {
+        warnings.addAll(
+          detectLegacyMarkers(text).map((w) => '$label:$rel: $w'),
+        );
+      }
+    }
+  }
+
+  // Global string overrides of this layer first …
+  if (globalOverrides != null) {
+    final parsed = parseTagFile(globalOverrides);
+    warnings.addAll(
+      parsed.warnings.map((w) => '$label:$globalOverridesFilename: $w'),
+    );
+    final stringBlocks = <TagBlock>[];
+    for (final block in parsed.blocks) {
+      if (block.isHeadingForm) {
+        warnings.add(
+          '$label:$globalOverridesFilename: heading-form block '
+          '"[@${block.tag}]" is not allowed globally — skipped.',
+        );
+      } else {
+        stringBlocks.add(block);
+      }
+    }
+    final foundTags = <String>{};
+    for (final rel in merged.keys.toList()) {
+      if (!rel.toLowerCase().endsWith('.md')) continue;
+      final text = _decodeText(merged[rel]!);
+      if (text == null) continue;
+      merged[rel] = _encodeText(
+        applyGlobalStringBlocks(text, stringBlocks, foundTags: foundTags),
+      );
+    }
+    for (final block in stringBlocks) {
+      if (!foundTags.contains(block.tag)) {
+        warnings.add(
+          '$label:$globalOverridesFilename: tag "${block.tag}" matches '
+          'nothing — skipped.',
+        );
+      }
+    }
+  }
+
+  // … then file-specific markdown overrides …
+  for (final rel in mdOverrides..sort()) {
+    final target = rel.substring(0, rel.length - overridesFileSuffix.length);
+    final targetRel = '$target.md';
+    final targetBytes = merged[targetRel];
+    if (targetBytes == null) {
+      messages.add(
+        '$label: "$rel" has no target file "$targetRel" — skipped.',
+      );
+      continue;
+    }
+    final targetText = _decodeText(targetBytes);
+    if (targetText == null) continue;
+    final parsed = parseTagFile(host.readString('$dnaRoot/$rel'));
+    warnings.addAll(parsed.warnings.map((w) => '$label:$rel: $w'));
+    final applied = applyTagBlocks(
+      targetText,
+      parsed.blocks,
+      fileLabel: targetRel,
+    );
+    warnings.addAll(applied.warnings.map((w) => '$label:$rel: $w'));
+    merged[targetRel] = _encodeText(applied.content);
+    provenance[targetRel] = '$displayRoot/$rel';
+  }
+
+  // … then JSON overrides.
+  for (final rel in jsonOverrides..sort()) {
+    final target = rel.substring(0, rel.length - jsonOverridesSuffix.length);
+    final targetRel = '$target.json';
+    final targetBytes = merged[targetRel];
+    if (targetBytes == null) {
+      messages.add(
+        '$label: "$rel" has no target file "$targetRel" — skipped.',
+      );
+      continue;
+    }
+    final targetValue = parseJsonc(
+      _decodeText(targetBytes) ?? '',
+      sourceLabel: targetRel,
+    );
+    final patchValue = parseJsonc(
+      host.readString('$dnaRoot/$rel'),
+      sourceLabel: '$label:$rel',
+    );
+    final patched = jsonMergePatch(
+      targetValue,
+      patchValue,
+      context: '$label:$rel',
+    );
+    warnings.addAll(patched.warnings);
+    merged[targetRel] = _encodeText(encodeJsonPretty(patched.value));
+    provenance[targetRel] = '$displayRoot/$rel';
+  }
+
+  return chain;
+}
+
+// .............................................................................
+FileNaming _defaultNaming(DnaHost host, String targetRoot) {
+  if (host.existsFile('$targetRoot/pubspec.yaml')) {
+    return FileNaming.snakeCase;
+  }
+  if (host.existsFile('$targetRoot/package.json')) {
+    return FileNaming.kebabCase;
+  }
+  return FileNaming.keep;
+}
+
+// .............................................................................
+String? _decodeText(Uint8List bytes) {
+  if (looksBinary(bytes)) return null;
+  try {
+    return utf8.decode(bytes);
+  } on FormatException {
+    return null;
+  }
+}
+
+Uint8List _encodeText(String text) => Uint8List.fromList(utf8.encode(text));
+
+bool _bytesEqual(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+// .............................................................................
+String _hashMerged(Map<String, Uint8List> merged) {
+  final host = MemoryDnaHost();
+  merged.forEach((rel, bytes) => host.writeBytes('/m/$rel', bytes));
+  return hashTree(host, '/m')!;
+}

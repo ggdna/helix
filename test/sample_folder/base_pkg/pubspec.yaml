@@ -1,6 +1,0 @@
-name: base_pkg
-description: Sample gg_dna base package used by tests as the base DNA source.
-version: 0.0.1
-
-environment:
-  sdk: ">=3.3.0 <4.0.0"

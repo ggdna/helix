@@ -12,29 +12,23 @@ import '../../bin/gg_dna.dart';
 
 void main() {
   group('run(args, log)', () {
-    test('runs sync with an explicit source and target', () async {
+    test('runs init against an explicit target', () async {
       final tmp = await Directory.systemTemp.createTemp('gg_dna_bin_test_');
       try {
-        final source = Directory('${tmp.path}/pkg/dna/src');
-        await source.create(recursive: true);
-        await File('${source.path}/a.md').writeAsString('A');
-        final target = Directory('${tmp.path}/target');
-        await target.create();
+        await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
 
         final messages = <String>[];
         await run(
-          args: [
-            'sync',
-            '--source',
-            '${tmp.path}/pkg',
-            '--target',
-            target.path,
-          ],
+          args: ['init', '--target', tmp.path],
           ggLog: messages.add,
         );
 
         expect(
-          messages.any((m) => m.contains('Synced')),
+          File('${tmp.path}/test/dna/dna_test.dart').existsSync(),
+          isTrue,
+        );
+        expect(
+          messages.any((m) => m.contains('DNA initialized')),
           isTrue,
           reason: 'messages: $messages',
         );
