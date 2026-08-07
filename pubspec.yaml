@@ -20,18 +20,4 @@ dev_dependencies:
   test: ^1.31.2
 
 executables:
- gg_dna:
-
-# DNA configuration lives in `.gg/dna.json` of the consuming repo
-# (all keys optional — see README):
-#
-# {
-#   "role": "project",
-#   "order": ["base_dna", "dna_dart"],
-#   "vars": { "projectName": "my_project" },
-#   "fileNaming": "snake_case",
-#   "dependencies": { "base_dna": { "path": "../base_dna" } },
-#   "config": {
-#     "claude": { "claude_md": { "include": ["doc/conventions"] } }
-#   }
-# }
+  gg_dna:
