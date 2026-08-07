@@ -1,20 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- Add .prettierignore and .prettierrc to dna
-
-### Changed
-
-- BREAKING: TypeScript projects instantiate with `kebab-case` file names
-— `package.json` no longer defaults to `camelCase` (the value stays
-selectable via `fileNaming`); Dart projects keep `snake_case`
-- Rework DNA repos
-- Provide first DNA, i.e. installation and .vscode settings
-- Define dna repos
-
 ## 5.0.0 - 2026-08-05
 
 ### Added
@@ -86,15 +71,6 @@ CLAUDE.md block (`claude_md: include:`) remains special
 resolution, the skills mirroring and the staging/backup folders
 (`.gg_dna_staging`, `.gg_dna_backup` are no longer created)
 
-## 3.1.0 - 2026-08-04
-
-Note: released out of order — this version shipped after 4.0.0 and
-contains the rename below on top of the 4.0.0 changes.
-
-### Changed
-
-- Rename .master to .ocean with automatic migration at next start
-
 ## 4.0.0 - 2026-07-24
 
 ### Added
@@ -120,6 +96,30 @@ reserved), and replaces `dna/_override`; path layers pointing into
 longer recognized
 - BREAKING: `.dna.json` manifest format v4 (records the implicit src
 layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
+
+## 3.1.1 - 2026-08-07
+
+### Added
+
+- Add .prettierignore and .prettierrc to dna
+
+### Changed
+
+- BREAKING: TypeScript projects instantiate with `kebab-case` file names
+— `package.json` no longer defaults to `camelCase` (the value stays
+selectable via `fileNaming`); Dart projects keep `snake_case`
+- Rework DNA repos
+- Provide first DNA, i.e. installation and .vscode settings
+- Define dna repos
+
+## 3.1.0 - 2026-08-04
+
+Note: released out of order — this version shipped after 4.0.0 and
+contains the rename below on top of the 4.0.0 changes.
+
+### Changed
+
+- Rename .master to .ocean with automatic migration at next start
 
 ## 3.0.0 - 2026-07-24
 
