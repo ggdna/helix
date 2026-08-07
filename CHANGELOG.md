@@ -1,101 +1,99 @@
 # Changelog
 
-## 5.0.0 - 2026-08-05
+## Unreleased
 
 ### Added
 
 - Instances: every public file of the merged `dna/` replica (path
-segments not starting with `_`) is copied to its project location, with
-ownership tracking, adoption of existing files, and removal of files the
-DNA no longer produces — including the folders they leave empty
+  segments not starting with `_`) is copied to its project location, with
+  ownership tracking, adoption of existing files, and removal of files the
+  DNA no longer produces — including the folders they leave empty
 - Inheritance tree: DNAs are declared as dev-dependencies
-(npm/pub); parent DNAs are regular dependencies of their child DNA;
-gg_dna resolves the tree recursively from `node_modules/` and
-`.dart_tool/package_config.json` (diamond dedup, cycle detection)
+  (npm/pub); parent DNAs are regular dependencies of their child DNA;
+  gg_dna resolves the tree recursively from `node_modules/` and
+  `.dart_tool/package_config.json` (diamond dedup, cycle detection)
 - JSON overrides: sidecar `X.overrides.json` merges into `X.json` —
-objects deep-merge, `null` deletes, `"key!"` replaces outright,
-`"key+"` joins arrays (deduplicated); JSONC (comments, trailing
-commas) is tolerated
+  objects deep-merge, `null` deletes, `"key!"` replaces outright,
+  `"key+"` joins arrays (deduplicated); JSONC (comments, trailing
+  commas) is tolerated
 - Variables: `dna/_vars.json` (deep-merged across layers, overridable
-via `vars` in `.gg/dna.json`); references `dnaMyVar`, `DnaMyVar`,
-`dna_my_var`, `DNA_MY_VAR`, `dna-my-var` are replaced case-adaptively;
-non-identifier values verbatim
+  via `vars` in `.gg/dna.json`); references `dnaMyVar`, `DnaMyVar`,
+  `dna_my_var`, `DNA_MY_VAR`, `dna-my-var` are replaced case-adaptively;
+  non-identifier values verbatim
 - File-naming conversion: DNA files are canonical kebab-case and are
-converted per target (`pubspec.yaml` → snake_case, `package.json` →
-camelCase, configurable via `fileNaming`); references to renamed files
-are rewritten in text instances
+  converted per target (`pubspec.yaml` → snake_case, `package.json` →
+  camelCase, configurable via `fileNaming`); references to renamed files
+  are rewritten in text instances
 - `gg_dna init`: places the DNA wrapper test (Dart and/or vitest), a
-`.gg/dna.json` skeleton and the `!.gg/dna.json` gitignore exception
+  `.gg/dna.json` skeleton and the `!.gg/dna.json` gitignore exception
 - Public engine API: `instantiateDna()` and `runDnaTest()`
-(`package:gg_dna/gg_dna.dart`); the engine core is free of `dart:io`
-and compilable to WebAssembly (host access via injectable `DnaHost`)
+  (`package:gg_dna/gg_dna.dart`); the engine core is free of `dart:io`
+  and compilable to WebAssembly (host access via injectable `DnaHost`)
 - Per-file guard: an existing file that carries uncommitted work is
-never overwritten or deleted — the run names those files and writes
-nothing; unrelated dirty files do not block it
+  never overwritten or deleted — the run names those files and writes
+  nothing; unrelated dirty files do not block it
 - Everything the DNA generates is committed right away as
-`#gg: generated DNA` (path-limited, so unrelated changes stay in the
-working tree); without a repository or git identity the files are kept
-for a manual commit
+  `#gg: generated DNA` (path-limited, so unrelated changes stay in the
+  working tree); without a repository or git identity the files are kept
+  for a manual commit
 - Provenance in every failure report: generated files are reported with
-the DNA source they are produced from (`edit instead: base_dna/dna/doc/develop.md`), so hand edits go into the DNA instead of
-the generated copy (`DnaInstantiationResult.sources`)
+  the DNA source they are produced from (`edit instead: base_dna/dna/doc/develop.md`), so hand edits go into the DNA instead of
+  the generated copy (`DnaInstantiationResult.sources`)
 
 ### Changed
 
 - BREAKING: `dna/src` is gone — a DNA's `dna/` folder itself mirrors
-the project root (public/private via the `_` prefix convention)
+  the project root (public/private via the `_` prefix convention)
 - BREAKING: DNA configuration lives only in `.gg/dna.json`; `dna:`
-blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are migration
-errors
+  blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are migration
+  errors
 - BREAKING: `gg_dna sync` was replaced by `gg_dna init` — the
-instantiation runs inside the placed test on every test run
-(hand-modified instances fail, DNA updates are written and committed)
+  instantiation runs inside the placed test on every test run
+  (hand-modified instances fail, DNA updates are written and committed)
 - BREAKING: git layers were removed — declare DNAs as dev-dependencies;
-`path:` overrides in `.gg/dna.json` remain for local development
+  `path:` overrides in `.gg/dna.json` remain for local development
 - BREAKING: the bookkeeping is split in two and renamed —
-`dna/_dna.json` (format v5: `layers` with `package`/`via`, hashes) and
-`dna/_instances.json` (the files the DNA owns); leftover `.dna.json` /
-`.instances.json` files are read once, so ownership survives, and then
-removed
+  `dna/_dna.json` (format v5: `layers` with `package`/`via`, hashes) and
+  `dna/_instances.json` (the files the DNA owns); leftover `.dna.json` /
+  `.instances.json` files are read once, so ownership survives, and then
+  removed
 - BREAKING: the effective variables are no longer duplicated into the
-bookkeeping — `dna/_vars.json` is their only home
+  bookkeeping — `dna/_vars.json` is their only home
 - BREAKING: `config: claude: skills:` was removed — skills ship as
-normal instances at `dna/.claude/skills/<name>`; only the managed
-CLAUDE.md block (`claude_md: include:`) remains special
+  normal instances at `dna/.claude/skills/<name>`; only the managed
+  CLAUDE.md block (`claude_md: include:`) remains special
 - Base DNA restructured: human documentation at `dna/doc/**`
-(conventions, guides — English), skills at `dna/.claude/skills/**`
+  (conventions, guides — English), skills at `dna/.claude/skills/**`
 
 ### Removed
 
 - `gg_dna sync` (including `--check`, `--source`, `--target`), git tag
-resolution, the skills mirroring and the staging/backup folders
-(`.gg_dna_staging`, `.gg_dna_backup` are no longer created)
-
-## 4.0.0 - 2026-07-24
+  resolution, the skills mirroring and the staging/backup folders
+  (`.gg_dna_staging`, `.gg_dna_backup` are no longer created)
 
 ### Added
 
 - `global.overrides.md` in the src root of any layer: its string blocks
-rewrite `{{@tag:…}}` placeholders in every merged `.md` file; file-specific
-overrides of the same layer win, heading-form blocks warn
+  rewrite `{{@tag:…}}` placeholders in every merged `.md` file; file-specific
+  overrides of the same layer win, heading-form blocks warn
 - Warnings (file + line) for leftover pre-4.0 tag notation
 
 ### Changed
 
 - BREAKING: every DNA source ships its mergeable DNA under `dna/src` —
-the gg_dna base DNA, git layers, and path layers; sources without `dna/src`
-are an error with a migration hint
+  the gg_dna base DNA, git layers, and path layers; sources without `dna/src`
+  are an error with a migration hint
 - BREAKING: `<target>/dna/src` is the implicit last layer — it survives the
-sync verbatim, is never listed in the config (layer name `src` is
-reserved), and replaces `dna/_override`; path layers pointing into
-`<target>/dna` are an error
+  sync verbatim, is never listed in the config (layer name `src` is
+  reserved), and replaces `dna/_override`; path layers pointing into
+  `<target>/dna` are an error
 - BREAKING: override files are named `<file>.overrides.md` — the old
-`.tag.md` suffix is a hard error with a rename hint
+  `.tag.md` suffix is a hard error with a rename hint
 - BREAKING: new tag notation `## [@tag] …` and `{{@tag:default}}`
-(comment markers `<!-- @tag -->`); the old notation without `@` is no
-longer recognized
+  (comment markers `<!-- @tag -->`); the old notation without `@` is no
+  longer recognized
 - BREAKING: `.dna.json` manifest format v4 (records the implicit src
-layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
+  layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
 
 ## 3.1.1 - 2026-08-07
 
@@ -106,8 +104,8 @@ layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
 ### Changed
 
 - BREAKING: TypeScript projects instantiate with `kebab-case` file names
-— `package.json` no longer defaults to `camelCase` (the value stays
-selectable via `fileNaming`); Dart projects keep `snake_case`
+  — `package.json` no longer defaults to `camelCase` (the value stays
+  selectable via `fileNaming`); Dart projects keep `snake_case`
 - Rework DNA repos
 - Provide first DNA, i.e. installation and .vscode settings
 - Define dna repos
@@ -126,25 +124,25 @@ contains the rename below on top of the 4.0.0 changes.
 ### Added
 
 - `dna: config: claude:` section: `claude_md: include:` maintains a managed
-`@`-import block in the target's CLAUDE.md (files stay as-is, folders expand
-to their `.md` files); `skills: include:` mirrors skill folders into
-`.claude/skills` — only skills gg_dna installed are overwritten or removed,
-hand-installed skills are never touched
+  `@`-import block in the target's CLAUDE.md (files stay as-is, folders expand
+  to their `.md` files); `skills: include:` mirrors skill folders into
+  `.claude/skills` — only skills gg_dna installed are overwritten or removed,
+  hand-installed skills are never touched
 - `gg_dna sync` creates CLAUDE.md when missing and removes leftover pre-3.0
-`gg_dna:conventions` blocks
+  `gg_dna:conventions` blocks
 - `gg_dna sync --check` also verifies the CLAUDE.md block and the installed
-skills
+  skills
 
 ### Changed
 
 - BREAKING: layers now live under `dna: dependencies:` — the pre-3.0 syntax
-(layer maps directly under `dna:`) is rejected with a migration hint
+  (layer maps directly under `dna:`) is rejected with a migration hint
 - BREAKING: `gg_dna sync` is fully non-interactive — the
-`install-skills` and `apply-conventions` subcommands, all prompts, and the
-`--no-install` flag were removed; everything is driven by the
-`dna: config:` block
+  `install-skills` and `apply-conventions` subcommands, all prompts, and the
+  `--no-install` flag were removed; everything is driven by the
+  `dna: config:` block
 - BREAKING: `.dna.json` manifest format v3 (adds the `claude` section;
-`--check` reports older manifests as outdated — run `gg_dna sync` once)
+  `--check` reports older manifests as outdated — run `gg_dna sync` once)
 
 ## 2.1.1 - 2026-07-24
 
@@ -162,29 +160,29 @@ skills
 - Add init-architecture skill that creates/updates README.architecture.md
 - Add dna sync manifest with hash/check support and overlay tracking
 - Multi-layer DNA: layers are configured in the target pubspec.yaml `dna:`
-block — git layers (optionally pinned via a semver `version:` constraint
-resolved against the repo tags), local path layers, and repo-local layers
-like `dna/_override` that survive the sync verbatim
+  block — git layers (optionally pinned via a semver `version:` constraint
+  resolved against the repo tags), local path layers, and repo-local layers
+  like `dna/_override` that survive the sync verbatim
 - Markdown tag overrides: `### [tag]` sections and `{{tag|default}}` strings
-can be overridden per layer via `X.tag.md` files; all markers are rendered
-away in the synced output
+  can be overridden per layer via `X.tag.md` files; all markers are rendered
+  away in the synced output
 
 ### Changed
 
 - BREAKING: `gg_dna sync` no longer accepts a positional overlay argument —
-configure layers via the `dna:` block in the target pubspec.yaml
+  configure layers via the `dna:` block in the target pubspec.yaml
 - BREAKING: the overlay stored in `.dna.json` is no longer auto-reused
 - BREAKING: `.dna.json` manifest format v2 (ordered layer list; `--check`
-reports pre-2.0 manifests as outdated)
+  reports pre-2.0 manifests as outdated)
 - Release 2.0.0 docs: changelog, readme, dna config example
 - Sync builds the new dna tree in a staging folder and swaps it in via
-renames — errors can no longer destroy the existing `dna/` (in particular
-in-dna override layers like `dna/_override`); interrupted swaps are
-recovered from the backup folder on the next run
+  renames — errors can no longer destroy the existing `dna/` (in particular
+  in-dna override layers like `dna/_override`); interrupted swaps are
+  recovered from the backup folder on the next run
 - Layers are resolved in parallel (clones, ls-remotes) — also in `--check`
 - Prefer stable tags over prereleases in semver resolution
 - Doc-comment density rule (max 3 lines before classes, 1 per member) added
-to the shipped code conventions
+  to the shipped code conventions
 - Use MIT license and shorten package description for pub.dev
 
 ### Fixed
@@ -192,14 +190,14 @@ to the shipped code conventions
 - Crash (`RangeError`) when the same section tag appeared on nested headings
 - Crash (`TypeError`) in `--check` on structurally malformed `.dna.json`
 - Longer code fences now nest shorter ones (CommonMark closing rule), so
-fenced markdown examples inside fences stay untouched
+  fenced markdown examples inside fences stay untouched
 - Layer hashes ignore `.git/` and are line-ending agnostic — no more false
-`--check` drift after git activity in a layer folder or CRLF checkouts
+  `--check` drift after git activity in a layer folder or CRLF checkouts
 - A foreign `[tag]` in a replacement heading is replaced instead of
-double-prefixed; mixed line endings normalize to the dominant one
+  double-prefixed; mixed line endings normalize to the dominant one
 - A configured but missing in-dna layer (e.g. `dna/_override` on a fresh
-clone — git does not track empty folders) is skipped as empty instead of
-failing the sync; `--check` agrees
+  clone — git does not track empty folders) is skipped as empty instead of
+  failing the sync; `--check` agrees
 - Backslash `path:` values in the pubspec work on every platform
 - Fix negative hex hash rendering and cwd race between parallel test suites
 
