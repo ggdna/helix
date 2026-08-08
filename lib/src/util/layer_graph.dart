@@ -63,18 +63,38 @@ class ResolvedLayer {
 /// [config]'s `layers`, parents recursively from each layer's own
 /// `dna/_dna.json`. Diamonds are deduplicated by canonical identity (first
 /// topological position wins), cycles and unresolvable layers throw.
+///
+/// A layer's parents are looked up in the layer's own installation first
+/// and only then in the target's. pnpm exposes just the direct
+/// dependencies at the top level, so a DNA pulled in by another DNA lives
+/// under *that* package's `node_modules`, never under the consumer's —
+/// with a `link:` checkout as much as with a registry install. pub is the
+/// other way round: it flattens everything into the target's
+/// `package_config.json` and a package in the cache has no resolution of
+/// its own, so the fallback is what carries it.
 ({List<ResolvedLayer> layers, List<String> warnings}) expandLayerGraph({
   required DnaHost host,
   required String targetRoot,
   required DnaConfig config,
   required PackageResolution resolution,
 }) {
-  final warnings = <String>[...resolution.warnings];
   final layers = <ResolvedLayer>[];
   final done = <String>{};
   final inProgress = <String>[];
+  final resolutions = <String, PackageResolution>{targetRoot: resolution};
+  final warnings = <String>[];
 
-  void expand(String rawName, String? via, int depth) {
+  PackageResolution resolutionOf(String root) => resolutions.putIfAbsent(
+        root,
+        () => PackageResolution.read(host, root),
+      );
+
+  void expand(
+    String rawName,
+    String? via,
+    int depth,
+    List<PackageResolution> chain,
+  ) {
     final name = canonicalPackageName(rawName);
     if (enginePackageNames.contains(name)) {
       throw const FormatException(
@@ -94,11 +114,15 @@ class ResolvedLayer {
       );
     }
 
-    final copies = resolution.locateAll(rawName);
+    var copies = const <LocatedPackage>[];
+    for (final candidate in chain) {
+      copies = candidate.locateAll(rawName);
+      if (copies.isNotEmpty) break;
+    }
     if (copies.isEmpty) {
       throw FormatException(
         'DNA layer "$rawName" cannot be resolved.\n'
-        '  ${resolution.describeFailure(rawName)}\n'
+        '  ${chain.first.describeFailure(rawName)}\n'
         '  Declare the DNA as a dependency in pubspec.yaml / package.json '
         'and install it. For local checkouts use gg_localize_refs.',
       );
@@ -110,9 +134,10 @@ class ResolvedLayer {
     warnings.addAll(ownConfig.warnings);
 
     inProgress.add(name);
+    final parentChain = [resolutionOf(located.root), ...chain];
     for (final parent in ownConfig.config.layers) {
       if (canonicalPackageName(parent) == name) continue;
-      expand(parent, name, depth + 1);
+      expand(parent, name, depth + 1, parentChain);
     }
     inProgress.removeLast();
 
@@ -131,9 +156,15 @@ class ResolvedLayer {
   }
 
   for (final name in config.layers) {
-    expand(name, null, 1);
+    expand(name, null, 1, [resolution]);
   }
-  return (layers: layers, warnings: warnings);
+  return (
+    layers: layers,
+    warnings: [
+      for (final r in resolutions.values) ...r.warnings,
+      ...warnings,
+    ],
+  );
 }
 
 // .............................................................................

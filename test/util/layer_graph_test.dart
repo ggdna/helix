@@ -148,6 +148,54 @@ void main() {
       expect(r.layers.single.ecosystem, PackageEcosystem.pub);
     });
 
+    test('a parent is found in the layer\'s own node_modules', () {
+      // pnpm exposes only direct dependencies at the top level, so a DNA
+      // pulled in by another DNA sits under *that* package — never under
+      // the consumer's. Looking only at the target would lose the whole
+      // upper half of the tree.
+      final host = MemoryDnaHost(
+        files: {
+          '$root/node_modules/dna-ts/package.json':
+              '{"name": "dna-ts", "version": "1.0.0"}',
+          '$root/node_modules/dna-ts/$dnaConfigPath': dnaConfig(['base-dna']),
+          '$root/node_modules/dna-ts/dna/doc/ts.md': '# ts',
+          // The parent lives below the layer, not below the target.
+          '$root/node_modules/dna-ts/node_modules/base-dna/package.json':
+              '{"name": "base-dna", "version": "1.2.0"}',
+          '$root/node_modules/dna-ts/node_modules/base-dna/$dnaConfigPath':
+              dnaConfig([]),
+          '$root/node_modules/dna-ts/node_modules/base-dna/dna/LICENSE':
+              'MIT\n',
+        },
+      );
+      final r = expand(host, ['dna-ts']);
+      expect(r.layers.map((l) => l.name).toList(), ['base-dna', 'dna-ts']);
+      expect(
+        r.layers.first.root,
+        '$root/node_modules/dna-ts/node_modules/base-dna',
+      );
+      expect(r.layers.first.via, 'dna-ts');
+    });
+
+    test('the target still resolves parents pub flattened', () {
+      // pub puts everything into the target's package_config.json, and a
+      // package in the cache has no resolution of its own — so the
+      // fallback to the target has to keep working.
+      final host = MemoryDnaHost(
+        files: {
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'dna_dart': '../../cache/dna_dart',
+            'base_dna': '../../cache/base_dna',
+          }),
+          ...pubDna('dna_dart', '1.0.0', layers: ['base_dna']),
+          ...pubDna('base_dna', '1.0.1'),
+        },
+      );
+      final r = expand(host, ['dna_dart']);
+      expect(r.layers.map((l) => l.name).toList(), ['base-dna', 'dna-dart']);
+      expect(r.layers.first.root, '/cache/base_dna');
+    });
+
     test('resolves file:// and trailing-slash rootUris', () {
       final host = MemoryDnaHost(
         files: {
