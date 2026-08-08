@@ -9,4 +9,4 @@
 // coverage:ignore-file
 
 /// The version of the `gg_dna` package.
-const String ggDnaVersion = '4.0.3';
+const String ggDnaVersion = '4.0.2';
