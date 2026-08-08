@@ -6,183 +6,298 @@
 
 import 'package:gg_dna/src/util/dna_config.dart';
 import 'package:gg_dna/src/util/dna_fs.dart';
+import 'package:gg_dna/src/util/dna_layout.dart';
 import 'package:gg_dna/src/util/layer_graph.dart';
+import 'package:gg_dna/src/util/package_resolution.dart';
 import 'package:test/test.dart';
 
 void main() {
   const root = '/t';
 
-  /// A DNA package installed under node_modules with optional parents.
+  String dnaConfig(List<String> layers) {
+    final list = layers.map((l) => '"$l"').join(', ');
+    return '{"version": $dnaFormatVersion, "role": "dna", '
+        '"layers": [$list]}';
+  }
+
+  /// A DNA package installed under node_modules, with its own parents.
   Map<String, String> npmDna(
     String name,
     String version, {
-    List<String> deps = const [],
+    List<String> layers = const [],
+  }) =>
+      {
+        '$root/node_modules/$name/package.json':
+            '{"name": "$name", "version": "$version"}',
+        '$root/node_modules/$name/$dnaConfigPath': dnaConfig(layers),
+        '$root/node_modules/$name/dna/doc/$name.md': '# $name',
+      };
+
+  /// A DNA package installed by pub at [at], plus its package_config entry.
+  Map<String, String> pubDna(
+    String name,
+    String version, {
+    List<String> layers = const [],
+    String? at,
   }) {
-    final depsJson = deps.map((d) => '"$d": "^1.0.0"').join(', ');
+    final dir = at ?? '/cache/$name';
     return {
-      '$root/node_modules/$name/package.json':
-          '{"name": "$name", "version": "$version", '
-              '"dependencies": {$depsJson}}',
-      '$root/node_modules/$name/dna/doc/$name.md': '# $name',
+      '$dir/pubspec.yaml': 'name: $name\nversion: $version\n',
+      '$dir/$dnaConfigPath': dnaConfig(layers),
+      '$dir/dna/doc/$name.md': '# $name',
     };
   }
 
-  group('expandLayerGraph', () {
-    test('resolves default order from devDependencies and recurses', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{"devDependencies": '
-              '{"dna-dart": "^2.0.0", "not-dna": "1.0.0"}}',
-          ...npmDna('dna-dart', '2.1.0', deps: ['base-dna']),
-          ...npmDna('base-dna', '1.2.0'),
-          '$root/node_modules/not-dna/package.json':
-              '{"name": "not-dna", "version": "1.0.0"}',
-          '$root/node_modules/not-dna/index.js': '',
-        },
-      );
-      final r = expandLayerGraph(
+  String packageConfig(Map<String, String> nameToRootUri) {
+    final entries = nameToRootUri.entries
+        .map((e) => '{"name": "${e.key}", "rootUri": "${e.value}"}')
+        .join(', ');
+    return '{"configVersion": 2, "packages": [$entries]}';
+  }
+
+  ({List<ResolvedLayer> layers, List<String> warnings}) expand(
+    MemoryDnaHost host,
+    List<String> layers,
+  ) =>
+      expandLayerGraph(
         host: host,
         targetRoot: root,
-        config: const DnaConfig(),
+        config: DnaConfig(layers: layers),
+        resolution: PackageResolution.read(host, root),
       );
+
+  group('expandLayerGraph', () {
+    test('recurses through each layer\'s own dna/_dna.json', () {
+      final host = MemoryDnaHost(
+        files: {
+          '$root/package.json': '{"dependencies": {"dna-dart": "^2.0.0"}}',
+          ...npmDna('dna-dart', '2.1.0', layers: ['base-dna']),
+          ...npmDna('base-dna', '1.2.0'),
+        },
+      );
+      final r = expand(host, ['dna-dart']);
       expect(r.layers.map((l) => l.name).toList(), ['base-dna', 'dna-dart']);
       expect(r.layers.first.via, 'dna-dart');
       expect(r.layers.first.version, '1.2.0');
+      expect(r.layers.first.ecosystem, PackageEcosystem.node);
       expect(r.layers.last.via, isNull);
       expect(r.layers.last.root, '$root/node_modules/dna-dart');
+    });
+
+    test('layers apply in the listed order', () {
+      final host = MemoryDnaHost(
+        files: {...npmDna('a-dna', '1.0.0'), ...npmDna('b-dna', '1.0.0')},
+      );
+      expect(
+        expand(host, ['b-dna', 'a-dna']).layers.map((l) => l.name).toList(),
+        ['b-dna', 'a-dna'],
+      );
+    });
+
+    test('a dependency that is not listed is not a layer', () {
+      final host = MemoryDnaHost(
+        files: {
+          '$root/package.json': '{"dependencies": '
+              '{"a-dna": "1", "b-dna": "1"}}',
+          ...npmDna('a-dna', '1.0.0'),
+          ...npmDna('b-dna', '1.0.0'),
+        },
+      );
+      expect(expand(host, ['a-dna']).layers.map((l) => l.name).toList(), [
+        'a-dna',
+      ]);
     });
 
     test('deduplicates diamonds — first topological position wins', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"devDependencies": '
-              '{"ds-dna-dart": "^1.0.0"}}',
-          ...npmDna('ds-dna-dart', '1.0.0', deps: ['dna-dart', 'ds-dna']),
-          ...npmDna('dna-dart', '2.0.0', deps: ['base-dna']),
-          ...npmDna('ds-dna', '1.0.0', deps: ['base-dna']),
+          ...npmDna(
+            'ds-dna-dart',
+            '1.0.0',
+            layers: ['dna-dart', 'ds-dna'],
+          ),
+          ...npmDna('dna-dart', '2.0.0', layers: ['base-dna']),
+          ...npmDna('ds-dna', '1.0.0', layers: ['base-dna']),
           ...npmDna('base-dna', '1.0.0'),
         },
       );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
+      final r = expand(host, ['ds-dna-dart']);
       expect(r.layers.map((l) => l.name).toList(), [
         'base-dna',
         'dna-dart',
         'ds-dna',
         'ds-dna-dart',
       ]);
-      expect(
-        r.layers.firstWhere((l) => l.name == 'base-dna').via,
-        'dna-dart',
-      );
-    });
-
-    test('explicit order in the config overrides the default', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{"devDependencies": '
-              '{"a-dna": "1", "b-dna": "1"}}',
-          ...npmDna('a-dna', '1.0.0'),
-          ...npmDna('b-dna', '1.0.0'),
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(order: ['b-dna']),
-      );
-      expect(r.layers.map((l) => l.name).toList(), ['b-dna']);
+      expect(r.layers.firstWhere((l) => l.name == 'base-dna').via, 'dna-dart');
     });
 
     test('resolves pub packages via package_config.json, snake names', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/pubspec.yaml': 'name: consumer\n'
-              'dev_dependencies:\n  dna_dart: ^2.0.0\n  test: ^1.0.0\n',
-          '$root/.dart_tool/package_config.json': '{"configVersion": 2, '
-              '"packages": [ '
-              '{"name": "dna_dart", "rootUri": "../../cache/dna_dart"}, '
-              '{"name": "test", "rootUri": "../../cache/test"}]}',
-          '/cache/dna_dart/pubspec.yaml': 'name: dna_dart\nversion: 2.1.0\n',
-          '/cache/dna_dart/dna/doc/x.md': '# x',
-          '/cache/test/pubspec.yaml': 'name: test\nversion: 1.0.0\n',
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'dna_dart': '../../cache/dna_dart',
+          }),
+          ...pubDna('dna_dart', '2.1.0'),
         },
       );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
+      final r = expand(host, ['dna-dart']);
       expect(r.layers.single.name, 'dna-dart');
       expect(r.layers.single.package, 'dna_dart');
       expect(r.layers.single.root, '/cache/dna_dart');
       expect(r.layers.single.version, '2.1.0');
+      expect(r.layers.single.ecosystem, PackageEcosystem.pub);
     });
 
-    test('path overrides win over installed packages at any depth', () {
+    test('resolves file:// and trailing-slash rootUris', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"devDependencies": {"dna-dart": "^2.0.0"}}',
-          ...npmDna('dna-dart', '2.1.0', deps: ['base-dna']),
-          ...npmDna('base-dna', '1.0.0'),
-          '$root/../base-dna/dna/doc/local.md': '# local',
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'a_dna': 'file:///abs/a_dna',
+            'b_dna': '../../rel/b_dna/',
+          }),
+          ...pubDna('a_dna', '1.0.0', at: '/abs/a_dna'),
+          ...pubDna('b_dna', '1.0.0', at: '/rel/b_dna'),
         },
       );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(
-          pathOverrides: {'base-dna': '../base-dna'},
-        ),
-      );
-      final base = r.layers.firstWhere((l) => l.name == 'base-dna');
-      expect(base.path, '../base-dna');
-      expect(base.package, isNull);
-      expect(base.root, '$root/../base-dna');
+      expect(expand(host, ['a_dna', 'b_dna']).layers.map((l) => l.root), [
+        '/abs/a_dna',
+        '/rel/b_dna',
+      ]);
     });
+  });
 
-    test('a layer with dna/src fails with the migration error', () {
+  group('DNA packages must say so', () {
+    test('a dna/ folder alone does not make a layer', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"devDependencies": {"old-dna": "1"}}',
-          '$root/node_modules/old-dna/package.json':
-              '{"name": "old-dna", "version": "1.0.0"}',
-          '$root/node_modules/old-dna/dna/src/doc/x.md': '# x',
+          '$root/node_modules/plain/package.json':
+              '{"name": "plain", "version": "1.0.0"}',
+          '$root/node_modules/plain/dna/doc/x.md': '# x',
         },
       );
       expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['old-dna']),
-        ),
+        () => expand(host, ['plain']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('dna/src'),
+            allOf(
+              contains('is not a DNA package'),
+              contains('"role": "dna"'),
+            ),
           ),
         ),
       );
     });
 
-    test('cycles are detected', () {
+    test('role: project is rejected just the same', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"devDependencies": {"a-dna": "1"}}',
-          ...npmDna('a-dna', '1.0.0', deps: ['b-dna']),
-          ...npmDna('b-dna', '1.0.0', deps: ['a-dna']),
+          '$root/node_modules/consumer/package.json':
+              '{"name": "consumer", "version": "1.0.0"}',
+          '$root/node_modules/consumer/$dnaConfigPath':
+              '{"version": $dnaFormatVersion, "role": "project"}',
+          '$root/node_modules/consumer/dna/doc/x.md': '# x',
         },
       );
       expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(),
+        () => expand(host, ['consumer']),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('is not a DNA package'),
+          ),
         ),
+      );
+    });
+  });
+
+  group('dual publication', () {
+    test('the npm and pub copies fold into one layer', () {
+      final host = MemoryDnaHost(
+        files: {
+          // The consumer declares the same DNA in both manifests.
+          '$root/package.json':
+              '{"dependencies": {"@tssuite/base-dna": "1.0.0"}}',
+          '$root/pubspec.yaml': 'name: c\ndependencies:\n  base_dna: ^1.0.0\n',
+          '$root/pnpm-lock.yaml': '''
+lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      '@tssuite/base-dna':
+        specifier: 1.0.0
+        version: 1.0.0
+packages:
+  '@tssuite/base-dna@1.0.0':
+    resolution: {integrity: sha512-x}
+''',
+          '$root/node_modules/@tssuite/base-dna/package.json':
+              '{"name": "@tssuite/base-dna", "version": "1.0.0"}',
+          '$root/node_modules/@tssuite/base-dna/$dnaConfigPath': dnaConfig([]),
+          '$root/node_modules/@tssuite/base-dna/dna/doc/x.md': '# x',
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'base_dna': '../../cache/base_dna',
+          }),
+          ...pubDna('base_dna', '1.0.1'),
+          '/cache/base_dna/dna/doc/x.md': '# x',
+        },
+      );
+      // The pub copy carries the same tree — remove the file pubDna added
+      // under its own name so both sides are identical.
+      host.deleteFile('/cache/base_dna/dna/doc/base_dna.md');
+
+      final r = expand(host, ['base_dna']);
+      expect(r.layers, hasLength(1));
+      expect(r.layers.single.name, 'base-dna');
+      expect(r.layers.single.package, '@tssuite/base-dna');
+      expect(r.warnings, isEmpty);
+    });
+
+    test('drifted copies warn, the npm one is used', () {
+      final host = MemoryDnaHost(
+        files: {
+          '$root/pnpm-lock.yaml': '''
+lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      '@tssuite/base-dna':
+        specifier: 1.0.0
+        version: 1.0.0
+''',
+          '$root/node_modules/@tssuite/base-dna/package.json':
+              '{"name": "@tssuite/base-dna", "version": "1.0.0"}',
+          '$root/node_modules/@tssuite/base-dna/$dnaConfigPath': dnaConfig([]),
+          '$root/node_modules/@tssuite/base-dna/dna/doc/x.md': '# npm',
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'base_dna': '../../cache/base_dna',
+          }),
+          '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.1\n',
+          '/cache/base_dna/$dnaConfigPath': dnaConfig([]),
+          '/cache/base_dna/dna/doc/x.md': '# pub — stale',
+        },
+      );
+      final r = expand(host, ['base_dna']);
+      expect(r.layers.single.package, '@tssuite/base-dna');
+      expect(
+        r.warnings.single,
+        allOf(contains('base-dna'), contains('the two copies differ')),
+      );
+    });
+  });
+
+  group('failures', () {
+    test('cycles are detected', () {
+      final host = MemoryDnaHost(
+        files: {
+          ...npmDna('a-dna', '1.0.0', layers: ['b-dna']),
+          ...npmDna('b-dna', '1.0.0', layers: ['a-dna']),
+        },
+      );
+      expect(
+        () => expand(host, ['a-dna']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -193,144 +308,79 @@ void main() {
       );
     });
 
-    test('unresolvable explicit layers fail with install hint', () {
-      final host = MemoryDnaHost(
-        files: {'$root/package.json': '{}'},
-      );
+    test('an unresolvable layer reports what was tried', () {
+      final host = MemoryDnaHost(files: {'$root/package.json': '{}'});
       expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['missing-dna']),
-        ),
+        () => expand(host, ['missing-dna']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('dev-dependency'),
+            allOf(
+              contains('cannot be resolved'),
+              contains('node_modules/'),
+              contains('not declared anywhere'),
+              contains('gg_localize_refs'),
+            ),
           ),
         ),
       );
     });
 
-    test('explicit layer without dna/ folder fails', () {
+    test('a layer in the lock but not installed says so', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/node_modules/plain/package.json':
-              '{"name": "plain", "version": "1.0.0"}',
-          '$root/node_modules/plain/index.js': '',
+          '$root/pubspec.lock': '''
+packages:
+  base_dna:
+    dependency: "direct main"
+    description:
+      name: base_dna
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
+''',
         },
       );
       expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['plain']),
-        ),
+        () => expand(host, ['base_dna']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('no dna/ folder'),
+            allOf(
+              contains('pubspec.lock knows base_dna 1.0.1'),
+              contains('declared but not installed'),
+            ),
           ),
         ),
       );
     });
 
-    test('dev-dependencies of a layer do not contribute parents', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{"devDependencies": {"child-dna": "1"}}',
-          '$root/node_modules/child-dna/package.json':
-              '{"name": "child-dna", "version": "1.0.0", '
-                  '"devDependencies": {"tool-dna": "^1.0.0"}}',
-          '$root/node_modules/child-dna/dna/doc/x.md': '# x',
-          ...npmDna('tool-dna', '1.0.0'),
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
-      expect(r.layers.map((l) => l.name).toList(), ['child-dna']);
-    });
-
-    test('the engine package gg_dna never counts as a DNA layer', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/pubspec.yaml':
-              'dev_dependencies:\n  gg_dna: ^5.0.0\n  dna_dart: ^1.0.0\n',
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
-              '{"name": "gg_dna", "rootUri": "../../cache/gg_dna"}, '
-              '{"name": "dna_dart", "rootUri": "../../cache/dna_dart"}]}',
-          '/cache/gg_dna/pubspec.yaml': 'name: gg_dna\nversion: 5.0.0\n',
-          '/cache/gg_dna/dna/doc/base.md': '# base',
-          '/cache/dna_dart/pubspec.yaml': 'name: dna_dart\nversion: 1.0.0\n',
-          '/cache/dna_dart/dna/doc/x.md': '# x',
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
-      expect(r.layers.map((l) => l.name).toList(), ['dna-dart']);
-
-      expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['gg_dna']),
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('layer 0'),
+    test('the engine and its bridge never count as DNA layers', () {
+      final host = MemoryDnaHost(files: {'$root/package.json': '{}'});
+      for (final name in ['gg_dna', '@tssuite/gg_dna-js']) {
+        expect(
+          () => expand(host, [name]),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('layer 0'),
+            ),
           ),
-        ),
-      );
-    });
-
-    test('layer order inside a DNA package comes from its .gg/dna.json', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{"devDependencies": {"child-dna": "1"}}',
-          ...npmDna('child-dna', '1.0.0', deps: ['a-dna', 'b-dna']),
-          '$root/node_modules/child-dna/.gg/dna.json':
-              '{"role": "dna", "order": ["b-dna", "a-dna"]}',
-          ...npmDna('a-dna', '1.0.0'),
-          ...npmDna('b-dna', '1.0.0'),
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
-      expect(r.layers.map((l) => l.name).toList(), [
-        'b-dna',
-        'a-dna',
-        'child-dna',
-      ]);
+          reason: name,
+        );
+      }
     });
 
     test('a tree deeper than the limit fails', () {
-      final files = <String, String>{
-        '$root/package.json': '{"devDependencies": {"dna-0": "1"}}',
-      };
+      final files = <String, String>{};
       for (var i = 0; i <= maxLayerDepth + 1; i++) {
-        files.addAll(
-          npmDna('dna-$i', '1.0.0', deps: ['dna-${i + 1}']),
-        );
+        files.addAll(npmDna('dna-$i', '1.0.0', layers: ['dna-${i + 1}']));
       }
       expect(
-        () => expandLayerGraph(
-          host: MemoryDnaHost(files: files),
-          targetRoot: root,
-          config: const DnaConfig(),
-        ),
+        () => expand(MemoryDnaHost(files: files), ['dna-0']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -341,74 +391,12 @@ void main() {
       );
     });
 
-    test('absolute path overrides are used as given', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{}',
-          '/elsewhere/base-dna/dna/doc/x.md': '# x',
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(
-          order: ['base-dna'],
-          pathOverrides: {'base-dna': '/elsewhere/base-dna'},
-        ),
-      );
-      expect(r.layers.single.root, '/elsewhere/base-dna');
-    });
-
-    test('resolves file:// and trailing-slash rootUris', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/pubspec.yaml': 'dev_dependencies:\n  a_dna: ^1.0.0\n'
-              '  b_dna: ^1.0.0\n',
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
-              '{"name": "a_dna", "rootUri": "file:///abs/a_dna"}, '
-              '{"name": "b_dna", "rootUri": "../../rel/b_dna/"}]}',
-          '/abs/a_dna/dna/doc/x.md': '# x',
-          '/rel/b_dna/dna/doc/x.md': '# x',
-        },
-      );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
-      );
-      expect(r.layers.map((l) => l.root).toList(), [
-        '/abs/a_dna',
-        '/rel/b_dna',
-      ]);
-    });
-
-    test('packages without rootUri are skipped', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/.dart_tool/package_config.json':
-              '{"packages": ["not a map", {"name": "a_dna"}]}',
-        },
-      );
-      expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['a-dna']),
-        ),
-        throwsFormatException,
-      );
-    });
-
     test('an unreadable package_config.json resolves no packages', () {
       final host = MemoryDnaHost(
         files: {'$root/.dart_tool/package_config.json': '{broken'},
       );
       expect(
-        () => expandLayerGraph(
-          host: host,
-          targetRoot: root,
-          config: const DnaConfig(order: ['a-dna']),
-        ),
+        () => expand(host, ['a-dna']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -418,77 +406,55 @@ void main() {
         ),
       );
     });
+  });
 
-    test('unreadable manifests are ignored, not fatal', () {
+  group('suggestDnaLayers', () {
+    test('combines both manifests and dedups by identity', () {
       final host = MemoryDnaHost(
         files: {
-          // Broken manifests at the target …
+          '$root/package.json': '{"dependencies": {"base-dna": "^1.0.0"}}',
+          '$root/pubspec.yaml':
+              'dependencies:\n  base_dna: ^1.0.0\n  dna_dart: ^1.0.0\n',
+          ...npmDna('base-dna', '1.0.0'),
+          '$root/.dart_tool/package_config.json': packageConfig({
+            'dna_dart': '../../cache/dna_dart',
+          }),
+          ...pubDna('dna_dart', '1.0.0'),
+        },
+      );
+      expect(suggestDnaLayers(host, root, PackageResolution.read(host, root)), [
+        'base-dna',
+        'dna_dart',
+      ]);
+    });
+
+    test('skips packages that are not DNA and survives broken manifests', () {
+      final host = MemoryDnaHost(
+        files: {
           '$root/package.json': '{broken',
           '$root/pubspec.yaml': '*undefined-anchor',
-          '$root/.dart_tool/package_config.json': '{broken',
         },
       );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(),
+      expect(
+        suggestDnaLayers(host, root, PackageResolution.read(host, root)),
+        isEmpty,
       );
-      expect(r.layers, isEmpty);
     });
 
-    test('a layer version falls back over broken manifests', () {
+    test('never suggests a package the engine would reject', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"devDependencies": {"a-dna": "1"}}',
-          // Broken package.json, version comes from the pubspec …
-          '$root/node_modules/a-dna/package.json': '{broken',
-          '$root/node_modules/a-dna/pubspec.yaml':
-              'name: a_dna\nversion: 3.2.1\n',
-          '$root/node_modules/a-dna/dna/doc/x.md': '# x',
-          // … and no version at all when both are unusable.
-          '$root/node_modules/b-dna/package.json': '{"name": "b-dna"}',
-          '$root/node_modules/b-dna/pubspec.yaml': '*undefined-anchor',
-          '$root/node_modules/b-dna/dna/doc/x.md': '# x',
+          '$root/package.json': '{"dependencies": '
+              '{"plain": "1", "real-dna": "1"}}',
+          '$root/node_modules/plain/package.json':
+              '{"name": "plain", "version": "1.0.0"}',
+          '$root/node_modules/plain/dna/doc/x.md': '# x',
+          ...npmDna('real-dna', '1.0.0'),
         },
       );
-      final r = expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: const DnaConfig(order: ['a-dna', 'b-dna']),
-      );
-      expect(r.layers.first.version, '3.2.1');
-      expect(r.layers.last.version, isNull);
-    });
-  });
-
-  group('canonicalLayerName', () {
-    test('folds snake to kebab, lowercases', () {
-      expect(canonicalLayerName('base_dna'), 'base-dna');
-      expect(canonicalLayerName('Base-DNA'), 'base-dna');
-    });
-  });
-
-  group('defaultDnaOrder', () {
-    test('combines package.json and pubspec.yaml, dedups by identity', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/package.json': '{"devDependencies": {"base-dna": "^1.0.0"}}',
-          '$root/pubspec.yaml':
-              'dev_dependencies:\n  base_dna: ^1.0.0\n  dna_dart: ^1.0.0\n',
-          ...npmDna('base-dna', '1.0.0'),
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
-              '{"name": "dna_dart", "rootUri": "../../cache/dna_dart"}]}',
-          '/cache/dna_dart/pubspec.yaml': 'name: dna_dart\nversion: 1.0.0\n',
-          '/cache/dna_dart/dna/doc/x.md': '# x',
-        },
-      );
-      final names = defaultDnaOrder(
-        host,
-        root,
-        manifestRoot: root,
-        config: const DnaConfig(),
-      );
-      expect(names, ['base-dna', 'dna_dart']);
+      expect(suggestDnaLayers(host, root, PackageResolution.read(host, root)), [
+        'real-dna',
+      ]);
     });
   });
 }

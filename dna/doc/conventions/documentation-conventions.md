@@ -143,8 +143,8 @@ Recommended content:
 - **References to the instantiated conventions**: the DNA places these
   convention documents at `doc/conventions/` in every consumer. Import
   them with `@` imports (e.g. `@doc/conventions/code-conventions.md`)
-  instead of duplicating their content. When `.gg/dna.json` configures
-  `config.claude.claude_md.include`, the DNA test maintains such an import
+  instead of duplicating their content. When `dna/_dna.json` configures
+  `claude.claudeMdInclude`, the DNA test maintains such an import
   block automatically between `<!-- gg_dna:claude_md:start -->` and
   `<!-- gg_dna:claude_md:end -->` — leave those markers untouched and put
   hand-written notes outside the block.

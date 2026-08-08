@@ -11,13 +11,15 @@ import 'package:yaml/yaml.dart';
 import 'dna_config.dart';
 import 'dna_fs.dart';
 import 'dna_layout.dart';
+import 'dna_tree_hash.dart';
+import 'package_resolution.dart';
 
 /// Maximum recursion depth of the inheritance tree.
 const int maxLayerDepth = 10;
 
-/// The engine package never counts as a DNA layer — its `dna/` folder is
-/// always the implicit base layer.
-const String enginePackageName = 'gg-dna';
+/// Canonical names of the engine itself and its bridges — never DNA
+/// layers, because gg_dna's own `dna/` is always the implicit base layer.
+const Set<String> enginePackageNames = {'gg-dna', 'gg-dna-js'};
 
 // .............................................................................
 /// One resolved layer of the inheritance tree, parents before children.
@@ -26,25 +28,30 @@ class ResolvedLayer {
   const ResolvedLayer({
     required this.name,
     required this.root,
-    this.package,
-    this.path,
+    required this.package,
+    required this.ecosystem,
+    required this.source,
     this.version,
     this.via,
   });
 
-  /// Canonical layer name (lowercased, `_` folded to `-`).
+  /// Canonical layer identity (lowercase, npm scope dropped, `_` folded
+  /// to `-`).
   final String name;
 
   /// Root folder of the layer checkout (its `dna/` lives below).
   final String root;
 
-  /// Resolved package name as installed (`null` for path overrides).
-  final String? package;
+  /// Package name as installed (`base_dna`, `@tssuite/base-dna`).
+  final String package;
 
-  /// Path override relative to the target root (`null` for packages).
-  final String? path;
+  /// Which ecosystem provided the copy that was used.
+  final PackageEcosystem ecosystem;
 
-  /// Version from the package's own manifest (`null` when unknown).
+  /// How the package manager obtained it.
+  final PackageSource source;
+
+  /// The resolved version (`null` when unknown).
   final String? version;
 
   /// Name of the layer that pulled this one in; `null` for direct layers.
@@ -52,31 +59,24 @@ class ResolvedLayer {
 }
 
 // .............................................................................
-/// Canonical layer identity: lowercase, `_` folded to `-` (npm kebab and
-/// pub snake names of the same DNA collapse to one identity).
-String canonicalLayerName(String name) =>
-    name.toLowerCase().replaceAll('_', '-');
-
-// .............................................................................
 /// Expands the inheritance tree of [targetRoot]: direct layers come from
-/// [config]'s `order` (or the dev-dependency declaration order), parents
-/// are read recursively from each layer's own `.gg/dna.json` (or its
-/// dependency declaration order). Diamonds are deduplicated by canonical
-/// name (first topological position wins), cycles and unresolvable layers
-/// throw.
+/// [config]'s `layers`, parents recursively from each layer's own
+/// `dna/_dna.json`. Diamonds are deduplicated by canonical identity (first
+/// topological position wins), cycles and unresolvable layers throw.
 ({List<ResolvedLayer> layers, List<String> warnings}) expandLayerGraph({
   required DnaHost host,
   required String targetRoot,
   required DnaConfig config,
+  required PackageResolution resolution,
 }) {
-  final warnings = <String>[];
+  final warnings = <String>[...resolution.warnings];
   final layers = <ResolvedLayer>[];
   final done = <String>{};
   final inProgress = <String>[];
 
   void expand(String rawName, String? via, int depth) {
-    final name = canonicalLayerName(rawName);
-    if (name == enginePackageName) {
+    final name = canonicalPackageName(rawName);
+    if (enginePackageNames.contains(name)) {
       throw const FormatException(
         'gg_dna itself is the engine — its base DNA is always layer 0 '
         'and must not be listed as a DNA layer.',
@@ -94,39 +94,24 @@ String canonicalLayerName(String name) =>
       );
     }
 
-    final located = _locate(host, targetRoot, config, rawName);
-    if (located == null) {
+    final copies = resolution.locateAll(rawName);
+    if (copies.isEmpty) {
       throw FormatException(
-        'DNA layer "$rawName" cannot be resolved — declare it as '
-        'dev-dependency and run pnpm install / dart pub get, or add a '
-        'path override to $dnaConfigPath.',
+        'DNA layer "$rawName" cannot be resolved.\n'
+        '  ${resolution.describeFailure(rawName)}\n'
+        '  Declare the DNA as a dependency in pubspec.yaml / package.json '
+        'and install it. For local checkouts use gg_localize_refs.',
       );
     }
-    if (!host.existsDir('${located.root}/$dnaDirname')) {
-      throw FormatException(
-        'DNA layer "$rawName" (${located.root}) has no dna/ folder.',
-      );
-    }
-    if (host.existsDir('${located.root}/$dnaDirname/src')) {
-      throw FormatException(legacySrcLayoutError(rawName));
-    }
+    final located = copies.first;
+    _warnOnDivergentCopies(host, copies, warnings);
+
+    final ownConfig = _readLayerConfig(host, located);
+    warnings.addAll(ownConfig.warnings);
 
     inProgress.add(name);
-    final ownConfig = readDnaConfig(host, located.root);
-    warnings.addAll(ownConfig.warnings.map((w) => '$rawName: $w'));
-    // Parents of a DNA package are its regular dependencies — its
-    // dev-dependencies (test tooling, the engine itself) never
-    // contribute layers.
-    final parentNames = ownConfig.config.order ??
-        defaultDnaOrder(
-          host,
-          targetRoot,
-          manifestRoot: located.root,
-          config: config,
-          includeDevDependencies: false,
-        );
-    for (final parent in parentNames) {
-      if (canonicalLayerName(parent) == name) continue;
+    for (final parent in ownConfig.config.layers) {
+      if (canonicalPackageName(parent) == name) continue;
       expand(parent, name, depth + 1);
     }
     inProgress.removeLast();
@@ -136,65 +121,107 @@ String canonicalLayerName(String name) =>
       ResolvedLayer(
         name: name,
         root: located.root,
-        package: located.package,
-        path: located.path,
+        package: located.packageName,
+        ecosystem: located.ecosystem,
+        source: located.source,
         version: located.version,
         via: via,
       ),
     );
   }
 
-  final directOrder = config.order ??
-      defaultDnaOrder(
-        host,
-        targetRoot,
-        manifestRoot: targetRoot,
-        config: config,
-      );
-  for (final name in directOrder) {
+  for (final name in config.layers) {
     expand(name, null, 1);
   }
   return (layers: layers, warnings: warnings);
 }
 
 // .............................................................................
-/// The default layer order: names of dependencies (and, for the target
-/// itself, dev-dependencies) of the manifests at [manifestRoot]
-/// (package.json before pubspec.yaml, regular before dev), keeping only
-/// those that resolve to DNA packages. The engine package gg_dna never
-/// counts.
-List<String> defaultDnaOrder(
+/// Reads the config of a resolved layer, insisting that it actually is a
+/// DNA package.
+///
+/// A `dna/` folder alone does not make one — the package has to say so in
+/// `dna/_dna.json`. Without that rule any dependency that happens to ship
+/// a `dna/` folder would be pulled in as a layer, and a package published
+/// before the config moved into `dna/` would silently contribute no
+/// parents at all.
+({DnaConfig config, List<String> warnings}) _readLayerConfig(
   DnaHost host,
-  String targetRoot, {
-  required String manifestRoot,
-  required DnaConfig config,
-  bool includeDevDependencies = true,
-}) {
+  LocatedPackage located,
+) {
+  final result = host.existsFile('${located.root}/$dnaConfigPath')
+      ? readDnaConfig(host, located.root, packageLabel: located.packageName)
+      : null;
+  if (result == null || result.config.role != DnaRole.dna) {
+    throw FormatException(
+      'Package "${located.packageName}" (${located.root}) is not a DNA '
+      'package — $dnaConfigPath is missing or does not declare '
+      '"role": "dna". A dna/ folder alone does not make a package a DNA '
+      'layer.',
+    );
+  }
+  return result;
+}
+
+// .............................................................................
+/// Warns when the npm and pub copies of a dual-published DNA carry
+/// different `dna/` trees — one of the two publications is then stale.
+void _warnOnDivergentCopies(
+  DnaHost host,
+  List<LocatedPackage> copies,
+  List<String> warnings,
+) {
+  if (copies.length < 2) return;
+  final hashes = {
+    for (final copy in copies) hashTree(host, '${copy.root}/$dnaDirname'),
+  };
+  if (hashes.length < 2) return;
+  warnings.add(
+    'DNA "${copies.first.identity}" is installed from both ecosystems and '
+    'the two copies differ: '
+    '${copies.map((c) => '${c.packageName} ${c.version ?? '?'}').join(' vs ')}'
+    '. ${copies.first.packageName} is used — republish the other one.',
+  );
+}
+
+// .............................................................................
+/// Package names declared by the manifests at [root] that resolve to DNA
+/// packages — the starting point `gg_dna init` writes into `layers`.
+///
+/// Only a suggestion: the engine itself never infers layers, so what is
+/// not listed in `dna/_dna.json` is not applied.
+List<String> suggestDnaLayers(
+  DnaHost host,
+  String root,
+  PackageResolution resolution,
+) {
   final names = <String>[];
   final seen = <String>{};
 
   void add(Iterable<String> candidates) {
     for (final name in candidates) {
-      final canonical = canonicalLayerName(name);
-      if (canonical == enginePackageName) continue;
-      if (!seen.add(canonical)) continue;
-      final located = _locate(host, targetRoot, config, name);
+      final identity = canonicalPackageName(name);
+      if (enginePackageNames.contains(identity)) continue;
+      if (!seen.add(identity)) continue;
+      final located = resolution.locate(name);
       if (located == null) continue;
-      if (!host.existsDir('${located.root}/$dnaDirname')) continue;
+      try {
+        _readLayerConfig(host, located);
+      } on FormatException {
+        continue;
+      }
       names.add(name);
     }
   }
 
-  final packageJson = '$manifestRoot/package.json';
+  final packageJson = '$root/package.json';
   if (host.existsFile(packageJson)) {
     try {
       final doc = jsonDecode(host.readString(packageJson));
       if (doc is Map<String, dynamic>) {
-        final deps = doc['dependencies'];
-        final devDeps = doc['devDependencies'];
-        if (deps is Map<String, dynamic>) add(deps.keys);
-        if (includeDevDependencies && devDeps is Map<String, dynamic>) {
-          add(devDeps.keys);
+        for (final section in const ['dependencies', 'devDependencies']) {
+          final deps = doc[section];
+          if (deps is Map<String, dynamic>) add(deps.keys);
         }
       }
     } on FormatException {
@@ -202,16 +229,14 @@ List<String> defaultDnaOrder(
     }
   }
 
-  final pubspec = '$manifestRoot/pubspec.yaml';
+  final pubspec = '$root/pubspec.yaml';
   if (host.existsFile(pubspec)) {
     try {
       final doc = loadYaml(host.readString(pubspec));
       if (doc is Map) {
-        final deps = doc['dependencies'];
-        final devDeps = doc['dev_dependencies'];
-        if (deps is Map) add(deps.keys.cast<String>());
-        if (includeDevDependencies && devDeps is Map) {
-          add(devDeps.keys.cast<String>());
+        for (final section in const ['dependencies', 'dev_dependencies']) {
+          final deps = doc[section];
+          if (deps is Map) add(deps.keys.cast<String>());
         }
       }
     } on YamlException {
@@ -219,103 +244,4 @@ List<String> defaultDnaOrder(
     }
   }
   return names;
-}
-
-// .............................................................................
-({String root, String? package, String? path, String? version})? _locate(
-  DnaHost host,
-  String targetRoot,
-  DnaConfig config,
-  String rawName,
-) {
-  final canonical = canonicalLayerName(rawName);
-
-  // 1. Path overrides from the target's config (any depth).
-  for (final entry in config.pathOverrides.entries) {
-    if (canonicalLayerName(entry.key) != canonical) continue;
-    final root = entry.value.startsWith('/')
-        ? entry.value
-        : '$targetRoot/${entry.value}';
-    return (root: root, package: null, path: entry.value, version: null);
-  }
-
-  // 2. node_modules of the target (npm/pnpm — kebab and raw name).
-  for (final candidate in {rawName, canonical}) {
-    final root = '$targetRoot/node_modules/$candidate';
-    if (host.existsDir(root)) {
-      return (
-        root: root,
-        package: candidate,
-        path: null,
-        version: _manifestVersion(host, root),
-      );
-    }
-  }
-
-  // 3. package_config.json of the target (pub — snake name).
-  final snake = canonical.replaceAll('-', '_');
-  final packageConfigPath = '$targetRoot/.dart_tool/package_config.json';
-  if (host.existsFile(packageConfigPath)) {
-    try {
-      final doc = jsonDecode(host.readString(packageConfigPath));
-      if (doc is Map<String, dynamic>) {
-        for (final pkg in (doc['packages'] as List?) ?? const []) {
-          if (pkg is! Map<String, dynamic>) continue;
-          if (pkg['name'] != snake && pkg['name'] != rawName) continue;
-          final rootUri = pkg['rootUri'] as String?;
-          if (rootUri == null) continue;
-          final root = _resolveRootUri(rootUri, targetRoot);
-          return (
-            root: root,
-            package: pkg['name'] as String,
-            path: null,
-            version: _manifestVersion(host, root),
-          );
-        }
-      }
-    } on FormatException {
-      // Not our file to validate.
-    }
-  }
-  return null;
-}
-
-// .............................................................................
-String _resolveRootUri(String rootUri, String targetRoot) {
-  if (rootUri.startsWith('file://')) {
-    return Uri.parse(rootUri).toFilePath(windows: false);
-  }
-  // Relative URIs are relative to the .dart_tool folder.
-  final base = Uri.parse('$targetRoot/.dart_tool/');
-  final resolved = base.resolve(rootUri).path;
-  return resolved.endsWith('/')
-      ? resolved.substring(0, resolved.length - 1)
-      : resolved;
-}
-
-// .............................................................................
-String? _manifestVersion(DnaHost host, String packageRoot) {
-  final packageJson = '$packageRoot/package.json';
-  if (host.existsFile(packageJson)) {
-    try {
-      final doc = jsonDecode(host.readString(packageJson));
-      if (doc is Map<String, dynamic> && doc['version'] is String) {
-        return doc['version'] as String;
-      }
-    } on FormatException {
-      // Fall through to pubspec.
-    }
-  }
-  final pubspec = '$packageRoot/pubspec.yaml';
-  if (host.existsFile(pubspec)) {
-    try {
-      final doc = loadYaml(host.readString(pubspec));
-      if (doc is Map && doc['version'] != null) {
-        return '${doc['version']}';
-      }
-    } on YamlException {
-      // No version then.
-    }
-  }
-  return null;
 }

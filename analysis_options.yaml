@@ -33,8 +33,8 @@ linter:
     - missing_whitespace_between_adjacent_strings
     - unawaited_futures
 
-#   exclude:
-#     - path/to/excluded/files/**
+exclude:
+  - node_modules/**
 
 analyzer:
   language:

@@ -10,6 +10,9 @@ import 'package:gg_log/gg_log.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
+import '../util/dna_layout.dart';
+import '../util/layer_graph.dart';
+import '../util/package_resolution.dart';
 
 /// Content of the placed Dart wrapper test.
 const String dartWrapperTest = '''
@@ -32,10 +35,10 @@ void main() {
 /// Content of the placed vitest wrapper spec.
 const String tsWrapperTest = '''
 // Placed by `gg_dna init` — instantiates and verifies this project's DNA
-// on every test run. The logic lives in the @tssuite/gg-dna
+// on every test run. The logic lives in the @tssuite/gg_dna-js
 // dev-dependency and is updated through normal dependency updates.
 
-import { runDnaTest } from '@tssuite/gg-dna';
+import { runDnaTest } from '@tssuite/gg_dna-js';
 import { test } from 'vitest';
 
 test(
@@ -47,26 +50,36 @@ test(
 );
 ''';
 
-/// Skeleton written to `.gg/dna.json` when it does not exist yet.
-const String dnaConfigSkeleton = '''
+/// Skeleton written to `dna/_dna.json` when it does not exist yet, with
+/// [layers] pre-filled from the DNA packages the project has installed.
+String dnaConfigSkeleton(List<String> layers) {
+  final list = layers.map((l) => '"$l"').join(', ');
+  return '''
 {
-  // DNA configuration (gg_dna 5.0) — all keys are optional.
-  //
-  // "role": "project",           // "dna" for DNA repositories
-  // "order": ["base_dna"],       // default: dev-dependency order
+  // DNA configuration (gg_dna 5.0) — the only place DNA config lives.
+  // The engine only ever reads this file; dna/_generated.json is its
+  // output. Comments and trailing commas are tolerated.
+  "version": $dnaFormatVersion,
+
+  // "dna" for DNA packages, "project" (the default) for consumers.
+  "role": "project",
+
+  // The DNA layers, in application order — later layers win. Package
+  // names as declared in pubspec.yaml / package.json, never paths.
+  // Transitive parents come from each layer's own dna/_dna.json.
+  "layers": [$list]
+
   // "vars": { "projectName": "my-project" },
   // "fileNaming": "snake_case",  // camelCase | kebab-case | keep
-  // "dependencies": { "base_dna": { "path": "../base_dna" } },
-  // "config": {
-  //   "claude": { "claude_md": { "include": ["doc/conventions"] } }
-  // }
+  // "claude": { "claudeMdInclude": ["doc/conventions"] }
 }
 ''';
+}
 
 // .............................................................................
-/// Places the DNA wrapper test, a `.gg/dna.json` skeleton and the
-/// `.gitignore` exception into a project. The actual instantiation runs
-/// inside the placed test on every test run.
+/// Places the DNA wrapper test and a `dna/_dna.json` skeleton into a
+/// project. The actual instantiation runs inside the placed test on every
+/// test run.
 class Init extends Command<dynamic> {
   /// Constructor.
   Init({required this.ggLog, DnaHost? host}) : _host = host ?? IoDnaHost() {
@@ -112,13 +125,21 @@ class Init extends Command<dynamic> {
     if (isNode) {
       _place('$root/test/dna/dna.spec.ts', tsWrapperTest);
     }
-    _place('$root/$dnaConfigPath', dnaConfigSkeleton);
-    _ensureGitignoreException(root);
+    final layers = suggestDnaLayers(
+      _host,
+      root,
+      PackageResolution.read(_host, root),
+    );
+    _place('$root/$dnaConfigPath', dnaConfigSkeleton(layers));
 
     ggLog(
-      'DNA initialized. Declare DNA packages as dev-dependencies, run '
-      'pnpm install / dart pub get, commit, then run your tests — the '
-      'first run instantiates the DNA.',
+      layers.isEmpty
+          ? 'DNA initialized. Declare the DNA packages you want as '
+              'dependencies, run pnpm install / dart pub get, list them '
+              'in "layers" of $dnaConfigPath, commit, then run your '
+              'tests — the first run instantiates the DNA.'
+          : 'DNA initialized with ${layers.join(', ')}. Commit, then run '
+              'your tests — the first run instantiates the DNA.',
     );
   }
 
@@ -130,20 +151,5 @@ class Init extends Command<dynamic> {
     }
     _host.writeString(path, content);
     ggLog('+ placed $path');
-  }
-
-  // ...........................................................................
-  void _ensureGitignoreException(String root) {
-    final path = '$root/.gitignore';
-    const exception = '!.gg/dna.json';
-    final existing = _host.existsFile(path) ? _host.readString(path) : '';
-    if (existing.split('\n').any((line) => line.trim() == exception)) {
-      return;
-    }
-    final updated = existing.isEmpty
-        ? '$exception\n'
-        : '${existing.trimRight()}\n$exception\n';
-    _host.writeString(path, updated);
-    ggLog('+ added $exception to .gitignore');
   }
 }

@@ -1,5 +1,59 @@
 # Changelog
 
+## 5.0.0
+
+### Changed — breaking
+
+- DNA configuration moved from `.gg/dna.json` to `dna/_dna.json`.
+`dart pub publish` drops every path with a leading dot, so a config below
+`.gg/` never reached a pub-installed consumer — the layer silently fell
+back to defaults. `dna/` is the one folder both ecosystems publish.
+- `dna/_dna.json` is hand-authored and the engine only ever reads it.
+Everything the engine writes moved to `dna/_generated.json`, which also
+absorbed `dna/_instances.json`.
+- Layers are declared explicitly in `layers` and referenced by the
+package name they are declared under in `pubspec.yaml` / `package.json`.
+The old `order` key is gone, and so is the inference from dependency
+declaration order — a dependency that is not listed is not a layer.
+- Path overrides (`dependencies: { x: { path: … } }`) were removed.
+Local checkouts are wired up by gg_localize_refs, which writes
+`pubspec_overrides.yaml` / `pnpm-workspace.yaml` and thereby repoints
+`.dart_tool/package_config.json` and the `node_modules` symlink.
+- A package is a DNA layer only if its `dna/_dna.json` declares
+`"role": "dna"`. A `dna/` folder alone no longer qualifies.
+- `config.claude.claude_md.include` flattened to `claude.claudeMdInclude`.
+- `"version": 6` is required in both files.
+- pnpm is the only supported npm package manager; `package-lock.json` and
+`yarn.lock` are not read.
+- No migration path: `.gg/dna.json`, `dna.yaml` and `dna:` blocks in
+`pubspec.yaml` / `package.json` are simply no longer read, and format
+version 5 files are rejected.
+
+### Added
+
+- Dotfiles in DNA content are escaped with a `dot-` prefix:
+`dna/dot-vscode/settings.json` instantiates to `.vscode/settings.json`.
+Without it `dart pub publish` silently drops them.
+- Layer resolution goes through the manifests and their lock files
+(`pubspec.lock`, `pnpm-lock.yaml`): the lock supplies the ecosystem, the
+resolved version and the installed-name index, while
+`.dart_tool/package_config.json` and `node_modules/` supply the folder.
+- The npm scope is dropped when folding a package name to its layer
+identity, so a DNA published to both registries (`@tssuite/base-dna` and
+`base_dna`) is one layer, not two. A warning fires when the two copies
+carry different `dna/` trees.
+
+### Fixed
+
+- `resolvedVersion` read `package.json` even for pub-resolved packages.
+A pub tarball ships both manifests, so a pub layer reported the npm
+version. The version now comes from the lock file of the ecosystem that
+provided the copy, and from the on-disk manifest for localized checkouts.
+- A `dna/_generated.json` that exists but cannot be read now throws
+instead of being treated as "never instantiated" — the latter made every
+instance count as unowned and overwrote hand edits without the
+hand-modified check ever firing.
+
 ## 4.0.0 - 2026-08-07
 
 ### Added

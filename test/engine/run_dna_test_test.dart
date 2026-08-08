@@ -20,8 +20,11 @@ void main() {
       MemoryDnaHost(
         files: {
           '$root/package.json': '{"devDependencies": {"a-dna": "^1.0.0"}}',
+          '$root/dna/_dna.json': '{"version": 6, "layers": ["a-dna"]}',
           '$root/node_modules/a-dna/package.json':
               '{"name": "a-dna", "version": "1.0.0"}',
+          '$root/node_modules/a-dna/dna/_dna.json':
+              '{"version": 6, "role": "dna"}',
           '$root/node_modules/a-dna/dna/LICENSE': 'MIT\n',
           '$root/node_modules/a-dna/dna/doc/hello.md': '# Hello\n',
           ...extra,
@@ -136,7 +139,10 @@ void main() {
 
     test('emits warnings and messages through the log', () async {
       final host = makeHost(
-        extra: {'$root/.gg/dna.json': '{"unknownKey": 1}'},
+        extra: {
+          '$root/dna/_dna.json':
+              '{"version": 6, "layers": ["a-dna"], "unknownKey": 1}',
+        },
       );
       await run(host);
       expect(log.any((m) => m.startsWith('warning: ')), isTrue);
@@ -199,7 +205,7 @@ void main() {
           ),
         ),
       );
-      expect(File('$target/dna/_dna.json').existsSync(), isTrue);
+      expect(File('$target/dna/_generated.json').existsSync(), isTrue);
     });
   });
 
@@ -237,8 +243,8 @@ void main() {
 
     test('paths without a DNA source are just committed', () {
       expect(
-        plain(describeDnaSources(['dna/_dna.json'], const {})),
-        'Commit or stash dna/_dna.json.',
+        plain(describeDnaSources(['dna/_generated.json'], const {})),
+        'Commit or stash dna/_generated.json.',
       );
     });
 
