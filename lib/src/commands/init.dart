@@ -56,7 +56,7 @@ String dnaConfigSkeleton(List<String> layers) {
   final list = layers.map((l) => '"$l"').join(', ');
   return '''
 {
-  // DNA configuration (gg_dna 5.0) — the only place DNA config lives.
+  // DNA configuration — the only place DNA config lives.
   // The engine only ever reads this file; dna/_generated.json is its
   // output. Comments and trailing commas are tolerated.
   "version": $dnaFormatVersion,

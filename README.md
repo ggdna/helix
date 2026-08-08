@@ -25,7 +25,7 @@ every test run that they always match the generated originals.
    # pubspec.yaml (Dart projects)
    dev_dependencies:
      dna_dart: ^1.0.0
-     gg_dna: ^5.0.0
+     gg_dna: ^4.0.0
    ```
 
 2. Install (`pnpm install` / `dart pub get`) and run once:

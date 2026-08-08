@@ -31,7 +31,7 @@ void main() {
       DnaManifestInstance(path: 'LICENSE', hash: '0x4'),
     ],
     claude: DnaManifestClaude(claudeMdInclude: ['doc/conventions']),
-    baseVersion: '5.0.0',
+    baseVersion: '4.0.0',
     baseHash: '0x5',
     hash: '0x6',
   );
@@ -56,7 +56,7 @@ void main() {
       expect(read.instances, hasLength(2));
       expect(read.instances.first.path, '.vscode/settings.json');
       expect(read.claude.claudeMdInclude, ['doc/conventions']);
-      expect(read.baseVersion, '5.0.0');
+      expect(read.baseVersion, '4.0.0');
       expect(read.baseHash, '0x5');
       expect(read.hash, '0x6');
     });

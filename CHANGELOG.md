@@ -58,6 +58,7 @@ provided the copy, and from the on-disk manifest for localized checkouts.
 instead of being treated as "never instantiated" — the latter made every
 instance count as unowned and overwrote hand edits without the
 hand-modified check ever firing.
+- Fix versions
 
 ## 4.0.0 - 2026-08-07
 
