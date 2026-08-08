@@ -18,16 +18,28 @@ void main() {
     });
   });
 
-  group('isConsumedPath', () {
-    test('sidecars and manifest are consumed', () {
-      expect(isConsumedPath('_dna.json'), isTrue);
-      expect(isConsumedPath('doc/develop.overrides.md'), isTrue);
-      expect(isConsumedPath('global.overrides.md'), isTrue);
-      expect(isConsumedPath('.vscode/settings.overrides.json'), isTrue);
-      expect(isConsumedPath('a/b.overrides.yaml'), isTrue);
-      expect(isConsumedPath('a/b.overrides.yml'), isTrue);
-      expect(isConsumedPath('doc/develop.md'), isFalse);
-      expect(isConsumedPath('sub/_dna.json'), isFalse);
+  group('decodeDotSegments', () {
+    test('every dot- segment becomes a leading dot', () {
+      expect(
+        decodeDotSegments('dot-vscode/settings.json'),
+        '.vscode/settings.json',
+      );
+      expect(
+        decodeDotSegments('dot-claude/skills/init/SKILL.md'),
+        '.claude/skills/init/SKILL.md',
+      );
+      expect(decodeDotSegments('dot-prettierrc'), '.prettierrc');
+      expect(decodeDotSegments('doc/dot-hidden.md'), 'doc/.hidden.md');
+    });
+
+    test('leaves everything else alone', () {
+      expect(decodeDotSegments('doc/develop.md'), 'doc/develop.md');
+      // Not a segment prefix — only a leading `dot-` escapes.
+      expect(decodeDotSegments('doc/my-dot-file.md'), 'doc/my-dot-file.md');
+      expect(
+        decodeDotSegments('.vscode/settings.json'),
+        '.vscode/settings.json',
+      );
     });
   });
 
@@ -196,15 +208,6 @@ void main() {
     test('root-level files have no ancestors', () {
       expect(ancestorDirs(['LICENSE']), isEmpty);
       expect(ancestorDirs(const []), isEmpty);
-    });
-  });
-
-  group('legacySrcLayoutError', () {
-    test('names the layer and the migration', () {
-      final message = legacySrcLayoutError('base-dna');
-      expect(message, contains('base-dna'));
-      expect(message, contains('dna/src'));
-      expect(message, contains('5.0'));
     });
   });
 }

@@ -4,12 +4,26 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dna_tree_hash.dart';
-import 'json_merge.dart';
-import 'md_tags.dart';
-
 /// Name of the replica folder every DNA layer ships.
 const String dnaDirname = 'dna';
+
+/// Format version of both `dna/_dna.json` and `dna/_generated.json`.
+const int dnaFormatVersion = 1;
+
+/// Filename of the hand-authored DNA configuration inside `<target>/dna/`
+/// — the only place DNA configuration lives. Private per the `_`
+/// convention, so it is never instantiated, and the engine only ever
+/// reads it.
+const String dnaConfigFilename = '_dna.json';
+
+/// Filename of the engine-owned bookkeeping inside `<target>/dna/`:
+/// resolved layers, hashes and the DNA-owned instances. Rewritten on
+/// every run, never edited by hand.
+const String dnaGeneratedFilename = '_generated.json';
+
+/// Prefix that escapes a leading dot in DNA content: `dot-vscode` becomes
+/// `.vscode` when instantiated.
+const String dotPrefix = 'dot-';
 
 // .............................................................................
 /// Whether [relPosix] is private per the `_` convention: any path segment
@@ -18,19 +32,19 @@ bool isPrivatePath(String relPosix) =>
     relPosix.split('/').any((s) => s.startsWith('_'));
 
 // .............................................................................
-/// Whether [relPosix] is consumed by the engine itself and therefore never
-/// copied nor instantiated: override sidecars and the manifest.
-bool isConsumedPath(String relPosix) {
-  final name = relPosix.split('/').last;
-  if (relPosix == dnaManifestFilename) return true;
-  if (name == globalOverridesFilename) return true;
-  if (name.endsWith(overridesFileSuffix)) return true;
-  if (name.endsWith(jsonOverridesSuffix)) return true;
-  for (final suffix in yamlOverridesSuffixes) {
-    if (name.endsWith(suffix)) return true;
-  }
-  return false;
-}
+/// Decodes the `dot-` escape of [relPosix]: `dot-vscode/settings.json`
+/// becomes `.vscode/settings.json`.
+///
+/// DNA layers ship dotfiles escaped because `dart pub publish` silently
+/// drops every path with a leading dot — a pub-installed layer would
+/// otherwise lose `.vscode/`, `.claude/` and friends. `dna/` itself keeps
+/// the escaped form, because that is what gets republished.
+String decodeDotSegments(String relPosix) => relPosix
+    .split('/')
+    .map(
+      (s) => s.startsWith(dotPrefix) ? '.${s.substring(dotPrefix.length)}' : s,
+    )
+    .join('/');
 
 // .............................................................................
 /// Whether instantiating to [relPosix] is forbidden: git internals and the
@@ -159,9 +173,3 @@ List<String> ancestorDirs(Iterable<String> paths) {
       return byDepth != 0 ? byDepth : a.compareTo(b);
     });
 }
-
-// .............................................................................
-/// Migration error for layers still shipping the pre-5.0 `dna/src` layout.
-String legacySrcLayoutError(String layerLabel) =>
-    'Layer "$layerLabel" still ships dna/src — since gg_dna 5.0 the dna/ '
-    'folder itself mirrors the project root. Move dna/src/* to dna/*.';

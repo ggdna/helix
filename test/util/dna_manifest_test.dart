@@ -4,8 +4,11 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'package:gg_dna/src/util/dna_config.dart';
 import 'package:gg_dna/src/util/dna_fs.dart';
+import 'package:gg_dna/src/util/dna_layout.dart';
 import 'package:gg_dna/src/util/dna_manifest.dart';
+import 'package:gg_dna/src/util/json_merge.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -15,100 +18,90 @@ void main() {
     layers: [
       DnaManifestLayer(
         name: 'base-dna',
-        package: 'base-dna',
+        package: '@tssuite/base-dna',
+        ecosystem: 'node',
         resolvedVersion: '1.0.0',
         via: 'dna-dart',
         hash: '0x1',
       ),
-      DnaManifestLayer(name: 'local', path: '../local', hash: '0x2'),
+      DnaManifestLayer(name: 'self', hash: '0x2'),
     ],
     instances: [
       DnaManifestInstance(path: '.vscode/settings.json', hash: '0x3'),
       DnaManifestInstance(path: 'LICENSE', hash: '0x4'),
     ],
     claude: DnaManifestClaude(claudeMdInclude: ['doc/conventions']),
-    baseVersion: '5.0.0',
+    baseVersion: '4.0.0',
     baseHash: '0x5',
     hash: '0x6',
   );
 
+  MemoryDnaHost hostWithGenerated(String content) =>
+      MemoryDnaHost(files: {'$root/$dnaGeneratedPath': content});
+
   group('DnaManifest', () {
-    test('round-trips through write and read', () {
-      final host = MemoryDnaHost();
-      manifest.write(host, root);
-      expect(host.existsFile('$root/dna/_dna.json'), isTrue);
+    test('round-trips through the file the engine writes', () {
+      // The engine writes `encodeJsonPretty(toJson())` inline, so that is
+      // what the round-trip has to exercise.
+      final host = hostWithGenerated(encodeJsonPretty(manifest.toJson()));
 
       final read = DnaManifest.read(host, root)!;
       expect(read.layers, hasLength(2));
       expect(read.layers.first.name, 'base-dna');
+      expect(read.layers.first.package, '@tssuite/base-dna');
+      expect(read.layers.first.ecosystem, 'node');
       expect(read.layers.first.via, 'dna-dart');
       expect(read.layers.first.resolvedVersion, '1.0.0');
-      expect(read.layers.last.path, '../local');
+      expect(read.layers.last.name, 'self');
       expect(read.instances, hasLength(2));
       expect(read.instances.first.path, '.vscode/settings.json');
       expect(read.claude.claudeMdInclude, ['doc/conventions']);
-      // Instances live in their own file, layers in the manifest.
-      expect(host.existsFile('$root/dna/_instances.json'), isTrue);
-      expect(manifest.toJson().containsKey('instances'), isFalse);
-      expect(manifest.toJson().containsKey('vars'), isFalse);
-      expect(manifest.instancesToJson()['instances'], hasLength(2));
-      expect(read.baseVersion, '5.0.0');
+      expect(read.baseVersion, '4.0.0');
       expect(read.baseHash, '0x5');
       expect(read.hash, '0x6');
     });
 
+    test('layers and instances share one file, vars stay out', () {
+      expect(manifest.toJson()['instances'], hasLength(2));
+      expect(manifest.toJson().containsKey('vars'), isFalse);
+    });
+
     test('toJson carries the format version', () {
-      expect(manifest.toJson()['version'], dnaManifestFormatVersion);
+      expect(manifest.toJson()['version'], dnaFormatVersion);
     });
 
-    test('read returns null for missing, invalid or outdated manifests', () {
+    test('read returns null only when the file is absent', () {
       expect(DnaManifest.read(MemoryDnaHost(), root), isNull);
-      expect(
-        DnaManifest.read(
-          MemoryDnaHost(files: {'$root/dna/_dna.json': '{broken'}),
-          root,
-        ),
-        isNull,
-      );
-      expect(
-        DnaManifest.read(
-          MemoryDnaHost(files: {'$root/dna/_dna.json': '{"version": 4}'}),
-          root,
-        ),
-        isNull,
-      );
-      expect(
-        DnaManifest.read(
-          MemoryDnaHost(files: {'$root/dna/_dna.json': '[1]'}),
-          root,
-        ),
-        isNull,
-      );
     });
 
-    test('an unusable instances file falls back to the manifest', () {
-      for (final broken in ['{broken', '[1]', '{"version": 4}']) {
-        final host = MemoryDnaHost(
-          files: {
-            '$root/dna/_dna.json': '{"version": 5, "instances": [ '
-                '{"path": "a.md", "hash": "0x1"}]}',
-            '$root/dna/_instances.json': broken,
-          },
+    test('a file that exists but is unusable throws', () {
+      // null would mean "never instantiated", which makes every instance
+      // count as unowned — and unowned instances get overwritten.
+      for (final broken in ['{broken', '[1]', '{"version": 5}']) {
+        expect(
+          () => DnaManifest.read(hostWithGenerated(broken), root),
+          throwsFormatException,
+          reason: broken,
         );
-        final read = DnaManifest.read(host, root)!;
-        expect(read.instances.single.path, 'a.md', reason: broken);
       }
     });
 
     test('read tolerates missing optional fields', () {
-      final host = MemoryDnaHost(
-        files: {'$root/dna/_dna.json': '{"version": 5}'},
-      );
-      final read = DnaManifest.read(host, root)!;
+      final read = DnaManifest.read(
+        hostWithGenerated('{"version": $dnaFormatVersion}'),
+        root,
+      )!;
       expect(read.layers, isEmpty);
       expect(read.instances, isEmpty);
       expect(read.claude.claudeMdInclude, isNull);
       expect(read.baseVersion, 'unknown');
+    });
+
+    test('the config file is not the manifest', () {
+      final host = MemoryDnaHost(
+        files: {'$root/$dnaConfigPath': '{"version": $dnaFormatVersion}'},
+      );
+      expect(DnaManifest.read(host, root), isNull);
     });
   });
 }

@@ -18,36 +18,50 @@ Two things are easy to confuse:
 
 A DNA package is a normal pub/npm package that ships a `dna/` folder. That
 folder is a **replica of a project root**: `dna/doc/conventions/…` lands
-at `doc/conventions/…`, `dna/.claude/skills/review/SKILL.md` lands at
+at `doc/conventions/…`, `dna/dot-claude/skills/review/SKILL.md` lands at
 `.claude/skills/review/SKILL.md`, `dna/scripts/…` lands at `scripts/…`.
 
-Every repository plays one of two roles, declared in `.gg/dna.json` — the
-only place DNA configuration lives:
+Dotfiles are escaped with a `dot-` prefix, because `dart pub publish`
+silently drops every path with a leading dot — an unescaped
+`dna/.vscode/` never reaches a consumer that installs the DNA from pub.
+
+Every repository plays one of two roles, declared in `dna/_dna.json` — the
+only place DNA configuration lives. It sits inside `dna/` for the same
+reason: that is the one folder both ecosystems publish.
 
 - **`"role": "dna"`** — a DNA repository. Its `dna/` folder is authored by
   hand and never overwritten. It is also applied to the repo itself as the
-  top layer, so a DNA repo eats its own dog food.
+  top layer, so a DNA repo eats its own dog food. This declaration is what
+  makes a package usable as a layer; a `dna/` folder alone does not.
 - **`"role": "project"`** (default) — a consumer. Its `dna/` folder is
-  fully generated. Never edit it.
+  fully generated. Never edit it — except `dna/_dna.json`, which is yours.
 
 ## Layers and Inheritance
 
-Projects consume DNAs as **dev-dependencies** (pub/npm). A DNA can itself
-depend on a parent DNA as a regular dependency. gg_dna expands this into
-an inheritance tree and merges the `dna/` replicas bottom-up:
+Projects consume DNAs as dependencies (pub/npm). A DNA declares its own
+parents the same way. gg_dna expands this into an inheritance tree and
+merges the `dna/` replicas bottom-up:
 
 1. the base DNA shipped with gg_dna itself (always the lowest layer),
-2. the DNA dev-dependencies, parents before children, in declaration
-   order (overridable via `"order"` in `.gg/dna.json`),
+2. the layers listed in `"layers"`, parents before children — a layer's
+   parents come from its own `dna/_dna.json`,
 3. in a `role: dna` repo: the repo's own `dna/` folder as the top layer.
 
 Later layers win on path collisions; diamond dependencies are merged only
-once. For local development, `.gg/dna.json` can point a layer at a
-checkout instead of the published package:
+once. Layers are named by the **package name** they are declared under in
+`pubspec.yaml`/`package.json` — never by a path:
 
 ```jsonc
-{ "dependencies": { "base_dna": { "path": "../base_dna" } } }
+{ "version": 1, "layers": ["base_dna"] }
 ```
+
+A DNA published to both registries is one layer, not two: the npm scope is
+dropped when folding a name to its identity, so `@tssuite/base-dna` and
+`base_dna` mean the same thing.
+
+For local development nothing DNA-specific is needed — `gg_localize_refs`
+points `pubspec_overrides.yaml`/`pnpm-workspace.yaml` at the sibling
+checkouts, and the engine follows whatever the package manager resolved.
 
 ## Public vs. Private: the `_` Convention
 
@@ -61,9 +75,9 @@ never instantiated.
 ## Instances and the Placed Test
 
 `gg_dna init` is the only CLI command. It places a wrapper test (Dart:
-`test/dna/dna_test.dart`, TypeScript: `test/dna/dna.spec.ts`), a
-`.gg/dna.json` skeleton, and a `!.gg/dna.json` gitignore exception. From
-then on **every test run instantiates the DNA**: merge all layers, apply
+`test/dna/dna_test.dart`, TypeScript: `test/dna/dna.spec.ts`) and a
+`dna/_dna.json` skeleton with `layers` pre-filled from the DNA packages
+you have installed. From then on **every test run instantiates the DNA**: merge all layers, apply
 overrides, substitute variables, convert file naming, and reconcile the
 result with the project.
 
@@ -162,7 +176,7 @@ prefix:
 ```
 
 Variable files merge across layers (`null` deletes an inherited
-variable); a project can override values via `"vars"` in `.gg/dna.json`.
+variable); a project can override values via `"vars"` in `dna/_dna.json`.
 In DNA content, variables are referenced **with the `dna` prefix**, and
 each reference form renders the value in its own casing:
 
@@ -184,34 +198,37 @@ instantiation, names are converted to the target's standard:
 
 - `pubspec.yaml` present → snake_case (`code_conventions.md`)
 - `package.json` present → kebab-case (`code-conventions.md`)
-- configurable via `"fileNaming"` in `.gg/dna.json`
+- configurable via `"fileNaming"` in `dna/_dna.json`
   (`snake_case`, `camelCase`, `kebab-case`, `keep`)
 
 Names containing uppercase letters (`README.md`, `SKILL.md`, `LICENSE`)
 and dotfiles are never converted. References to renamed files inside text
 instances are rewritten automatically.
 
-## Configuration Reference (`.gg/dna.json`)
+## Configuration Reference (`dna/_dna.json`)
 
 ```jsonc
 {
+  "version": 1,                 // required
   "role": "project",            // "dna" for DNA repositories
-  "order": ["base_dna"],        // layer order; default: dev-dependency order
+  "layers": ["base_dna"],       // package names, in application order
   "vars": { "projectName": "my-project" },
   "fileNaming": "snake_case",   // camelCase | kebab-case | keep
-  "dependencies": { "base_dna": { "path": "../base_dna" } },
-  "config": {
-    "claude": { "claude_md": { "include": ["doc/conventions"] } }
-  }
+  "claude": { "claudeMdInclude": ["doc/conventions"] }
 }
 ```
 
-All keys are optional. `config.claude.claude_md.include` maintains a
-managed block of `@` imports in the project's `CLAUDE.md` (folders expand
-to their `.md` files) between `<!-- gg_dna:claude_md:start -->` and
+Only `version` is required. `claude.claudeMdInclude` maintains a managed
+block of `@` imports in the project's `CLAUDE.md` (folders expand to their
+`.md` files) between `<!-- gg_dna:claude_md:start -->` and
 `<!-- gg_dna:claude_md:end -->`. `CLAUDE.md` itself is never a DNA
 instance — only that block is managed; everything outside it belongs to
 the project.
+
+The engine writes nothing into this file. Its own bookkeeping — the
+resolved layers, their versions and hashes, and the list of instances it
+owns — goes to `dna/_generated.json`, which is machine-owned and should
+never be edited by hand.
 
 ## What the Base DNA Ships
 

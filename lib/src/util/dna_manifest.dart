@@ -7,11 +7,10 @@
 import 'dart:convert';
 
 import 'dna_fs.dart';
-import 'dna_tree_hash.dart';
-import 'json_merge.dart';
+import 'dna_layout.dart';
 
-/// Manifest format written by gg_dna 5.x.
-const int dnaManifestFormatVersion = 5;
+/// Path of the engine-owned bookkeeping relative to the project root.
+const String dnaGeneratedPath = '$dnaDirname/$dnaGeneratedFilename';
 
 // .............................................................................
 /// One resolved layer of the inheritance tree.
@@ -20,7 +19,7 @@ class DnaManifestLayer {
   const DnaManifestLayer({
     required this.name,
     this.package,
-    this.path,
+    this.ecosystem,
     this.resolvedVersion,
     this.via,
     this.hash,
@@ -31,20 +30,20 @@ class DnaManifestLayer {
       DnaManifestLayer(
         name: json['name'] as String,
         package: json['package'] as String?,
-        path: json['path'] as String?,
+        ecosystem: json['ecosystem'] as String?,
         resolvedVersion: json['resolvedVersion'] as String?,
         via: json['via'] as String?,
         hash: json['hash'] as String?,
       );
 
-  /// Canonical layer name (kebab package name or override name).
+  /// Canonical layer identity, or `base`/`self` for the implicit layers.
   final String name;
 
-  /// Resolved package name (`null` for path overrides and the base layer).
+  /// Package name as installed (`null` for the `self` layer).
   final String? package;
 
-  /// Path override relative to the target root (`null` for packages).
-  final String? path;
+  /// Ecosystem the copy came from: `node` or `pub` (`null` when neither).
+  final String? ecosystem;
 
   /// The version the package manager resolved (`null` when unknown).
   final String? resolvedVersion;
@@ -60,7 +59,7 @@ class DnaManifestLayer {
   Map<String, dynamic> toJson() => {
         'name': name,
         'package': package,
-        'path': path,
+        'ecosystem': ecosystem,
         'resolvedVersion': resolvedVersion,
         'via': via,
         'hash': hash,
@@ -110,12 +109,11 @@ class DnaManifestClaude {
 }
 
 // .............................................................................
-/// The bookkeeping gg_dna writes below `<target>/dna/`.
+/// The bookkeeping gg_dna writes to `<target>/dna/_generated.json`.
 ///
-/// Two files, because they answer two questions:
-/// - `_dna.json` — which layers produced the current state, and their
-///   hashes.
-/// - `_instances.json` — which project files the DNA owns.
+/// It is the engine's half of the `dna/` folder: which layers produced the
+/// current state, and which project files the DNA owns. The other half,
+/// `dna/_dna.json`, belongs to the developer and is only ever read.
 ///
 /// The effective variables are part of neither: they live in
 /// `dna/_vars.json`, the merged file the DNA itself ships.
@@ -148,52 +146,58 @@ class DnaManifest {
   /// Hash of the generated `dna/` tree (`null` for role: dna).
   final String? hash;
 
-  /// JSON representation of `_dna.json` — layers and hashes.
+  /// JSON representation of `dna/_generated.json`.
   Map<String, dynamic> toJson() => {
-        'version': dnaManifestFormatVersion,
+        'version': dnaFormatVersion,
         'layers': layers.map((l) => l.toJson()).toList(),
         'claude': claude.toJson(),
         'baseVersion': baseVersion,
         'baseHash': baseHash,
         'hash': hash,
-      };
-
-  /// JSON representation of `_instances.json` — the files the DNA owns.
-  Map<String, dynamic> instancesToJson() => {
-        'version': dnaManifestFormatVersion,
         'instances': instances.map((i) => i.toJson()).toList(),
       };
 
   // ...........................................................................
-  /// Reads the manifest of [targetRoot]; `null` when missing or not
-  /// format v5.
+  /// Reads the manifest of [targetRoot]; `null` only when the file is
+  /// absent, which means this project has never been instantiated.
+  ///
+  /// A file that exists but cannot be used throws instead of yielding
+  /// `null`. The distinction is load-bearing: `null` makes every existing
+  /// instance count as unowned, and unowned instances get adopted and
+  /// overwritten — so a `null` for "unreadable" would silently destroy
+  /// hand edits that the hand-modified check is supposed to catch.
   static DnaManifest? read(DnaHost host, String targetRoot) {
-    var path = '$targetRoot/dna/$dnaManifestFilename';
-    if (!host.existsFile(path)) {
-      // Repositories written before the rename still carry the old file.
-      path = '$targetRoot/dna/$legacyDnaManifestFilename';
-      if (!host.existsFile(path)) return null;
-    }
+    final path = '$targetRoot/$dnaGeneratedPath';
+    if (!host.existsFile(path)) return null;
+
     final Object? decoded;
     try {
       decoded = jsonDecode(host.readString(path));
-    } on FormatException {
-      return null;
+    } on FormatException catch (e) {
+      throw FormatException('$dnaGeneratedPath is not valid JSON ($e). $_fix');
     }
-    if (decoded is! Map<String, dynamic>) return null;
-    if (decoded['version'] != dnaManifestFormatVersion) return null;
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException(
+        '$dnaGeneratedPath must contain an object. $_fix',
+      );
+    }
+    final version = decoded['version'];
+    if (version != dnaFormatVersion) {
+      throw FormatException(
+        '$dnaGeneratedPath was written in format version $version — this '
+        'gg_dna writes version $dnaFormatVersion. $_fix',
+      );
+    }
+
     return DnaManifest(
       layers: [
         for (final l in (decoded['layers'] as List?) ?? const [])
           DnaManifestLayer.fromJson(l as Map<String, dynamic>),
       ],
-      // Instances live in their own file; repositories written before
-      // the split still carry them inside the manifest.
-      instances: _readInstances(host, targetRoot) ??
-          [
-            for (final i in (decoded['instances'] as List?) ?? const [])
-              DnaManifestInstance.fromJson(i as Map<String, dynamic>),
-          ],
+      instances: [
+        for (final i in (decoded['instances'] as List?) ?? const [])
+          DnaManifestInstance.fromJson(i as Map<String, dynamic>),
+      ],
       claude: decoded['claude'] is Map<String, dynamic>
           ? DnaManifestClaude.fromJson(
               decoded['claude'] as Map<String, dynamic>,
@@ -205,38 +209,7 @@ class DnaManifest {
     );
   }
 
-  // ...........................................................................
-  /// Writes both bookkeeping files below `<targetRoot>/dna/`.
-  void write(DnaHost host, String targetRoot) {
-    host.writeString(
-      '$targetRoot/dna/$dnaManifestFilename',
-      encodeJsonPretty(toJson()),
-    );
-    host.writeString(
-      '$targetRoot/dna/$dnaInstancesFilename',
-      encodeJsonPretty(instancesToJson()),
-    );
-  }
-}
-
-// .............................................................................
-List<DnaManifestInstance>? _readInstances(DnaHost host, String targetRoot) {
-  var path = '$targetRoot/dna/$dnaInstancesFilename';
-  if (!host.existsFile(path)) {
-    // Written before the `_` convention was applied to this file.
-    path = '$targetRoot/dna/$legacyDnaInstancesFilename';
-    if (!host.existsFile(path)) return null;
-  }
-  final Object? decoded;
-  try {
-    decoded = jsonDecode(host.readString(path));
-  } on FormatException {
-    return null;
-  }
-  if (decoded is! Map<String, dynamic>) return null;
-  if (decoded['version'] != dnaManifestFormatVersion) return null;
-  return [
-    for (final i in (decoded['instances'] as List?) ?? const [])
-      DnaManifestInstance.fromJson(i as Map<String, dynamic>),
-  ];
+  static const String _fix =
+      'Delete it and re-run — the DNA re-adopts the existing files. Commit '
+      'any hand edits you want to keep first.';
 }

@@ -18,6 +18,34 @@ import '../util/json_merge.dart';
 import '../util/jsonc.dart';
 import '../util/layer_graph.dart';
 import '../util/md_tags.dart';
+import '../util/package_resolution.dart';
+
+// .............................................................................
+/// The folder a developer opens to edit [layer]: a localized checkout is
+/// shown relative to [targetRoot], a registry install by its package name.
+String _displayRootOf(ResolvedLayer layer, String targetRoot) =>
+    layer.source == PackageSource.path
+        ? _relativeTo(layer.root, targetRoot)
+        : layer.package;
+
+// .............................................................................
+/// [path] relative to [base]; [path] unchanged when the two cannot be
+/// related (one absolute, one relative).
+String _relativeTo(String path, String base) {
+  if (path.startsWith('/') != base.startsWith('/')) return path;
+  final from = base.split('/').where((s) => s.isNotEmpty).toList();
+  final to = path.split('/').where((s) => s.isNotEmpty).toList();
+  var common = 0;
+  while (common < from.length &&
+      common < to.length &&
+      from[common] == to[common]) {
+    common++;
+  }
+  return [
+    ...List.filled(from.length - common, '..'),
+    ...to.skip(common),
+  ].join('/');
+}
 
 /// Headline shown when generated files were edited by hand.
 const String modifiedInstancesMessage = 'Generated files modified by hand:';
@@ -107,16 +135,20 @@ DnaInstantiationResult instantiateDna({
   final config = configResult.config;
   warnings.addAll(configResult.warnings);
 
+  // Read once and thread through — every lookup shares the same view of
+  // what the package managers resolved.
+  final resolution = PackageResolution.read(host, targetRoot);
   final graph = expandLayerGraph(
     host: host,
     targetRoot: targetRoot,
     config: config,
+    resolution: resolution,
   );
   warnings.addAll(graph.warnings);
 
   // `display` names the layer the way a developer opens it: the local
-  // folder for path overrides and the repo's own `dna/`, the package
-  // name for installed DNAs.
+  // folder for a localized checkout, the package name for a registry
+  // install.
   final sources = <({String label, String root, String display})>[
     if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
       // The engine's built-in base DNA is not a package a developer
@@ -126,9 +158,7 @@ DnaInstantiationResult instantiateDna({
       (
         label: layer.name,
         root: layer.root,
-        // The package name as installed (`base_dna`), not the canonical
-        // identity (`base-dna`) — this is what a developer opens.
-        display: '${layer.path ?? layer.package ?? layer.name}/$dnaDirname',
+        display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
       ),
     if (config.role == DnaRole.dna)
       (label: 'self', root: targetRoot, display: dnaDirname),
@@ -152,6 +182,12 @@ DnaInstantiationResult instantiateDna({
       warnings: warnings,
     );
   }
+
+  // The configuration belongs to the developer, and `isDnaContent` is
+  // what keeps it out of `merged` — and therefore out of every write and
+  // delete path below. The role:dna test asserts the file survives two
+  // runs byte-identical, which is what would break first if that
+  // exclusion ever went away.
 
   // 3. Render markdown markers.
   for (final rel in merged.keys.toList()) {
@@ -177,7 +213,9 @@ DnaInstantiationResult instantiateDna({
   final renames = <String, String>{};
   for (final rel in merged.keys) {
     if (isPrivatePath(rel)) continue;
-    final instancePath = convertPathNaming(rel, naming);
+    // Decode before converting: the decoded path starts with a dot, and
+    // dot-rooted paths keep their canonical names.
+    final instancePath = convertPathNaming(decodeDotSegments(rel), naming);
     if (isForbiddenInstanceTarget(instancePath)) {
       warnings.add(
         'Instance target "$instancePath" is forbidden — skipped.',
@@ -331,7 +369,7 @@ DnaInstantiationResult instantiateDna({
         DnaManifestLayer(
           name: layer.name,
           package: layer.package,
-          path: layer.path,
+          ecosystem: layer.ecosystem.name,
           resolvedVersion: layer.version,
           via: layer.via,
           hash: hashTree(host, '${layer.root}/$dnaDirname'),
@@ -339,7 +377,6 @@ DnaInstantiationResult instantiateDna({
       if (config.role == DnaRole.dna)
         DnaManifestLayer(
           name: 'self',
-          path: dnaDirname,
           hash: hashTree(host, '$targetRoot/$dnaDirname'),
         ),
     ],
@@ -356,20 +393,10 @@ DnaInstantiationResult instantiateDna({
         baseDnaRoot == null ? null : hashTree(host, '$baseDnaRoot/$dnaDirname'),
     hash: config.role == DnaRole.project ? _hashMerged(merged) : null,
   );
-  final bookkeeping = <String, String>{
-    '$dnaDirname/$dnaManifestFilename': encodeJsonPretty(manifest.toJson()),
-    '$dnaDirname/$dnaInstancesFilename':
-        encodeJsonPretty(manifest.instancesToJson()),
-  };
-  final bookkeepingChanged = bookkeeping.entries.any((e) {
-    final path = '$targetRoot/${e.key}';
-    return !host.existsFile(path) || host.readString(path) != e.value;
-  });
-  // Repositories written by earlier versions keep orphan bookkeeping.
-  final legacyBookkeeping = [
-    for (final name in legacyDnaBookkeepingFilenames)
-      if (host.existsFile('$targetRoot/$dnaDirname/$name')) '$dnaDirname/$name',
-  ];
+  final generatedJson = encodeJsonPretty(manifest.toJson());
+  final generatedPath = '$targetRoot/$dnaGeneratedPath';
+  final generatedChanged = !host.existsFile(generatedPath) ||
+      host.readString(generatedPath) != generatedJson;
 
   // 10. Hand-modified instances fail without writing anything.
   if (modified.isNotEmpty) {
@@ -386,8 +413,7 @@ DnaInstantiationResult instantiateDna({
       instanceWrites.isNotEmpty ||
       instanceDeletes.isNotEmpty ||
       claudeMdContent != null ||
-      bookkeepingChanged ||
-      legacyBookkeeping.isNotEmpty;
+      generatedChanged;
   if (!hasChanges) {
     return DnaInstantiationResult(messages: messages, warnings: warnings);
   }
@@ -401,8 +427,7 @@ DnaInstantiationResult instantiateDna({
     ...instanceWrites,
     ...instanceDeletes,
     if (claudeMdContent != null) 'CLAUDE.md',
-    if (bookkeepingChanged) ...bookkeeping.keys,
-    ...legacyBookkeeping,
+    if (generatedChanged) dnaGeneratedPath,
   };
   final existingTouched =
       touched.where((path) => host.existsFile('$targetRoot/$path')).toSet();
@@ -449,13 +474,9 @@ DnaInstantiationResult instantiateDna({
     host.writeString('$targetRoot/CLAUDE.md', claudeMdContent);
     note('CLAUDE.md');
   }
-  bookkeeping.forEach((rel, content) {
-    host.writeString('$targetRoot/$rel', content);
-    if (bookkeepingChanged) note(rel);
-  });
-  for (final rel in legacyBookkeeping) {
-    host.deleteFile('$targetRoot/$rel');
-    note(rel, removed: true);
+  if (generatedChanged) {
+    host.writeString(generatedPath, generatedJson);
+    note(dnaGeneratedPath);
   }
 
   // A folder that only existed to hold generated files goes with them —
@@ -525,8 +546,11 @@ Map<String, Object?> _applyLayer({
   final jsonOverrides = <String>[];
   String? globalOverrides;
 
+  final literalDotfiles = <String>[];
+
   for (final rel in files) {
     final name = rel.split('/').last;
+    if (rel.split('/').any((s) => s.startsWith('.'))) literalDotfiles.add(rel);
     if (name.endsWith(legacyOverridesFileSuffix)) {
       throw FormatException(
         '"$rel" ($label) uses the removed $legacyOverridesFileSuffix '
@@ -580,6 +604,18 @@ Map<String, Object?> _applyLayer({
         );
       }
     }
+  }
+
+  // `dart pub publish` drops every path with a leading dot, so a DNA that
+  // ships literal dotfiles loses them the moment it is consumed from pub.
+  if (literalDotfiles.isNotEmpty) {
+    final shown = literalDotfiles.take(3).join(', ');
+    final more = literalDotfiles.length > 3 ? ', …' : '';
+    warnings.add(
+      '$label: ${literalDotfiles.length} dna/ path(s) start with a dot '
+      '($shown$more) — dart pub publish drops them. Rename the segment '
+      'to "$dotPrefix…", e.g. dna/${dotPrefix}vscode/settings.json.',
+    );
   }
 
   // Global string overrides of this layer first …

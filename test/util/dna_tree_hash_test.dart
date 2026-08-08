@@ -7,31 +7,37 @@
 import 'dart:typed_data';
 
 import 'package:gg_dna/src/util/dna_fs.dart';
+import 'package:gg_dna/src/util/dna_layout.dart';
 import 'package:gg_dna/src/util/dna_tree_hash.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('isDnaContent', () {
-    test('excludes the manifest and git internals', () {
+    test('excludes both manifests and git internals', () {
       expect(isDnaContent('doc/develop.md'), isTrue);
-      expect(isDnaContent(dnaManifestFilename), isFalse);
+      expect(isDnaContent(dnaConfigFilename), isFalse);
+      expect(isDnaContent(dnaGeneratedFilename), isFalse);
       expect(isDnaContent('.git'), isFalse);
       expect(isDnaContent('.git/config'), isFalse);
+      // Only at the root — deeper down they are ordinary content.
+      expect(isDnaContent('sub/$dnaConfigFilename'), isTrue);
     });
   });
 
   group('hashTree', () {
-    test('is stable, EOL-agnostic and excludes the manifest', () {
+    test('is stable, EOL-agnostic and excludes both manifests', () {
       final a = MemoryDnaHost(
         files: {
           '/r/dna/doc/x.md': 'line1\nline2\n',
-          '/r/dna/_dna.json': '{"version": 5}',
+          '/r/dna/_dna.json': '{"version": 1}',
+          '/r/dna/_generated.json': '{"version": 1}',
         },
       );
       final b = MemoryDnaHost(
         files: {
           '/r/dna/doc/x.md': 'line1\r\nline2\r\n',
           '/r/dna/_dna.json': '{"different": true}',
+          '/r/dna/_generated.json': '{"also": "different"}',
         },
       );
       expect(hashTree(a, '/r/dna'), hashTree(b, '/r/dna'));

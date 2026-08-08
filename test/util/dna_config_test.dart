@@ -12,20 +12,25 @@ import 'package:test/test.dart';
 void main() {
   const root = '/repo';
 
-  MemoryDnaHost hostWith(String? config, {Map<String, String>? extra}) =>
-      MemoryDnaHost(
-        files: {
-          if (config != null) '$root/.gg/dna.json': config,
-          ...?extra,
-        },
-      );
+  /// Writes [config] to `dna/_dna.json`, injecting the format version
+  /// unless the literal states one itself.
+  MemoryDnaHost hostWith(String? config, {Map<String, String>? extra}) {
+    final withVersion = config == null || config.contains('"version"')
+        ? config
+        : config.replaceFirst('{', '{"version": $dnaFormatVersion,');
+    return MemoryDnaHost(
+      files: {
+        if (withVersion != null) '$root/$dnaConfigPath': withVersion,
+        ...?extra,
+      },
+    );
+  }
 
   group('readDnaConfig', () {
     test('missing file yields defaults', () {
       final r = readDnaConfig(hostWith(null), root);
       expect(r.config.role, DnaRole.project);
-      expect(r.config.order, isNull);
-      expect(r.config.pathOverrides, isEmpty);
+      expect(r.config.layers, isEmpty);
       expect(r.config.vars, isEmpty);
       expect(r.config.fileNaming, isNull);
       expect(r.config.claude.claudeMdInclude, isNull);
@@ -38,128 +43,73 @@ void main() {
 {
   // the role
   "role": "dna",
-  "order": ["base-dna", "dna-dart"],
-  "dependencies": {
-    "base-dna": {"path": "../base-dna"}
-  },
+  "layers": ["base_dna", "@tssuite/dna-dart"],
   "vars": {"projectName": "my_project"},
   "fileNaming": "snake_case",
-  "config": {"claude": {"claude_md": {"include": ["doc/conventions"]}}},
+  "claude": {"claudeMdInclude": ["doc/conventions"]},
 }'''),
         root,
       );
       expect(r.config.role, DnaRole.dna);
-      expect(r.config.order, ['base-dna', 'dna-dart']);
-      expect(r.config.pathOverrides, {'base-dna': '../base-dna'});
+      expect(r.config.layers, ['base_dna', '@tssuite/dna-dart']);
       expect(r.config.vars, {'projectName': 'my_project'});
       expect(r.config.fileNaming, FileNaming.snakeCase);
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
       expect(r.warnings, isEmpty);
     });
 
-    test('rejects invalid role, order and fileNaming', () {
+    test('requires the format version', () {
+      MemoryDnaHost raw(String config) =>
+          MemoryDnaHost(files: {'$root/$dnaConfigPath': config});
       expect(
-        () => readDnaConfig(hostWith('{"role": "x"}'), root),
-        throwsFormatException,
+        () => readDnaConfig(raw('{"role": "dna"}'), root),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('"version" is missing'),
+          ),
+        ),
       );
       expect(
-        () => readDnaConfig(hostWith('{"order": "x"}'), root),
-        throwsFormatException,
-      );
-      expect(
-        () => readDnaConfig(hostWith('{"order": ["a", "a"]}'), root),
-        throwsFormatException,
-      );
-      expect(
-        () => readDnaConfig(hostWith('{"order": [""]}'), root),
-        throwsFormatException,
-      );
-      expect(
-        () => readDnaConfig(hostWith('{"fileNaming": "Pascal"}'), root),
-        throwsFormatException,
+        () => readDnaConfig(raw('{"version": 5}'), root),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('not supported'),
+          ),
+        ),
       );
     });
 
-    test('rejects git and version in dependencies with migration hints', () {
+    test('names the package when a layer config is broken', () {
       expect(
         () => readDnaConfig(
-          hostWith('{"dependencies": {"a": {"git": "url"}}}'),
+          hostWith('{"role": "x"}'),
           root,
+          packageLabel: '@tssuite/base-dna',
         ),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('dev-dependency'),
-          ),
-        ),
-      );
-      expect(
-        () => readDnaConfig(
-          hostWith('{"dependencies": {"a": {"path": "x", "version": "1"}}}'),
-          root,
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('package.json/pubspec.yaml'),
+            contains('@tssuite/base-dna'),
           ),
         ),
       );
     });
 
-    test('rejects malformed dependency entries', () {
-      expect(
-        () => readDnaConfig(hostWith('{"dependencies": "x"}'), root),
-        throwsFormatException,
-      );
-      expect(
-        () => readDnaConfig(hostWith('{"dependencies": {"a": "x"}}'), root),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('must be a map'),
-          ),
-        ),
-      );
-      expect(
-        () => readDnaConfig(hostWith('{"dependencies": {"a": {}}}'), root),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('non-empty path'),
-          ),
-        ),
-      );
-      expect(
-        () => readDnaConfig(
-          hostWith('{"dependencies": {"a": {"path": "  "}}}'),
-          root,
-        ),
-        throwsFormatException,
-      );
-    });
-
-    test('warns about unknown keys inside config.claude', () {
-      final r = readDnaConfig(
-        hostWith('{"config": {"claude": {"agents": {}}}}'),
-        root,
-      );
-      expect(r.warnings.single, contains('config.claude key "agents"'));
-    });
-
-    test('rejects malformed config sections', () {
+    test('rejects invalid role, layers and fileNaming', () {
       for (final config in [
-        '{"config": "x"}',
-        '{"config": {"claude": "x"}}',
-        '{"config": {"claude": {"claude_md": "x"}}}',
-        '{"config": {"claude": {"claude_md": {"include": "x"}}}}',
-        '{"config": {"claude": {"claude_md": {"include": [""]}}}}',
-        '{"vars": "x"}',
+        '{"role": "x"}',
+        '{"layers": "x"}',
+        '{"layers": ["a", "a"]}',
+        '{"layers": [""]}',
+        '{"layers": [1]}',
+        '{"fileNaming": "Pascal"}',
         '{"fileNaming": 1}',
+        '{"vars": "x"}',
         '[1]',
       ]) {
         expect(
@@ -170,50 +120,63 @@ void main() {
       }
     });
 
-    test('config.claude without claude_md yields no includes', () {
-      final r = readDnaConfig(hostWith('{"config": {"claude": {}}}'), root);
-      expect(r.config.claude.claudeMdInclude, isNull);
-    });
-
-    test('normalizes backslashes in path overrides', () {
-      final r = readDnaConfig(
-        hostWith(r'{"dependencies": {"a": {"path": "..\\a"}}}'),
-        root,
-      );
-      expect(r.config.pathOverrides['a'], '../a');
-    });
-
-    test('rejects config.claude.skills with migration hint', () {
+    test('rejects a path where a package name belongs', () {
       expect(
-        () => readDnaConfig(
-          hostWith('{"config": {"claude": {"skills": {}}}}'),
-          root,
-        ),
+        () => readDnaConfig(hostWith('{"layers": ["../base_dna"]}'), root),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('dna/.claude/skills'),
+            allOf(contains('looks like a path'), contains('gg_localize_refs')),
           ),
         ),
       );
     });
 
-    test('include present without entries yields empty list', () {
+    test('rejects malformed claude sections', () {
+      for (final config in [
+        '{"claude": "x"}',
+        '{"claude": {"claudeMdInclude": "x"}}',
+        '{"claude": {"claudeMdInclude": [""]}}',
+      ]) {
+        expect(
+          () => readDnaConfig(hostWith(config), root),
+          throwsFormatException,
+          reason: config,
+        );
+      }
+    });
+
+    test('claude without claudeMdInclude leaves CLAUDE.md alone', () {
+      final r = readDnaConfig(hostWith('{"claude": {}}'), root);
+      expect(r.config.claude.claudeMdInclude, isNull);
+    });
+
+    test('claudeMdInclude present but empty manages an empty block', () {
       final r = readDnaConfig(
-        hostWith('{"config": {"claude": {"claude_md": {"include": []}}}}'),
+        hostWith('{"claude": {"claudeMdInclude": []}}'),
         root,
       );
       expect(r.config.claude.claudeMdInclude, isEmpty);
     });
 
-    test('warns on unknown keys', () {
+    test('warns about unknown keys, at both levels', () {
       final r = readDnaConfig(
-        hostWith('{"unknown": 1, "config": {"other": {}}}'),
+        hostWith('{"unknown": 1, "claude": {"agents": {}}}'),
         root,
       );
       expect(r.warnings, hasLength(2));
-      expect(r.warnings.first, contains('unknown'));
+      expect(r.warnings.first, contains('unknown key "unknown"'));
+      expect(r.warnings.last, contains('claude key "agents"'));
+    });
+
+    test('the removed dependencies key is just unknown now', () {
+      final r = readDnaConfig(
+        hostWith('{"dependencies": {"a": {"path": "../a"}}}'),
+        root,
+      );
+      expect(r.warnings.single, contains('unknown key "dependencies"'));
+      expect(r.config.layers, isEmpty);
     });
 
     test('validates vars with warnings', () {
@@ -224,78 +187,14 @@ void main() {
       expect(r.config.vars, {'ok': 'y'});
       expect(r.warnings.single, contains('Bad_Key'));
     });
-  });
 
-  group('legacy config sources', () {
-    test('dna.yaml existence is a migration error', () {
-      expect(
-        () => readDnaConfig(
-          hostWith(null, extra: {'$root/dna.yaml': 'dna:\n  order: []'}),
-          root,
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('.gg/dna.json'),
-          ),
-        ),
-      );
-    });
-
-    test('dna: block in pubspec.yaml is a migration error', () {
-      expect(
-        () => readDnaConfig(
-          hostWith(
-            null,
-            extra: {'$root/pubspec.yaml': 'name: x\ndna:\n  order: []'},
-          ),
-          root,
-        ),
-        throwsFormatException,
-      );
-    });
-
-    test('pubspec.yaml without dna block is fine, broken yaml ignored', () {
-      final ok = readDnaConfig(
-        hostWith(null, extra: {'$root/pubspec.yaml': 'name: x'}),
-        root,
-      );
-      expect(ok.config.role, DnaRole.project);
-      final broken = readDnaConfig(
-        hostWith(null, extra: {'$root/pubspec.yaml': ': : :'}),
-        root,
-      );
-      expect(broken.config.role, DnaRole.project);
-    });
-
-    test('"dna" object in package.json is a migration error', () {
-      expect(
-        () => readDnaConfig(
-          hostWith(
-            null,
-            extra: {'$root/package.json': '{"dna": {"order": []}}'},
-          ),
-          root,
-        ),
-        throwsFormatException,
-      );
-    });
-
-    test('non-map "dna" field in package.json is foreign and ignored', () {
+    test('a legacy .gg/dna.json is simply not read', () {
       final r = readDnaConfig(
-        hostWith(null, extra: {'$root/package.json': '{"dna": "other"}'}),
+        hostWith(null, extra: {'$root/.gg/dna.json': '{"role": "dna"}'}),
         root,
       );
       expect(r.config.role, DnaRole.project);
-    });
-
-    test('broken package.json is ignored', () {
-      final r = readDnaConfig(
-        hostWith(null, extra: {'$root/package.json': '{broken'}),
-        root,
-      );
-      expect(r.config.role, DnaRole.project);
+      expect(r.warnings, isEmpty);
     });
   });
 }
