@@ -80,7 +80,7 @@ writes goes to `dna/_generated.json`.
 
 ```jsonc
 {
-  "version": 6, // required
+  "version": 1, // required
   "role": "project", // "dna" for DNA packages themselves
   "layers": ["base_dna", "dna_dart"],
   "vars": { "projectName": "my_project" },
@@ -265,7 +265,7 @@ Dart tests, callback-based hosts for the WebAssembly bridge
 5.0 reads nothing but the new format — there is no compatibility path,
 so every repository is moved over by hand once.
 
-1. Move `.gg/dna.json` to `dna/_dna.json`, add `"version": 6`, rename
+1. Move `.gg/dna.json` to `dna/_dna.json`, add `"version": 1`, rename
    `order` to `layers` and list every layer explicitly (nothing is
    inferred from dependencies any more). Delete `.gg/dna.json` and the
    `!.gg/dna.json` line from `.gitignore`.

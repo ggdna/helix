@@ -29,8 +29,8 @@ void main() {
       final a = MemoryDnaHost(
         files: {
           '/r/dna/doc/x.md': 'line1\nline2\n',
-          '/r/dna/_dna.json': '{"version": 6}',
-          '/r/dna/_generated.json': '{"version": 6}',
+          '/r/dna/_dna.json': '{"version": 1}',
+          '/r/dna/_generated.json': '{"version": 1}',
         },
       );
       final b = MemoryDnaHost(

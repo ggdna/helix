@@ -20,11 +20,11 @@ void main() {
       MemoryDnaHost(
         files: {
           '$root/package.json': '{"devDependencies": {"a-dna": "^1.0.0"}}',
-          '$root/dna/_dna.json': '{"version": 6, "layers": ["a-dna"]}',
+          '$root/dna/_dna.json': '{"version": 1, "layers": ["a-dna"]}',
           '$root/node_modules/a-dna/package.json':
               '{"name": "a-dna", "version": "1.0.0"}',
           '$root/node_modules/a-dna/dna/_dna.json':
-              '{"version": 6, "role": "dna"}',
+              '{"version": 1, "role": "dna"}',
           '$root/node_modules/a-dna/dna/LICENSE': 'MIT\n',
           '$root/node_modules/a-dna/dna/doc/hello.md': '# Hello\n',
           ...extra,
@@ -141,7 +141,7 @@ void main() {
       final host = makeHost(
         extra: {
           '$root/dna/_dna.json':
-              '{"version": 6, "layers": ["a-dna"], "unknownKey": 1}',
+              '{"version": 1, "layers": ["a-dna"], "unknownKey": 1}',
         },
       );
       await run(host);

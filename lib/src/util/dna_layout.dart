@@ -8,7 +8,7 @@
 const String dnaDirname = 'dna';
 
 /// Format version of both `dna/_dna.json` and `dna/_generated.json`.
-const int dnaFormatVersion = 6;
+const int dnaFormatVersion = 1;
 
 /// Filename of the hand-authored DNA configuration inside `<target>/dna/`
 /// — the only place DNA configuration lives. Private per the `_`

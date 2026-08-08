@@ -19,6 +19,7 @@ carry different `dna/` trees.
 ### Changed
 
 - Distribute DNA using npm and dart package inheritance
+- Set version back to 1
 
 ### Changed — breaking
 
@@ -40,7 +41,7 @@ Local checkouts are wired up by gg_localize_refs, which writes
 - A package is a DNA layer only if its `dna/_dna.json` declares
 `"role": "dna"`. A `dna/` folder alone no longer qualifies.
 - `config.claude.claude_md.include` flattened to `claude.claudeMdInclude`.
-- `"version": 6` is required in both files.
+- `"version": 1` is required in both files.
 - pnpm is the only supported npm package manager; `package-lock.json` and
 `yarn.lock` are not read.
 - No migration path: `.gg/dna.json`, `dna.yaml` and `dna:` blocks in

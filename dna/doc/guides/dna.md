@@ -52,7 +52,7 @@ once. Layers are named by the **package name** they are declared under in
 `pubspec.yaml`/`package.json` — never by a path:
 
 ```jsonc
-{ "version": 6, "layers": ["base_dna"] }
+{ "version": 1, "layers": ["base_dna"] }
 ```
 
 A DNA published to both registries is one layer, not two: the npm scope is
@@ -209,7 +209,7 @@ instances are rewritten automatically.
 
 ```jsonc
 {
-  "version": 6,                 // required
+  "version": 1,                 // required
   "role": "project",            // "dna" for DNA repositories
   "layers": ["base_dna"],       // package names, in application order
   "vars": { "projectName": "my-project" },
