@@ -1,6 +1,6 @@
 name: gg_dna
 description: The DNA engine - resolves DNA packages declared as dev-dependencies, merges their dna folders and instantiates configs, docs, scripts and agent skills into the target repo.
-version: 4.0.2
+version: 4.0.3
 repository: https://github.com/ggsuite/gg_dna.git
 
 environment:
