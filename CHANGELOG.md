@@ -1,6 +1,24 @@
 # Changelog
 
-## 5.0.0
+## Unreleased
+
+### Added
+
+- Dotfiles in DNA content are escaped with a `dot-` prefix:
+`dna/dot-vscode/settings.json` instantiates to `.vscode/settings.json`.
+Without it `dart pub publish` silently drops them.
+- Layer resolution goes through the manifests and their lock files
+(`pubspec.lock`, `pnpm-lock.yaml`): the lock supplies the ecosystem, the
+resolved version and the installed-name index, while
+`.dart_tool/package_config.json` and `node_modules/` supply the folder.
+- The npm scope is dropped when folding a package name to its layer
+identity, so a DNA published to both registries (`@tssuite/base-dna` and
+`base_dna`) is one layer, not two. A warning fires when the two copies
+carry different `dna/` trees.
+
+### Changed
+
+- Distribute DNA using npm and dart package inheritance
 
 ### Changed — breaking
 
@@ -28,20 +46,6 @@ Local checkouts are wired up by gg_localize_refs, which writes
 - No migration path: `.gg/dna.json`, `dna.yaml` and `dna:` blocks in
 `pubspec.yaml` / `package.json` are simply no longer read, and format
 version 5 files are rejected.
-
-### Added
-
-- Dotfiles in DNA content are escaped with a `dot-` prefix:
-`dna/dot-vscode/settings.json` instantiates to `.vscode/settings.json`.
-Without it `dart pub publish` silently drops them.
-- Layer resolution goes through the manifests and their lock files
-(`pubspec.lock`, `pnpm-lock.yaml`): the lock supplies the ecosystem, the
-resolved version and the installed-name index, while
-`.dart_tool/package_config.json` and `node_modules/` supply the folder.
-- The npm scope is dropped when folding a package name to its layer
-identity, so a DNA published to both registries (`@tssuite/base-dna` and
-`base_dna`) is one layer, not two. A warning fires when the two copies
-carry different `dna/` trees.
 
 ### Fixed
 

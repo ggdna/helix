@@ -33,10 +33,13 @@ linter:
     - missing_whitespace_between_adjacent_strings
     - unawaited_futures
 
-exclude:
-  - node_modules/**
-
 analyzer:
+  exclude:
+    # pnpm links packages into node_modules as live symlinks, so a linked
+    # Dart package shows up here with its whole source tree. It is
+    # analyzed in its own repository against its own dependencies; from
+    # here it cannot resolve.
+    - node_modules/**
   language:
     strict-casts: true
     strict-inference: true
