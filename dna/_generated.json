@@ -26,22 +26,6 @@
   "hash": null,
   "instances": [
     {
-      "path": ".claude/skills/init/SKILL.md",
-      "hash": "0x0e505fab50995a94"
-    },
-    {
-      "path": ".claude/skills/new-project/SKILL.md",
-      "hash": "0xf863e80c14b5e980"
-    },
-    {
-      "path": ".claude/skills/new-ticket/SKILL.md",
-      "hash": "0xad3fcff3720d05a5"
-    },
-    {
-      "path": ".claude/skills/review/SKILL.md",
-      "hash": "0xfefedaf6c0274000"
-    },
-    {
       "path": "doc/conventions/code-conventions.md",
       "hash": "0x488d57d7867e43bc"
     },
@@ -60,6 +44,22 @@
     {
       "path": "doc/guides/dna.md",
       "hash": "0xe5a0c0607e0f58d5"
+    },
+    {
+      "path": "dot_claude/skills/init/SKILL.md",
+      "hash": "0x0e505fab50995a94"
+    },
+    {
+      "path": "dot_claude/skills/new-project/SKILL.md",
+      "hash": "0xf863e80c14b5e980"
+    },
+    {
+      "path": "dot_claude/skills/new-ticket/SKILL.md",
+      "hash": "0xad3fcff3720d05a5"
+    },
+    {
+      "path": "dot_claude/skills/review/SKILL.md",
+      "hash": "0xfefedaf6c0274000"
     },
     {
       "path": "scripts/README.md",
