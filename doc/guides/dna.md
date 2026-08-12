@@ -197,6 +197,18 @@ casing:
 Values that are not identifier-like (sentences, spaces) are inserted
 verbatim in all forms. Unknown references stay literal.
 
+A value may itself reference other variables — in any of the five forms:
+
+```json
+{ "dnaOrg": "acme", "dnaTitle": "Built by dnaOrg" }
+```
+
+`dnaTitle` becomes `Built by acme`. Helix loops over the values until no
+reference to a known variable is left, at most 10 passes. Two setups are
+rejected before instantiation starts: a cycle (`dnaA` → `dnaB` → `dnaA`,
+including a variable referencing itself), reported with the path that
+closes it, and a chain reaching deeper than 10 levels.
+
 ## File-Naming Conversion
 
 DNA files use **canonical kebab-case** names (`code-conventions.md`). At

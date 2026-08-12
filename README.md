@@ -233,6 +233,20 @@ text file of the merged tree:
 Non-identifier values (spaces, sentences — e.g. `"MEGA TARGET"`) are
 inserted verbatim for every form. Unknown references stay literal.
 
+**Variables may reference variables.** A value carrying a reference is
+expanded before anything else is substituted, in the casing of the form
+it is written in:
+
+```json
+{ "dnaOrg": "acme", "dnaTitle": "Built by dnaOrg", "dnaLib": "dna_org/lib" }
+```
+
+resolves to `dnaTitle = "Built by acme"` and `dnaLib = "acme/lib"`. The
+expansion loops until nothing is left to replace, at most 10 times.
+Reference cycles are detected up front and reported with the path that
+closes them (`Cyclic variable reference: dnaA → dnaB → dnaA.`), as is a
+chain deeper than 10 levels.
+
 ## File naming
 
 DNA files are instantiated under exactly the name they carry in the DNA

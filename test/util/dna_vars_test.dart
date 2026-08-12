@@ -90,6 +90,110 @@ void main() {
     });
   });
 
+  group('expandDnaVarValues', () {
+    test('resolves values that reference other variables', () {
+      expect(
+        expandDnaVarValues({
+          'dnaOrg': 'acme',
+          'dnaTitle': 'Made by dnaOrg',
+          'dnaFooter': 'dnaTitle — all rights reserved',
+        }),
+        {
+          'dnaOrg': 'acme',
+          'dnaTitle': 'Made by acme',
+          'dnaFooter': 'Made by acme — all rights reserved',
+        },
+      );
+    });
+
+    test('references inside values honor the casing of their form', () {
+      expect(
+        expandDnaVarValues({
+          'dnaProject': 'my-project',
+          'dnaLib': 'dna_project/lib',
+          'dnaClass': 'DnaProject',
+        }),
+        {
+          'dnaProject': 'my-project',
+          'dnaLib': 'my_project/lib',
+          'dnaClass': 'MyProject',
+        },
+      );
+    });
+
+    test('unknown references stay literal', () {
+      expect(
+        expandDnaVarValues({'dnaA': 'x dnaUnknown'}),
+        {'dnaA': 'x dnaUnknown'},
+      );
+    });
+
+    test('detects a cycle between two variables', () {
+      expect(
+        () => expandDnaVarValues({'dnaA': 'dnaB', 'dnaB': 'dnaA'}),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('Cyclic variable reference'),
+              contains('dnaA'),
+              contains('dnaB'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('detects a self-reference and a longer cycle', () {
+      expect(
+        () => expandDnaVarValues({'dnaA': 'see dnaA'}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => expandDnaVarValues({
+          'dnaA': 'dnaB',
+          'dnaB': 'dnaC',
+          'dnaC': 'dnaA',
+        }),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('resolves a chain up to the pass limit', () {
+      Map<String, String> chain(int length) => {
+            for (var i = 0; i < length; i++)
+              'dnaV$i': i == length - 1 ? 'end' : 'dnaV${i + 1}',
+          };
+      expect(
+        expandDnaVarValues(chain(maxDnaVarExpansions))['dnaV0'],
+        'end',
+      );
+      expect(
+        () => expandDnaVarValues(chain(maxDnaVarExpansions + 3)),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('levels deep'),
+              contains('at most $maxDnaVarExpansions'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fromEntries expands, so the effective set is fully resolved', () {
+      final vars = DnaVars.fromEntries({
+        'dnaOrg': 'acme',
+        'dnaTitle': 'by dnaOrg',
+        'dnaGone': null,
+      });
+      expect(vars.values, {'dnaOrg': 'acme', 'dnaTitle': 'by acme'});
+    });
+  });
+
   group('splitIntoWords', () {
     test('splits camel, snake, kebab and mixed forms', () {
       expect(splitIntoWords('projectName'), ['project', 'name']);

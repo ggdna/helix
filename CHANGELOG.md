@@ -5,6 +5,7 @@
 ### Changed
 
 - Rename helix to helix
+- Variable value can contain other variable names
 
 ## 4.1.2 - 2026-08-12
 
