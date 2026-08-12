@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Rename helix to helix
+
 ## 4.1.2 - 2026-08-12
 
 ### Removed
