@@ -26,6 +26,7 @@ silently instantiating a literal `dot_vscode/` folder.
 silently falling back to `"role": "project"` — that fallback let the
 engine treat a hand-authored DNA as generated content.
 - Ensure correct naming, Require dna/_dna.json
+- Rename gg_dna to helix
 
 ### Fixed
 
@@ -310,14 +311,16 @@ failing the sync; `--check` agrees
 
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
+- Rename gg_dna to helix
 
 ## 0.0.2 - 2026-08-12
 
-- First publishing using gg
+- First publish using gg
 
 ### Changed
 
-- Rename gg_dna to helix
+- Rename gg_dna -> helix
+- Rename gg_dna -> helix
 
 ## 0.0.1 - 2026-08-12
 
