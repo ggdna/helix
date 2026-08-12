@@ -7,7 +7,7 @@
       "ecosystem": null,
       "resolvedVersion": "4.1.0",
       "via": null,
-      "hash": "0x5bad0ad5ab29adb6"
+      "hash": "0x6c72ef989fbc85dc"
     },
     {
       "name": "self",
@@ -15,14 +15,14 @@
       "ecosystem": null,
       "resolvedVersion": null,
       "via": null,
-      "hash": "0x5bad0ad5ab29adb6"
+      "hash": "0x6c72ef989fbc85dc"
     }
   ],
   "claude": {
     "claudeMdInclude": null
   },
   "baseVersion": "4.1.0",
-  "baseHash": "0x5bad0ad5ab29adb6",
+  "baseHash": "0x6c72ef989fbc85dc",
   "hash": null,
   "instances": [
     {
@@ -40,6 +40,10 @@
     {
       "path": ".claude/skills/review/SKILL.md",
       "hash": "0x345dd9e198274000"
+    },
+    {
+      "path": ".vscode/probe.json",
+      "hash": "0x636a00b3fc5190e6"
     },
     {
       "path": "doc/conventions/code_conventions.md",
