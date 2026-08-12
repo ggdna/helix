@@ -7,7 +7,7 @@
       "ecosystem": null,
       "resolvedVersion": "4.1.1",
       "via": null,
-      "hash": "0x5bad0ad5ab29adb6"
+      "hash": "0x4334cf62f857d605"
     },
     {
       "name": "self",
@@ -15,14 +15,14 @@
       "ecosystem": null,
       "resolvedVersion": null,
       "via": null,
-      "hash": "0x5bad0ad5ab29adb6"
+      "hash": "0x4334cf62f857d605"
     }
   ],
   "claude": {
     "claudeMdInclude": null
   },
   "baseVersion": "4.1.1",
-  "baseHash": "0x5bad0ad5ab29adb6",
+  "baseHash": "0x4334cf62f857d605",
   "hash": null,
   "instances": [
     {
@@ -63,7 +63,7 @@
     },
     {
       "path": "scripts/README.md",
-      "hash": "0x18eb11ecbaaff8e8"
+      "hash": "0x0072d45be9d1835b"
     }
   ]
 }
