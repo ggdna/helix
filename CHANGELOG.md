@@ -30,6 +30,9 @@ silently instantiating a literal `dot_vscode/` folder.
   silently falling back to `"role": "project"` — that fallback let the
   engine treat a hand-authored DNA as generated content.
 - Ensure correct naming, Require dna/\_dna.json
+silently falling back to `"role": "project"` — that fallback let the
+engine treat a hand-authored DNA as generated content.
+- Ensure correct naming, Require dna/_dna.json
 - Rename gg_dna to helix
 
 ### Fixed
@@ -316,6 +319,10 @@ contains the rename below on top of the 4.0.0 changes.
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 - Rename gg_dna to helix
+
+## 0.0.2 - 2026-08-12
+
+- First publish using gg
 
 ### Changed
 
