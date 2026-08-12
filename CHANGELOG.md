@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- First publishing using gg
-
-### Changed
-
-- Rename gg_dna to helix
-
 ## 4.1.2 - 2026-08-12
 
 ### Removed
@@ -39,13 +31,6 @@ engine treat a hand-authored DNA as generated content.
 
 - The snake*case dot escape `dot*`is decoded like`dot-`, so
 `dna/dot_vscode/settings.json`also instantiates to`.vscode/settings.json`.
-
-## 0.0.1 - 2026-08-12
-
-### Changed
-
-- Rename helix to helix
-- Variable value can contain other variable names
 
 ## 4.1.0 - 2026-08-09
 
@@ -325,3 +310,18 @@ failing the sync; `--check` agrees
 
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
+
+## 0.0.2 - 2026-08-12
+
+- First publishing using gg
+
+### Changed
+
+- Rename gg_dna to helix
+
+## 0.0.1 - 2026-08-12
+
+### Changed
+
+- Rename helix to helix
+- Variable value can contain other variable names
