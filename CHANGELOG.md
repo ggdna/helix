@@ -1,12 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Changed
-
-- Rename helix to helix
-- Variable value can contain other variable names
-
 ## 4.1.2 - 2026-08-12
 
 ### Removed
@@ -318,3 +311,10 @@ failing the sync; `--check` agrees
 
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
+
+## 0.0.1 - 2026-08-12
+
+### Changed
+
+- Rename helix to helix
+- Variable value can contain other variable names
