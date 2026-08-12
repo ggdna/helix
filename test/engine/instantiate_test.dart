@@ -140,6 +140,43 @@ Run dart pub upgrade.
         reason: r.messages.join('\n'),
       );
     });
+
+    test('the backup lands in a real system-temp folder', () {
+      final host = IoDnaHost(git: (_, __) => '');
+      final project = '${tmp.path}/project';
+      final layer = '$project/node_modules/a-dna';
+      host
+        ..writeString('$layer/package.json', '{"name": "a-dna"}')
+        ..writeString('$layer/$dnaConfigPath', layerConfig())
+        ..writeString('$layer/dna/doc/keep.md', '# keep\n')
+        ..writeString('$project/pubspec.yaml', 'name: consumer\n')
+        ..writeString(
+          '$project/$dnaConfigPath',
+          '{"version": $dnaFormatVersion, "layers": ["a-dna"]}',
+        );
+      instantiateDna(host: host, targetRoot: project, baseVersion: '4.0.0');
+
+      host.writeString('$project/doc/keep.md', '# edited by hand\n');
+      final r = instantiateDna(
+        host: host,
+        targetRoot: project,
+        baseVersion: '4.0.0',
+      );
+
+      expect(r.backedUp, ['doc/keep.md']);
+      final backup = File('${r.backupDir}/doc/keep.md');
+      addTearDown(() => Directory(r.backupDir!).deleteSync(recursive: true));
+      expect(backup.readAsStringSync(), '# edited by hand\n');
+      expect(File('$project/doc/keep.md').readAsStringSync(), '# keep\n');
+      // Outside the project, below the system temp folder.
+      expect(r.backupDir, isNot(contains(project)));
+      expect(
+        r.backupDir,
+        startsWith(
+          Directory.systemTemp.absolute.path.replaceAll(r'\', '/'),
+        ),
+      );
+    });
   });
 
   group('instantiateDna — end to end', () {
@@ -156,7 +193,8 @@ Run dart pub upgrade.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.modifiedInstances, isEmpty);
+      expect(r.backedUp, isEmpty);
+      expect(r.backupDir, isNull);
       expect(r.blocked, isFalse);
       expect(r.updated, isNotEmpty);
 
@@ -255,20 +293,30 @@ Run dart pub upgrade.
       expect(third.upToDate, isTrue);
     });
 
-    test('hand-modified instances fail without any writes', () {
+    test('locally changed instances are backed up and overwritten', () {
       final host = makeHost();
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
+      final generated = host.readString('$root/.vscode/settings.json');
 
       host.writeString('$root/.vscode/settings.json', '{"hacked": true}');
-      final before = Map.of(host.files);
       final r = instantiateDna(
         host: host,
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.modifiedInstances, ['.vscode/settings.json']);
-      expect(r.updated, isEmpty);
-      expect(host.files, before);
+      expect(r.backedUp, ['.vscode/settings.json']);
+      expect(r.updated, contains('.vscode/settings.json'));
+      // The DNA content wins, the local content survives in system temp.
+      expect(host.readString('$root/.vscode/settings.json'), generated);
+      expect(r.backupDir, contains(dnaBackupDirPrefix));
+      expect(
+        host.readString('${r.backupDir}/.vscode/settings.json'),
+        '{"hacked": true}',
+      );
+      // Outside the project — nothing to commit, nothing the next run
+      // sees.
+      expect(r.backupDir, isNot(startsWith('$root/')));
+      expect(r.updated.any((u) => u.contains(dnaBackupDirPrefix)), isFalse);
       // The report names the DNA file to edit instead — here the sidecar
       // of the last contributing layer.
       expect(
@@ -291,10 +339,7 @@ Run dart pub upgrade.
         baseVersion: '4.0.0',
       );
       expect(r.sources['LICENSE'], 'dna-base/dna/LICENSE');
-      expect(
-        r.modifiedInstances,
-        contains('LICENSE'),
-      );
+      expect(r.backedUp, contains('LICENSE'));
 
       // Markdown overrides win over the base file they patch.
       final fresh = makeHost();
@@ -405,18 +450,22 @@ packages:
       expect(r.sources['LICENSE'], '../elsewhere/dna/dna/LICENSE');
     });
 
-    test('a hand-fix moved into the DNA heals the modified state', () {
+    test('a hand-fix moved into the DNA becomes the generated content', () {
       final host = makeHost();
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
 
-      // User edits the instance by hand → fail.
+      // User edits the instance by hand → backed up and overwritten.
       host.writeString('$root/LICENSE', 'MIT (c) ggsuite — edited\n');
-      final failed = instantiateDna(
+      final overwritten = instantiateDna(
         host: host,
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(failed.modifiedInstances, ['LICENSE']);
+      expect(overwritten.backedUp, ['LICENSE']);
+      expect(
+        host.readString('${overwritten.backupDir}/LICENSE'),
+        'MIT (c) ggsuite — edited\n',
+      );
 
       // User moves the change into the DNA source instead.
       host.writeString(
@@ -428,7 +477,7 @@ packages:
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(healed.modifiedInstances, isEmpty);
+      expect(healed.backedUp, isEmpty);
       expect(healed.updated, isNotEmpty);
     });
 
@@ -723,7 +772,7 @@ packages:
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.modifiedInstances, isEmpty);
+      expect(r.backedUp, isEmpty);
 
       // Own dna/ untouched (authored), own content wins in instances.
       expect(host.readString('$root/dna/doc/develop.md'), '# Own version\n');

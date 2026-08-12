@@ -85,6 +85,13 @@ class IoDnaHost extends DnaHost {
   }
 
   @override
+  String createTempDir(String prefix) => Directory.systemTemp
+      .createTempSync(prefix)
+      .absolute
+      .path
+      .replaceAll(r'\', '/');
+
+  @override
   List<String> listFilesRecursive(String dir) {
     final root = Directory(dir);
     if (!root.existsSync()) return [];
@@ -123,6 +130,17 @@ class IoDnaHost extends DnaHost {
     // paths; the path-limited commit leaves everything else untouched,
     // including whatever else is already staged.
     _git(repoRoot, ['add', '-A', '--', ...paths]);
+    // Restoring a locally changed instance can put back exactly what HEAD
+    // has — then there is nothing to commit and `git commit` would exit
+    // non-zero. That is a success, not a failure to report.
+    final staged = _git(repoRoot, [
+      'diff',
+      '--cached',
+      '--name-only',
+      '--',
+      ...paths,
+    ]);
+    if (staged.trim().isEmpty) return;
     _git(repoRoot, ['commit', '-m', message, '--', ...paths]);
   }
 }

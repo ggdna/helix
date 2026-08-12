@@ -21,6 +21,12 @@ const String dnaConfigFilename = '_dna.json';
 /// every run, never edited by hand.
 const String dnaGeneratedFilename = '_generated.json';
 
+/// Name prefix of the system-temp folder an instantiation puts the
+/// backups in when it overwrites generated files that were changed
+/// locally. Outside the project on purpose: the backup is a safety net,
+/// not project content, and must not show up in git or in the DNA state.
+const String dnaBackupDirPrefix = 'helix-dna-backup-';
+
 /// Prefix that escapes a leading dot in DNA content: `dot-vscode` becomes
 /// `.vscode` when instantiated. The only accepted form — `dot_` is not an
 /// escape and instantiates verbatim.

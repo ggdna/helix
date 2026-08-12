@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:helix/helix.dart';
+import 'package:helix/src/util/dna_layout.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -110,40 +111,33 @@ void main() {
 
     test('files stay for a manual commit when git cannot commit', () async {
       final host = makeHost()..commitError = 'no git identity';
-      await expectLater(
-        () => run(host),
-        throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            allOf(contains('need a commit'), contains('LICENSE')),
-          ),
-        ),
-      );
+      // Not being able to commit is reported, not a failure.
+      await run(host);
       expect(host.existsFile('$root/LICENSE'), isTrue);
       expect(log.any((m) => m.contains('Could not commit')), isTrue);
     });
 
-    test('reports hand-modified files with their DNA source', () async {
+    test('backs up locally changed files and prints where they went', () async {
       final host = makeHost();
       await run(host);
+      final generated = host.readString('$root/doc/hello.md');
       host.writeString('$root/doc/hello.md', 'hand edited\n');
 
-      await expectLater(
-        () => run(host),
-        throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            allOf(
-              contains('modified by hand'),
-              contains('Move edits from'),
-              contains('doc/hello.md'),
-              contains('a-dna/dna/doc/hello.md'),
-            ),
-          ),
-        ),
+      await run(host);
+
+      expect(host.readString('$root/doc/hello.md'), generated);
+      final backup = host.files.keys.firstWhere(
+        (p) => p.contains(dnaBackupDirPrefix),
       );
+      expect(backup, endsWith('/doc/hello.md'));
+      expect(backup, isNot(startsWith('$root/')));
+      expect(host.readString(backup), 'hand edited\n');
+      expect(
+        log.map((m) => m.replaceAll(RegExp(r'\x1B\[[0-9;]*m'), '')),
+        contains('Local changes of doc/hello.md were backed up to $backup'),
+      );
+      // The path is highlighted like every other file in the report.
+      expect(log.any((m) => m.contains(cCmd(backup))), isTrue);
     });
 
     test('reports files with uncommitted work and their DNA source', () async {
@@ -241,7 +235,8 @@ void main() {
         ..writeAsStringSync('name: consumer\n');
 
       // The temp folder is no git repository, so the generated files
-      // stay for a manual commit.
+      // stay for a manual commit — reported through the log, not thrown.
+      // What fails here is the missing LICENSE.
       await expectLater(
         () => runDnaTest(
           targetRoot: target,
@@ -252,10 +247,11 @@ void main() {
           isA<Exception>().having(
             (e) => '$e',
             'message',
-            contains('need a commit'),
+            contains('LICENSE is missing'),
           ),
         ),
       );
+      expect(log.any((m) => m.contains('Could not commit')), isTrue);
       expect(File('$target/dna/_generated.json').existsSync(), isTrue);
     });
   });
@@ -289,7 +285,6 @@ void main() {
       expect(report, contains(cAction('Move edits from')));
       expect(report, contains(cCmd('a.md')));
       expect(report, contains(cCmd('dna/a.md')));
-      expect(cError(modifiedInstancesMessage), isNot(report));
     });
 
     test('paths without a DNA source are just committed', () {
@@ -309,7 +304,6 @@ void main() {
 
   group('messages', () {
     test('are single-line headlines', () {
-      expect(modifiedInstancesMessage, 'Generated files modified by hand:');
       expect(
         uncommittedTargetsMessage,
         'Generated files carry invalid changes:',

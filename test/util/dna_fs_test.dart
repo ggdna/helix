@@ -5,6 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_layout.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -85,6 +86,17 @@ void main() {
         ),
       );
       expect(failing.commits, isEmpty);
+    });
+
+    test('createTempDir hands out a fresh path outside the project', () {
+      final first = host.createTempDir(dnaBackupDirPrefix);
+      final second = host.createTempDir(dnaBackupDirPrefix);
+      expect(first, contains(dnaBackupDirPrefix));
+      expect(second, isNot(first));
+      // Usable right away, and nothing lives there yet.
+      expect(host.listFilesRecursive(first), isEmpty);
+      host.writeString('$first/a.md', '# a\n');
+      expect(host.readString('$first/a.md'), '# a\n');
     });
 
     test('uncommittedPaths reflects the seeded set', () {

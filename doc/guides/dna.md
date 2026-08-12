@@ -91,25 +91,26 @@ Outcomes (golden-update semantics):
 |---|---|
 | Everything up to date | Test passes |
 | The DNA produced updates | Files are written and committed as `#gg: generated DNA` |
-| An instance was edited by hand | Test fails, nothing is written |
+| An instance was edited locally | The edit is backed up to a system-temp folder, the DNA content is written |
 | A file to be overwritten carries invalid changes | Test fails without writing |
 | `LICENSE` missing | Test fails |
 
 Two rules follow from this:
 
 - **Per-file guard**: Helix never overwrites a file that carries
-  uncommitted work — it names those files and writes nothing, so every
+  uncommitted work — except instances it owns, which are copied to a
+  system-temp folder first. It names the other files and writes nothing, so every
   DNA change appears as a reviewable diff on top of a commit. Dirty files
   the DNA does not touch are ignored: you can keep working while the DNA
   updates.
 - **Instances belong to the DNA**: to change one, edit the DNA layer that
   owns it (or `dna/` in a `role: dna` repo) — the next test run
   propagates the change. When a generated file was edited by hand, the
-  test names both files:
+  test overwrites the file, copies your version to a system-temp folder
+  and prints where it went:
 
   ```text
-  Generated files modified by hand:
-  Move edits from doc/develop.md to dna_base/dna/doc/develop.md.
+  Local changes of doc/develop.md were backed up to /tmp/helix-dna-backup-a1b2/doc/develop.md
   ```
 
 Getting started in a consumer:
@@ -118,8 +119,7 @@ Getting started in a consumer:
 dart pub add --dev helix     # declare the DNA(s) as dev-dependencies
 dart run helix init          # place the test + config skeleton
 git add -A && git commit -m "Add DNA"
-dart test                     # first run instantiates → "review & commit"
-git add -A && git commit -m "Instantiate DNA"
+dart test                     # first run instantiates and commits
 dart test                     # green
 ```
 
