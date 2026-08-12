@@ -22,8 +22,11 @@ import 'instantiate.dart';
 ///
 /// - a `dot_`-escaped path in `dna/` → fails before instantiating, naming
 ///   the `dot-` rename
-/// - hand-modified instances → fails, files stay untouched
-/// - DNA updates → writes them and fails once ("review & commit")
+/// - locally changed instances → the local content is copied to a
+///   system-temp folder and the DNA content is written
+/// - DNA updates → writes them and commits them; without a repository or
+///   a git identity they stay for a manual commit (a warning, not a
+///   failure)
 /// - a file to be overwritten carries uncommitted work → fails without
 ///   writing (unrelated dirty files do not block)
 /// - missing LICENSE → fails
@@ -60,10 +63,11 @@ Future<void> runDnaTest({
     emit(message);
   }
 
-  if (result.modifiedInstances.isNotEmpty) {
-    throw Exception(
-      '\n${cError(modifiedInstancesMessage)}\n'
-      '${describeDnaSources(result.modifiedInstances, result.sources)}',
+  for (final path in result.backedUp) {
+    emit(
+      '${cAction('Local changes of')} ${cCmd(path)} '
+      '${cAction('were backed up to')} '
+      '${cCmd('${result.backupDir}/$path')}',
     );
   }
   if (result.blocked) {
@@ -71,12 +75,6 @@ Future<void> runDnaTest({
       '\n${cError(uncommittedTargetsMessage)}\n'
       '${describeDnaSources(result.uncommittedTargets, result.sources)}',
     );
-  }
-  if (result.updated.isNotEmpty && !result.committed) {
-    final lines = result.updated
-        .map((path) => '${cAction('Commit')} ${cCmd(path)}.')
-        .join('\n');
-    throw Exception('\n${cError(needsCommitMessage)}\n$lines');
   }
   if (!effectiveHost.existsFile('$root/LICENSE')) {
     throw Exception(

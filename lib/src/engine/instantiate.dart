@@ -47,15 +47,9 @@ String _relativeTo(String path, String base) {
   ].join('/');
 }
 
-/// Headline shown when generated files were edited by hand.
-const String modifiedInstancesMessage = 'Generated files modified by hand:';
-
 /// Headline of the per-file guard failure.
 const String uncommittedTargetsMessage =
     'Generated files carry invalid changes:';
-
-/// Headline when the generated files could not be committed.
-const String needsCommitMessage = 'Generated files need a commit:';
 
 /// Headline when DNA files escape a leading dot with `dot_`.
 const String invalidDotEscapesMessage = 'Invalid dot escapes in dna/:';
@@ -66,14 +60,16 @@ const String generatedDnaCommitMessage = '#gg: generated DNA';
 
 // .............................................................................
 /// Outcome of one instantiation run (see the golden-update semantics in
-/// the README): hand-modified instances fail without writing, pending
-/// updates are written and reported once, an up-to-date project passes.
+/// the README): locally changed instances are backed up and overwritten,
+/// pending updates are written and reported once, an up-to-date project
+/// passes.
 class DnaInstantiationResult {
   /// Creates the result.
   const DnaInstantiationResult({
     this.messages = const [],
     this.warnings = const [],
-    this.modifiedInstances = const [],
+    this.backedUp = const [],
+    this.backupDir,
     this.updated = const [],
     this.uncommittedTargets = const [],
     this.sources = const {},
@@ -86,9 +82,14 @@ class DnaInstantiationResult {
   /// Non-fatal findings of config parsing and merging.
   final List<String> warnings;
 
-  /// Instances whose content was changed by hand — the run fails and
-  /// leaves them untouched.
-  final List<String> modifiedInstances;
+  /// Instances whose content was changed locally — the run copied the
+  /// local content into [backupDir] and overwrote them with the DNA
+  /// content.
+  final List<String> backedUp;
+
+  /// The system-temp folder holding the copies of [backedUp], keeping
+  /// their project-relative paths. `null` when nothing was backed up.
+  final String? backupDir;
 
   /// Paths written by this run (instances, dna/ files, CLAUDE.md,
   /// manifest).
@@ -113,8 +114,7 @@ class DnaInstantiationResult {
   bool get blocked => uncommittedTargets.isNotEmpty;
 
   /// Whether the project was already fully up to date.
-  bool get upToDate =>
-      modifiedInstances.isEmpty && !blocked && (updated.isEmpty || committed);
+  bool get upToDate => !blocked && (updated.isEmpty || committed);
 }
 
 // .............................................................................
@@ -281,7 +281,9 @@ DnaInstantiationResult instantiateDna({
   }
 
   final instanceWrites = <String>[];
-  final modified = <String>[];
+  // Instances that carry local changes: the DNA content wins, the local
+  // content is copied to a folder below the system temp directory.
+  final backedUp = <String>[];
   for (final entry in instanceBytes.entries) {
     final path = entry.key;
     final full = '$targetRoot/$path';
@@ -316,7 +318,9 @@ DnaInstantiationResult instantiateDna({
       messages.add('~ updated $path');
       continue;
     }
-    modified.add(path);
+    instanceWrites.add(path);
+    backedUp.add(path);
+    messages.add('~ updated $path (local changes were backed up)');
   }
 
   final instanceDeletes = <String>[];
@@ -395,16 +399,6 @@ DnaInstantiationResult instantiateDna({
   final generatedChanged = !host.existsFile(generatedPath) ||
       host.readString(generatedPath) != generatedJson;
 
-  // 10. Hand-modified instances fail without writing anything.
-  if (modified.isNotEmpty) {
-    return DnaInstantiationResult(
-      messages: messages,
-      warnings: warnings,
-      modifiedInstances: modified,
-      sources: _sourcesFor(modified, pathSources),
-    );
-  }
-
   final hasChanges = dnaWrites.isNotEmpty ||
       dnaDeletes.isNotEmpty ||
       instanceWrites.isNotEmpty ||
@@ -415,9 +409,12 @@ DnaInstantiationResult instantiateDna({
     return DnaInstantiationResult(messages: messages, warnings: warnings);
   }
 
-  // 11. Per-file guard: every *existing* file this run would overwrite or
+  // 10. Per-file guard: every *existing* file this run would overwrite or
   // delete must be committed, so the change stays recoverable via git.
-  // Unrelated dirty files in the repo do not block the run.
+  // Unrelated dirty files in the repo do not block the run. Instances
+  // with local changes are exempt: their content is preserved in the
+  // backup folder, which is the recoverability the guard asks
+  // for — and blocking them is what used to make a hand edit a dead end.
   final touched = <String>{
     for (final rel in dnaWrites) '$dnaDirname/$rel',
     for (final rel in dnaDeletes) '$dnaDirname/$rel',
@@ -425,7 +422,7 @@ DnaInstantiationResult instantiateDna({
     ...instanceDeletes,
     if (claudeMdContent != null) 'CLAUDE.md',
     if (generatedChanged) dnaGeneratedPath,
-  };
+  }..removeAll(backedUp);
   final existingTouched =
       touched.where((path) => host.existsFile('$targetRoot/$path')).toSet();
   if (existingTouched.isNotEmpty) {
@@ -442,7 +439,7 @@ DnaInstantiationResult instantiateDna({
     }
   }
 
-  // 12. Write. `updated` reads well in reports, `touchedPaths` is what
+  // 11. Write. `updated` reads well in reports, `touchedPaths` is what
   // git gets.
   final updated = <String>[];
   final touchedPaths = <String>[];
@@ -458,6 +455,16 @@ DnaInstantiationResult instantiateDna({
   for (final rel in dnaDeletes) {
     host.deleteFile('$targetRoot/$dnaDirname/$rel');
     note('$dnaDirname/$rel', removed: true);
+  }
+  // The local content first, so nothing is lost if a write fails. It
+  // goes to a fresh system-temp folder — inside the project it would
+  // become part of the repository and of the next DNA run.
+  String? backupDir;
+  if (backedUp.isNotEmpty) {
+    backupDir = host.createTempDir(dnaBackupDirPrefix);
+    for (final path in backedUp) {
+      host.writeBytes('$backupDir/$path', host.readBytes('$targetRoot/$path'));
+    }
   }
   for (final path in instanceWrites) {
     host.writeBytes('$targetRoot/$path', instanceBytes[path]!);
@@ -491,7 +498,7 @@ DnaInstantiationResult instantiateDna({
     messages.add('- removed empty folder $dir');
   }
 
-  // 13. Commit what the DNA generated — it is machine-owned, so it never
+  // 12. Commit what the DNA generated — it is machine-owned, so it never
   // belongs in the developer's working tree. A repository without git or
   // without an identity keeps the files for a manual commit.
   var committed = false;
@@ -510,6 +517,9 @@ DnaInstantiationResult instantiateDna({
     warnings: warnings,
     updated: updated,
     committed: committed,
+    backedUp: backedUp,
+    backupDir: backupDir,
+    sources: _sourcesFor(backedUp, pathSources),
   );
 }
 

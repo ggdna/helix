@@ -164,8 +164,8 @@ class DnaManifest {
   /// A file that exists but cannot be used throws instead of yielding
   /// `null`. The distinction is load-bearing: `null` makes every existing
   /// instance count as unowned, and unowned instances get adopted and
-  /// overwritten — so a `null` for "unreadable" would silently destroy
-  /// hand edits that the hand-modified check is supposed to catch.
+  /// overwritten without a backup — so a `null` for "unreadable" would
+  /// silently destroy local edits the backup is supposed to preserve.
   static DnaManifest? read(DnaHost host, String targetRoot) {
     final path = '$targetRoot/$dnaGeneratedPath';
     if (!host.existsFile(path)) return null;

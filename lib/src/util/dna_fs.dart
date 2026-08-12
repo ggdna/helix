@@ -47,6 +47,12 @@ abstract class DnaHost {
   /// Renames/moves a file or directory from [from] to [to].
   void rename(String from, String to);
 
+  /// Creates a new, empty directory below the system temp folder, its
+  /// name starting with [prefix], and returns its absolute posix path.
+  /// Used for the backups of locally changed instances — they must not
+  /// land in the project (see `instantiateDna`).
+  String createTempDir(String prefix);
+
   /// Lists all files below [dir] recursively as relative posix paths
   /// (files only, no directories, symlinks not followed).
   List<String> listFilesRecursive(String dir);
@@ -161,6 +167,11 @@ class MemoryDnaHost extends DnaHost {
     });
     files.addAll(moved);
   }
+
+  @override
+  String createTempDir(String prefix) => '/tmp/$prefix${_tempDirCount++}';
+
+  int _tempDirCount = 0;
 
   @override
   List<String> listFilesRecursive(String dir) {

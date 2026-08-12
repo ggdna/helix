@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:helix/src/util/dna_fs_io.dart';
+import 'package:helix/src/util/dna_layout.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -81,20 +82,58 @@ void main() {
     });
   });
 
+  group('IoDnaHost.createTempDir', () {
+    test('creates a fresh folder below the system temp directory', () {
+      final host = IoDnaHost();
+      final dir = host.createTempDir(dnaBackupDirPrefix);
+      try {
+        expect(Directory(dir).existsSync(), isTrue);
+        expect(dir, contains(dnaBackupDirPrefix));
+        expect(dir, isNot(contains(r'\')));
+        expect(
+          dir,
+          startsWith(
+            Directory.systemTemp.absolute.path.replaceAll(r'\', '/'),
+          ),
+        );
+        // A second call never returns the same folder.
+        final other = host.createTempDir(dnaBackupDirPrefix);
+        expect(other, isNot(dir));
+        Directory(other).deleteSync();
+      } finally {
+        if (Directory(dir).existsSync()) Directory(dir).deleteSync();
+      }
+    });
+  });
+
   group('IoDnaHost.commitPaths', () {
     test('stages and commits exactly the given paths', () {
       final calls = <List<String>>[];
       final probe = IoDnaHost(
         git: (dir, args) {
           calls.add(args);
-          return '';
+          return args.first == 'diff' ? 'a.txt\n' : '';
         },
       );
       probe.commitPaths('/repo', ['a.txt', 'dna/b.md'], '#gg: generated DNA');
       expect(calls, [
         ['add', '-A', '--', 'a.txt', 'dna/b.md'],
+        ['diff', '--cached', '--name-only', '--', 'a.txt', 'dna/b.md'],
         ['commit', '-m', '#gg: generated DNA', '--', 'a.txt', 'dna/b.md'],
       ]);
+    });
+
+    test('skips the commit when the paths are identical to HEAD', () {
+      final calls = <List<String>>[];
+      final probe = IoDnaHost(
+        git: (dir, args) {
+          calls.add(args);
+          // Nothing staged — `git commit` would exit non-zero here.
+          return args.first == 'diff' ? '\n' : '';
+        },
+      );
+      probe.commitPaths('/repo', ['a.txt'], '#gg: generated DNA');
+      expect(calls.map((c) => c.first), ['add', 'diff']);
     });
 
     test('does nothing without paths', () {
@@ -127,6 +166,11 @@ void main() {
         host.commitPaths(tmp.path, ['generated.md'], '#gg: generated DNA');
 
         expect(git(['log', '-1', '--pretty=%s']).trim(), '#gg: generated DNA');
+
+        // Committing the same content again is a no-op, not a failure —
+        // restoring a locally changed instance ends up exactly here.
+        host.commitPaths(tmp.path, ['generated.md'], '#gg: generated DNA');
+        expect(git(['log', '--pretty=%s']).trim().split('\n'), hasLength(1));
         // The unrelated file stayed in the working tree.
         expect(host.uncommittedPaths(tmp.path), {'mine.md'});
       } finally {

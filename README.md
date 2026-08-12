@@ -144,25 +144,26 @@ Every test run executes Helix (Dart: in-process via the `helix`
 dev-dependency; TypeScript: via the npm package `@tssuite/helix-js`,
 Helix compiled to WebAssembly with node callbacks injected):
 
-- **Instance modified by hand** → the test fails and leaves the file
-  untouched. The report names the DNA source the file is generated from,
-  so the fix is obvious:
+- **Instance changed locally** → the DNA content wins. The local content
+  is copied to a fresh folder below the system temp directory (never into
+  the project, so it stays out of git and out of the next run) and the
+  report prints that path:
 
   ```text
-  Generated files modified by hand:
-  Move edits from .vscode/settings.json to dna_dart/dna/dot-vscode/settings.overrides.json.
+  Local changes of .vscode/settings.json were backed up to /tmp/helix-dna-backup-a1b2/.vscode/settings.json
   ```
 
 - **DNA updated** (new dependency versions, changed local DNA) → Helix
   rewrites `dna/`, the instances and its bookkeeping and commits
   exactly those files as **`#gg: generated DNA`** — generated content is
   machine-owned and never clutters your working tree. Without a
-  repository or a git identity the files stay for a manual commit and
-  the run fails once.
+  repository or a git identity the files stay for a manual commit — the
+  run reports them and passes.
 - **Everything up to date** → green, no writes.
 - **Per-file guard**: every existing file a run would overwrite or
-  delete must be committed. If one of them carries uncommitted work
-  (modified, staged or untracked), the run fails without writing and
+  delete must be committed — except instances the DNA owns, whose local
+  content is copied to the backup folder instead. If one of the others carries uncommitted
+  work (modified, staged or untracked), the run fails without writing and
   reports each file the same way — `Move edits from <instance> to <DNA
 source>.` (headline: _Generated files carry invalid changes:_) Unrelated dirty files never block a run,
   so every overwrite stays recoverable via git.
