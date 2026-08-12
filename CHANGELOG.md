@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.2 - 2026-08-12
 
 - First version take from gg_dna
 
