@@ -11,9 +11,9 @@ files. The `fileNaming` config key is gone; a `_dna.json` still setting
 it now warns as an unknown key. Layers that relied on conversion must
 rename their DNA files to the name the target should see.
 - BREAKING: The `dot_` dot escape. `dot-` is the only accepted form; the
-`dot_` variant only existed for snake_case layers, which the removal of
+`dot_` variant only existed for snake*case layers, which the removal of
 file-naming conversion makes obsolete. The placed DNA test now rejects a
-`dot_`-escaped path in `dna/` before instantiating and reports the
+`dot*`-escaped path in `dna/` before instantiating and reports the
 rename to make (`Rename dna/dot_vscode to dna/dot-vscode.`) instead of
 silently instantiating a literal `dot_vscode/` folder.
 - Remove auto renaming of dna files. Did break links.
@@ -29,9 +29,8 @@ engine treat a hand-authored DNA as generated content.
 
 ### Fixed
 
-- The snake_case dot escape `dot_` is decoded like `dot-`, so
-`dna/dot_vscode/settings.json` also instantiates to
-`.vscode/settings.json`.
+- The snake*case dot escape `dot*`is decoded like`dot-`, so
+`dna/dot_vscode/settings.json`also instantiates to`.vscode/settings.json`.
 
 ## 4.1.0 - 2026-08-09
 
@@ -313,6 +312,12 @@ failing the sync; `--check` agrees
 - Move dna files to dna folder
 
 ## 0.0.2 - 2026-08-12
+
+- First publishing using gg
+
+### Changed
+
+- Rename gg_dna to helix
 
 ## 0.0.1 - 2026-08-12
 
