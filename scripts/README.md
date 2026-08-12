@@ -5,9 +5,8 @@ instantiated to `scripts/` in the project root of every consumer.
 
 The gg_dna base layer ships no scripts of its own — higher DNA layers add
 organization- or project-specific helpers here (setup, tooling,
-maintenance, and convenience scripts). Script files use canonical
-kebab-case names in the DNA and are converted to the target's naming
-standard at instantiation.
+maintenance, and convenience scripts). Script files are instantiated
+under exactly the name they carry in the DNA layer.
 
 Not to be confused with `bin/`: in Dart packages, `bin/` holds the entry
 points of the published CLI application; `scripts/` holds everything

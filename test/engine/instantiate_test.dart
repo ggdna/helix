@@ -25,7 +25,7 @@ void main() {
       '"layers": [${layers.map((l) => '"$l"').join(', ')}]}';
 
   /// Builds a target with base-dna and dna-dart installed via npm and a
-  /// pubspec (Dart project → snake_case naming).
+  /// pubspec.
   MemoryDnaHost makeHost({Map<String, String> extra = const {}}) =>
       MemoryDnaHost(
         files: {
@@ -178,14 +178,14 @@ Run dart pub upgrade.
       expect(extensions, contains('esbenp.prettier-vscode'));
       expect(extensions, contains('dart-code.dart-code'));
 
-      // Variables: verbatim value, config var wins, naming converted.
+      // Variables: verbatim value, config var wins.
       expect(
         host.readString('$root/LICENSE'),
         contains('MIT (c) ggsuite'),
       );
-      expect(host.existsFile('$root/test/dna/dna_test.dart'), isTrue);
+      expect(host.existsFile('$root/test/dna/dna-test.dart'), isTrue);
       expect(
-        host.readString('$root/test/dna/dna_test.dart'),
+        host.readString('$root/test/dna/dna-test.dart'),
         contains('myProject test wrapper'),
       );
 
@@ -819,7 +819,7 @@ packages:
       );
     });
 
-    test('kebab-case naming for package.json-only projects', () {
+    test('names are instantiated verbatim for package.json-only projects', () {
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"devDependencies": {"dna-ts": "^1.0.0"}}',
@@ -836,36 +836,6 @@ packages:
       expect(
         host.existsFile('$root/test/dna/my-spec-helper.ts'),
         isTrue,
-      );
-    });
-
-    test('renamed references are rewritten in instances only', () {
-      final host = MemoryDnaHost(
-        files: {
-          '$root/pubspec.yaml': 'name: x\n',
-          '$root/package.json': '{"devDependencies": {"a-dna": "1"}}',
-          '$root/$dnaConfigPath':
-              '{"version": $dnaFormatVersion, "layers": ["a-dna"]}',
-          '$root/node_modules/a-dna/package.json':
-              '{"name": "a-dna", "version": "1.0.0"}',
-          '$root/node_modules/a-dna/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/a-dna/dna/scripts/create-branch.js':
-              'console.log("hi");\n',
-          '$root/node_modules/a-dna/dna/doc/develop.md':
-              'Run node scripts/create-branch.js\n',
-        },
-      );
-      instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
-      expect(host.existsFile('$root/scripts/create_branch.js'), isTrue);
-      expect(
-        host.readString('$root/doc/develop.md'),
-        'Run node scripts/create_branch.js\n',
-      );
-      // dna/ originals keep canonical names and references.
-      expect(host.existsFile('$root/dna/scripts/create-branch.js'), isTrue);
-      expect(
-        host.readString('$root/dna/doc/develop.md'),
-        'Run node scripts/create-branch.js\n',
       );
     });
 
@@ -968,8 +938,8 @@ packages:
     test('instance name collisions are a hard error', () {
       final host = makeHost(
         extra: {
-          '$root/node_modules/dna-dart/dna/doc/my-note.md': 'a\n',
-          '$root/node_modules/dna-dart/dna/doc/my_note.md': 'b\n',
+          '$root/node_modules/dna-dart/dna/dot-vscode/tasks.json': '{}\n',
+          '$root/node_modules/dna-dart/dna/.vscode/tasks.json': '{}\n',
         },
       );
       expect(
@@ -1125,17 +1095,17 @@ Not allowed globally.
         baseVersion: '4.0.0',
       );
       expect(host.existsFile('$root/dna/doc/base-doc.md'), isTrue);
-      expect(host.existsFile('$root/doc/base_doc.md'), isTrue);
+      expect(host.existsFile('$root/doc/base-doc.md'), isTrue);
       // The engine's built-in base DNA points at the repo's dna/ folder,
       // never at a gg_dna package path.
-      host.writeString('$root/doc/base_doc.md', 'hand edited\n');
+      host.writeString('$root/doc/base-doc.md', 'hand edited\n');
       final modified = instantiateDna(
         host: host,
         targetRoot: root,
         baseDnaRoot: '/gg',
         baseVersion: '4.0.0',
       );
-      expect(modified.sources['doc/base_doc.md'], 'dna/doc/base-doc.md');
+      expect(modified.sources['doc/base-doc.md'], 'dna/doc/base-doc.md');
       final manifest = DnaManifest.read(host, root)!;
       expect(manifest.layers.first.name, 'base');
       expect(manifest.baseHash, isNotNull);

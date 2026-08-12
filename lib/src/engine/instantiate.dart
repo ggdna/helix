@@ -57,6 +57,9 @@ const String uncommittedTargetsMessage =
 /// Headline when the generated files could not be committed.
 const String needsCommitMessage = 'Generated files need a commit:';
 
+/// Headline when DNA files escape a leading dot with `dot_`.
+const String invalidDotEscapesMessage = 'Invalid dot escapes in dna/:';
+
 /// Commit message of the automatic commit that carries everything the
 /// DNA generated.
 const String generatedDnaCommitMessage = '#gg: generated DNA';
@@ -217,15 +220,11 @@ DnaInstantiationResult instantiateDna({
   }
   merged[dnaVarsFilename] = _encodeText(encodeJsonPretty(vars.toJson()));
 
-  // 5. Plan instances (naming conversion + rename map).
-  final naming = config.fileNaming ?? _defaultNaming(host, targetRoot);
+  // 5. Plan instances.
   final instancePlan = <String, String>{}; // instance path -> merged rel
-  final renames = <String, String>{};
   for (final rel in merged.keys) {
     if (isPrivatePath(rel)) continue;
-    // Decode before converting: the decoded path starts with a dot, and
-    // dot-rooted paths keep their canonical names.
-    final instancePath = convertPathNaming(decodeDotSegments(rel), naming);
+    final instancePath = decodeDotSegments(rel);
     if (isForbiddenInstanceTarget(instancePath)) {
       warnings.add(
         'Instance target "$instancePath" is forbidden — skipped.',
@@ -240,24 +239,12 @@ DnaInstantiationResult instantiateDna({
       );
     }
     instancePlan[instancePath] = rel;
-    final relSegments = rel.split('/');
-    final instSegments = instancePath.split('/');
-    for (var i = 0; i < relSegments.length; i++) {
-      if (relSegments[i] != instSegments[i]) {
-        renames[relSegments[i]] = instSegments[i];
-      }
-    }
   }
 
-  // 6. Produce instance contents (rewriting renamed references).
-  final instanceBytes = <String, Uint8List>{};
-  for (final entry in instancePlan.entries) {
-    final bytes = merged[entry.value]!;
-    final text = _decodeText(bytes);
-    instanceBytes[entry.key] = text == null
-        ? bytes
-        : _encodeText(rewriteRenamedReferences(text, renames));
-  }
+  // 6. Produce instance contents.
+  final instanceBytes = <String, Uint8List>{
+    for (final entry in instancePlan.entries) entry.key: merged[entry.value]!,
+  };
 
   // 6b. Where each project path comes from — the DNA file to edit
   // instead of the generated one.
@@ -719,17 +706,6 @@ Map<String, Object?> _applyLayer({
   }
 
   return chain;
-}
-
-// .............................................................................
-FileNaming _defaultNaming(DnaHost host, String targetRoot) {
-  if (host.existsFile('$targetRoot/pubspec.yaml')) {
-    return FileNaming.snakeCase;
-  }
-  if (host.existsFile('$targetRoot/package.json')) {
-    return FileNaming.kebabCase;
-  }
-  return FileNaming.keep;
 }
 
 // .............................................................................

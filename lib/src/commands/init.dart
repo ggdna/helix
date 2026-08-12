@@ -70,7 +70,6 @@ String dnaConfigSkeleton(List<String> layers) {
   "layers": [$list]
 
   // "vars": { "projectName": "my-project" },
-  // "fileNaming": "snake_case",  // camelCase | kebab-case | keep
   // "claude": { "claudeMdInclude": ["doc/conventions"] }
 }
 ''';

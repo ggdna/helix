@@ -32,16 +32,12 @@ void main() {
       expect(decodeDotSegments('doc/dot-hidden.md'), 'doc/.hidden.md');
     });
 
-    test('every dot_ segment becomes a leading dot too', () {
+    test('dot_ is not decoded — checkDotEscapes rejects it instead', () {
       expect(
         decodeDotSegments('dot_vscode/settings.json'),
-        '.vscode/settings.json',
+        'dot_vscode/settings.json',
       );
-      expect(
-        decodeDotSegments('dot_claude/skills/init/SKILL.md'),
-        '.claude/skills/init/SKILL.md',
-      );
-      expect(decodeDotSegments('doc/dot_hidden.md'), 'doc/.hidden.md');
+      expect(decodeDotSegments('doc/dot_hidden.md'), 'doc/dot_hidden.md');
     });
 
     test('leaves everything else alone', () {
@@ -56,6 +52,19 @@ void main() {
     });
   });
 
+  group('invalidDotSegment', () {
+    test('reports the offending segment', () {
+      expect(invalidDotSegment('dot_vscode/settings.json'), 'dot_vscode');
+      expect(invalidDotSegment('doc/dot_hidden.md'), 'dot_hidden.md');
+    });
+
+    test('null for dot- and everything else', () {
+      expect(invalidDotSegment('dot-vscode/settings.json'), isNull);
+      expect(invalidDotSegment('doc/my_dot_file.md'), isNull);
+      expect(invalidDotSegment('_vars.json'), isNull);
+    });
+  });
+
   group('isForbiddenInstanceTarget', () {
     test('git internals and CLAUDE.md are forbidden', () {
       expect(isForbiddenInstanceTarget('.git'), isTrue);
@@ -63,143 +72,6 @@ void main() {
       expect(isForbiddenInstanceTarget('CLAUDE.md'), isTrue);
       expect(isForbiddenInstanceTarget('.claude/skills/x/SKILL.md'), isFalse);
       expect(isForbiddenInstanceTarget('doc/claude.md'), isFalse);
-    });
-  });
-
-  group('parseFileNaming', () {
-    test('parses valid values, null passes through', () {
-      expect(parseFileNaming('snake_case'), FileNaming.snakeCase);
-      expect(parseFileNaming('camelCase'), FileNaming.camelCase);
-      expect(parseFileNaming('kebab-case'), FileNaming.kebabCase);
-      expect(parseFileNaming('keep'), FileNaming.keep);
-      expect(parseFileNaming(null), isNull);
-    });
-
-    test('throws on unknown values', () {
-      expect(() => parseFileNaming('PascalCase'), throwsFormatException);
-    });
-  });
-
-  group('convertSegmentNaming', () {
-    test('converts the part before the first dot', () {
-      expect(
-        convertSegmentNaming('dna-test.dart', FileNaming.snakeCase),
-        'dna_test.dart',
-      );
-      expect(
-        convertSegmentNaming('create-branch.js', FileNaming.camelCase),
-        'createBranch.js',
-      );
-      expect(
-        convertSegmentNaming('create_branch.js', FileNaming.kebabCase),
-        'create-branch.js',
-      );
-    });
-
-    test('keeps multi-dot extensions intact', () {
-      expect(
-        convertSegmentNaming('dna.spec.ts', FileNaming.camelCase),
-        'dna.spec.ts',
-      );
-      expect(
-        convertSegmentNaming('my-comp.spec.ts', FileNaming.camelCase),
-        'myComp.spec.ts',
-      );
-      expect(
-        convertSegmentNaming('typescript.code-snippets', FileNaming.snakeCase),
-        'typescript.code-snippets',
-      );
-    });
-
-    test('names with uppercase letters and dotfiles stay untouched', () {
-      expect(
-        convertSegmentNaming('LICENSE', FileNaming.snakeCase),
-        'LICENSE',
-      );
-      expect(
-        convertSegmentNaming('README.md', FileNaming.camelCase),
-        'README.md',
-      );
-      expect(
-        convertSegmentNaming('.gitattributes', FileNaming.snakeCase),
-        '.gitattributes',
-      );
-    });
-
-    test('keep returns the segment unchanged', () {
-      expect(convertSegmentNaming('a-b.md', FileNaming.keep), 'a-b.md');
-      expect(
-        convertSegmentNaming('create_branch.js', FileNaming.keep),
-        'create_branch.js',
-      );
-    });
-
-    test('single-word names stay untouched', () {
-      expect(
-        convertSegmentNaming('develop.md', FileNaming.snakeCase),
-        'develop.md',
-      );
-      expect(convertSegmentNaming('scripts', FileNaming.camelCase), 'scripts');
-    });
-  });
-
-  group('convertPathNaming', () {
-    test('converts every segment', () {
-      expect(
-        convertPathNaming('test/dna/dna-test.dart', FileNaming.snakeCase),
-        'test/dna/dna_test.dart',
-      );
-      expect(
-        convertPathNaming(
-          'my-folder/install-node-mac.md',
-          FileNaming.camelCase,
-        ),
-        'myFolder/installNodeMac.md',
-      );
-    });
-
-    test('keep leaves everything alone', () {
-      expect(
-        convertPathNaming('a-b/c-d.md', FileNaming.keep),
-        'a-b/c-d.md',
-      );
-    });
-
-    test('dot-rooted tool trees keep canonical names', () {
-      expect(
-        convertPathNaming(
-          '.claude/skills/new-project/SKILL.md',
-          FileNaming.snakeCase,
-        ),
-        '.claude/skills/new-project/SKILL.md',
-      );
-      expect(
-        convertPathNaming(
-          '.github/workflows/my-pipeline.yaml',
-          FileNaming.camelCase,
-        ),
-        '.github/workflows/my-pipeline.yaml',
-      );
-    });
-  });
-
-  group('rewriteRenamedReferences', () {
-    test('replaces literally, longest keys first', () {
-      final renames = {
-        'create-branch.js': 'create_branch.js',
-        'create-branch.js.md': 'create_branch.js.md',
-      };
-      expect(
-        rewriteRenamedReferences(
-          'run node scripts/create-branch.js and read create-branch.js.md',
-          renames,
-        ),
-        'run node scripts/create_branch.js and read create_branch.js.md',
-      );
-    });
-
-    test('no renames returns content unchanged', () {
-      expect(rewriteRenamedReferences('x', {}), 'x');
     });
   });
 

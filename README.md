@@ -90,7 +90,6 @@ the engine overwrite a hand-written DNA. Run `gg_dna init` to place it.
   "role": "project", // "dna" for DNA packages themselves
   "layers": ["base_dna", "dna_dart"],
   "vars": { "projectName": "my_project" },
-  "fileNaming": "snake_case", // camelCase | kebab-case | keep
   "claude": { "claudeMdInclude": ["doc/conventions"] },
 }
 ```
@@ -117,20 +116,18 @@ package. It always contributes its files and always wins a conflict.
 | `dna/dot-vscode/settings.json`        | `.vscode/settings.json`        |
 | `dna/LICENSE`                         | `LICENSE`                      |
 | `dna/doc/develop.md`                  | `doc/develop.md`               |
-| `dna/scripts/create-branch.js`        | `scripts/create_branch.js`¹    |
+| `dna/scripts/create-branch.js`        | `scripts/create-branch.js`     |
 | `dna/dot-claude/skills/init/SKILL.md` | `.claude/skills/init/SKILL.md` |
 | `dna/_vars.json`                      | — (private)                    |
-
-¹ file naming converted for a Dart project, see below.
 
 - **Dotfiles are escaped** with a `dot-` prefix. `dart pub publish`
   silently drops every path with a leading dot, so a DNA that ships
   `dna/.vscode/` loses it the moment it is consumed from pub. The escape
   is decoded when instantiating; `dna/` itself keeps it, because that is
   what gets republished. A layer shipping literal dotfiles is warned
-  about. The snake_case variant `dot_` is decoded as well, so
-  `dna/dot_vscode/` instantiates to `.vscode/` just like
-  `dna/dot-vscode/`; `dot-` stays the canonical, documented form.
+  about. `dot-` is the only accepted form: the placed test rejects a
+  `dot_`-escaped path in `dna/` before instantiating and names the
+  rename (`dna/dot_vscode` → `dna/dot-vscode`).
 - **Private**: path segments starting with `_` (e.g. `_vars.json`) stay
   inside `dna/` and are never instantiated.
 - **Public**: everything else becomes an instance.
@@ -234,16 +231,12 @@ every text file of the merged tree:
 Non-identifier values (spaces, sentences — e.g. `"MEGA TARGET"`) are
 inserted verbatim for every form. Unknown references stay literal.
 
-## File naming conversion
+## File naming
 
-DNA files are authored in canonical **kebab-case**. At instantiation
-they are converted to the target standard — `pubspec.yaml` present →
-`snake_case`, otherwise `package.json` present → `kebab-case`, otherwise
-`keep` (overridable via `fileNaming`). Only the part before the first dot of
-purely lowercase segments converts (`dna-test.dart` → `dna_test.dart`;
-`.spec.ts`, `.code-snippets`, `LICENSE`, `README.md` stay untouched).
-References to renamed files are rewritten inside text instances; the
-`dna/` originals keep canonical names.
+DNA files are instantiated under exactly the name they carry in the DNA
+layer — no case conversion happens. Author each file with the name the
+target project should see (the dot escape `dot-vscode/` → `.vscode/` is
+the only path rewriting the engine performs).
 
 ## CLAUDE.md and skills
 

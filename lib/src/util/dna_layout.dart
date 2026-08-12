@@ -22,15 +22,9 @@ const String dnaConfigFilename = '_dna.json';
 const String dnaGeneratedFilename = '_generated.json';
 
 /// Prefix that escapes a leading dot in DNA content: `dot-vscode` becomes
-/// `.vscode` when instantiated. Canonical form — the one suggested in
-/// warnings and documentation.
+/// `.vscode` when instantiated. The only accepted form — `dot_` is not an
+/// escape and instantiates verbatim.
 const String dotPrefix = 'dot-';
-
-/// All accepted escapes of a leading dot. The `dot_` form exists because
-/// snake_case layers write their folders with an underscore, so
-/// `dna/dot_vscode/` must instantiate to `.vscode/` just like
-/// `dna/dot-vscode/`.
-const List<String> dotPrefixes = [dotPrefix, 'dot_'];
 
 // .............................................................................
 /// Whether [relPosix] is private per the `_` convention: any path segment
@@ -39,8 +33,8 @@ bool isPrivatePath(String relPosix) =>
     relPosix.split('/').any((s) => s.startsWith('_'));
 
 // .............................................................................
-/// Decodes the dot escape of [relPosix]: `dot-vscode/settings.json` and
-/// `dot_vscode/settings.json` both become `.vscode/settings.json`.
+/// Decodes the dot escape of [relPosix]: `dot-vscode/settings.json`
+/// becomes `.vscode/settings.json`.
 ///
 /// DNA layers ship dotfiles escaped because `dart pub publish` silently
 /// drops every path with a leading dot — a pub-installed layer would
@@ -49,13 +43,22 @@ bool isPrivatePath(String relPosix) =>
 String decodeDotSegments(String relPosix) =>
     relPosix.split('/').map(_decodeDotSegment).join('/');
 
-String _decodeDotSegment(String segment) {
-  for (final prefix in dotPrefixes) {
-    if (segment.startsWith(prefix)) {
-      return '.${segment.substring(prefix.length)}';
-    }
+String _decodeDotSegment(String segment) => segment.startsWith(dotPrefix)
+    ? '.${segment.substring(dotPrefix.length)}'
+    : segment;
+
+// .............................................................................
+/// The misspelled dot escape: `dot_vscode` instead of `dot-vscode`.
+const String invalidDotPrefix = 'dot_';
+
+/// The first `dot_`-escaped segment of [relPosix], or `null` when there is
+/// none. Only `dot-` is decoded, so such a path would instantiate as a
+/// literal `dot_…` folder — the placed DNA test rejects it.
+String? invalidDotSegment(String relPosix) {
+  for (final segment in relPosix.split('/')) {
+    if (segment.startsWith(invalidDotPrefix)) return segment;
   }
-  return segment;
+  return null;
 }
 
 // .............................................................................
@@ -66,105 +69,6 @@ bool isForbiddenInstanceTarget(String relPosix) =>
     relPosix == '.git' ||
     relPosix.startsWith('.git/') ||
     relPosix == 'CLAUDE.md';
-
-// .............................................................................
-/// The file naming standard instances are converted to.
-enum FileNaming {
-  /// `my_file.dart` — Dart projects.
-  snakeCase,
-
-  /// `myFile.ts` — TypeScript projects.
-  camelCase,
-
-  /// `my-file.md` — canonical DNA form.
-  kebabCase,
-
-  /// No conversion.
-  keep,
-}
-
-// .............................................................................
-/// Parses the `fileNaming` config value; `null` when [value] is `null`,
-/// throws [FormatException] on unknown values.
-FileNaming? parseFileNaming(String? value) {
-  switch (value) {
-    case null:
-      return null;
-    case 'snake_case':
-      return FileNaming.snakeCase;
-    case 'camelCase':
-      return FileNaming.camelCase;
-    case 'kebab-case':
-      return FileNaming.kebabCase;
-    case 'keep':
-      return FileNaming.keep;
-    default:
-      throw FormatException(
-        'fileNaming must be one of snake_case, camelCase, kebab-case, '
-        'keep — got "$value".',
-      );
-  }
-}
-
-// .............................................................................
-/// Converts one path segment to [naming]. Only the part before the first
-/// dot is converted (`dna-test.dart` → `dna_test.dart`, `.spec.ts` and
-/// `.code-snippets` survive) and only for purely lowercase names — names
-/// with uppercase letters (`LICENSE`, `README.md`) and dotfiles stay
-/// untouched.
-String convertSegmentNaming(String segment, FileNaming naming) {
-  if (segment.startsWith('.')) return segment;
-  final dot = segment.indexOf('.');
-  final base = dot < 0 ? segment : segment.substring(0, dot);
-  final ext = dot < 0 ? '' : segment.substring(dot);
-  if (base.contains(RegExp('[A-Z]'))) return segment;
-  if (!base.contains(RegExp('[a-z]'))) return segment;
-  final words = base.split(RegExp('[-_]+')).where((w) => w.isNotEmpty).toList();
-  if (words.length < 2) return segment;
-  final String converted;
-  switch (naming) {
-    case FileNaming.snakeCase:
-      converted = words.join('_');
-    case FileNaming.camelCase:
-      converted = words.first +
-          words.skip(1).map((w) => w[0].toUpperCase() + w.substring(1)).join();
-    case FileNaming.kebabCase:
-      converted = words.join('-');
-    case FileNaming.keep:
-      converted = base;
-  }
-  return '$converted$ext';
-}
-
-// .............................................................................
-/// Converts every segment of the relative posix path [relPosix] to
-/// [naming] via [convertSegmentNaming]. Paths rooted in a dot-folder
-/// (`.claude/`, `.vscode/`, `.github/`, …) keep their canonical names —
-/// they are tool configuration, not ecosystem source, and e.g. skill
-/// folder names must stay identical across all projects.
-String convertPathNaming(String relPosix, FileNaming naming) {
-  if (naming == FileNaming.keep) return relPosix;
-  if (relPosix.startsWith('.')) return relPosix;
-  return relPosix
-      .split('/')
-      .map((s) => convertSegmentNaming(s, naming))
-      .join('/');
-}
-
-// .............................................................................
-/// Rewrites references to renamed files in a text instance: every key of
-/// [renames] (old segment name) is replaced literally by its value, longest
-/// keys first.
-String rewriteRenamedReferences(String content, Map<String, String> renames) {
-  if (renames.isEmpty) return content;
-  var result = content;
-  final keys = renames.keys.toList()
-    ..sort((a, b) => b.length.compareTo(a.length));
-  for (final key in keys) {
-    result = result.replaceAll(key, renames[key]!);
-  }
-  return result;
-}
 
 // .............................................................................
 /// All ancestor folders of [paths], deepest first — the candidates to

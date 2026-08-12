@@ -12,6 +12,7 @@ import 'package:gg_console_colors/gg_console_colors.dart';
 import '../gg_dna_version.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
+import '../util/dna_layout.dart';
 import 'instantiate.dart';
 
 /// Entry point for the placed DNA test (`test/dna/dna_test.dart` imports
@@ -19,6 +20,8 @@ import 'instantiate.dart';
 /// the current project and throws when the project is not in a clean,
 /// up-to-date DNA state:
 ///
+/// - a `dot_`-escaped path in `dna/` → fails before instantiating, naming
+///   the `dot-` rename
 /// - hand-modified instances → fails, files stay untouched
 /// - DNA updates → writes them and fails once ("review & commit")
 /// - a file to be overwritten carries uncommitted work → fails without
@@ -34,6 +37,14 @@ Future<void> runDnaTest({
   final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
   final base = baseDnaRoot ?? await ggDnaPackageRoot();
   final emit = log ?? print; // coverage:ignore-line
+
+  final invalidEscapes = invalidDotEscapes(effectiveHost, root);
+  if (invalidEscapes.isNotEmpty) {
+    throw Exception(
+      '\n${cError(invalidDotEscapesMessage)}\n'
+      '${describeInvalidDotEscapes(invalidEscapes)}',
+    );
+  }
 
   final result = instantiateDna(
     host: effectiveHost,
@@ -84,6 +95,31 @@ String cCmd(Object message) => blue(message);
 
 /// Color of an instruction in the DNA report.
 String cAction(Object message) => yellow(message);
+
+// .............................................................................
+/// The paths below `<root>/dna/` that escape a leading dot with `dot_`
+/// instead of `dot-`, project-relative. Only `dot-` is decoded, so these
+/// would instantiate as literal `dot_…` folders.
+List<String> invalidDotEscapes(DnaHost host, String root) {
+  final dnaRoot = '$root/$dnaDirname';
+  if (!host.existsDir(dnaRoot)) return const [];
+  final hits = <String>{};
+  // Paths come back relative to `dnaRoot` from both hosts.
+  for (final rel in host.listFilesRecursive(dnaRoot)) {
+    final segment = invalidDotSegment(rel.replaceAll(r'\', '/'));
+    if (segment != null) hits.add(segment);
+  }
+  return hits.toList()..sort();
+}
+
+// .............................................................................
+/// Renders one instruction per invalid dot escape: rename it to `dot-`.
+String describeInvalidDotEscapes(List<String> segments) =>
+    segments.map((segment) {
+      final fixed = '$dotPrefix${segment.substring(invalidDotPrefix.length)}';
+      return '${cAction('Rename')} ${cCmd('$dnaDirname/$segment')} '
+          '${cAction('to')} ${cCmd('$dnaDirname/$fixed')}.';
+    }).join('\n');
 
 // .............................................................................
 /// Renders one instruction per reported path: move the edits from the
