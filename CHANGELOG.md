@@ -312,6 +312,8 @@ failing the sync; `--check` agrees
 - migrate claude/ configs to agents/, update references throughout
 - Move dna files to dna folder
 
+## 0.0.2 - 2026-08-12
+
 ## 0.0.1 - 2026-08-12
 
 ### Changed
