@@ -13,39 +13,49 @@ void main() {
   group('parseDnaVarEntries', () {
     test('parses strings, coerces numbers and bools', () {
       final r = parseDnaVarEntries(
-        '{"projectName": "myProject", "year": 2026, "flag": true}',
+        '{"dnaProjectName": "myProject", "dnaYear": 2026, "dnaFlag": true}',
         sourceLabel: 'v',
       );
       expect(r.entries, {
-        'projectName': 'myProject',
-        'year': '2026',
-        'flag': 'true',
+        'dnaProjectName': 'myProject',
+        'dnaYear': '2026',
+        'dnaFlag': 'true',
       });
       expect(r.warnings, isEmpty);
     });
 
     test('keeps null as deletion marker', () {
-      final r = parseDnaVarEntries('{"a": null}', sourceLabel: 'v');
-      expect(r.entries.containsKey('a'), isTrue);
-      expect(r.entries['a'], isNull);
+      final r = parseDnaVarEntries('{"dnaA": null}', sourceLabel: 'v');
+      expect(r.entries.containsKey('dnaA'), isTrue);
+      expect(r.entries['dnaA'], isNull);
     });
 
-    test('warns on non-camelCase keys and skips them', () {
-      final r = parseDnaVarEntries(
-        '{"My_Key": "x", "ok": "y"}',
-        sourceLabel: 'v',
+    test('throws on a key without the dna prefix, naming the rename', () {
+      expect(
+        () => parseDnaVarEntries('{"projectName": "x"}', sourceLabel: 'v'),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('projectName'), contains('dnaProjectName')),
+          ),
+        ),
       );
-      expect(r.entries, {'ok': 'y'});
-      expect(r.warnings.single, contains('My_Key'));
     });
 
-    test('warns when a key carries the dna prefix', () {
-      final r = parseDnaVarEntries('{"dnaFoo": "x"}', sourceLabel: 'v');
-      expect(r.warnings.single, contains('without the prefix'));
+    test('throws on a prefixed key that is not camelCase', () {
+      expect(
+        () => parseDnaVarEntries('{"dna_my_key": "x"}', sourceLabel: 'v'),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => parseDnaVarEntries('{"dna": "x"}', sourceLabel: 'v'),
+        throwsA(isA<FormatException>()),
+      );
     });
 
     test('skips nested values with warning', () {
-      final r = parseDnaVarEntries('{"a": {"b": 1}}', sourceLabel: 'v');
+      final r = parseDnaVarEntries('{"dnaA": {"b": 1}}', sourceLabel: 'v');
       expect(r.entries, isEmpty);
       expect(r.warnings.single, contains('must be string'));
     });
@@ -63,10 +73,10 @@ void main() {
 
     test('tolerates comments (JSONC)', () {
       final r = parseDnaVarEntries(
-        '{\n  // company\n  "company": "ggsuite",\n}',
+        '{\n  // company\n  "dnaCompany": "ggsuite",\n}',
         sourceLabel: 'v',
       );
-      expect(r.entries, {'company': 'ggsuite'});
+      expect(r.entries, {'dnaCompany': 'ggsuite'});
     });
   });
 
@@ -98,7 +108,7 @@ void main() {
   });
 
   group('substituteDnaVars', () {
-    const vars = DnaVars(values: {'projectName': 'gg_template_project'});
+    const vars = DnaVars(values: {'dnaProjectName': 'gg_template_project'});
 
     test('replaces all five reference forms case-adaptively', () {
       const content = '''
@@ -116,14 +126,14 @@ kebab: gg-template-project''');
     });
 
     test('respects word boundaries — no partial-name matches', () {
-      const vars = DnaVars(values: {'myVar': 'foo'});
+      const vars = DnaVars(values: {'dnaMyVar': 'foo'});
       expect(substituteDnaVars('dnaMyVariant', vars), 'dnaMyVariant');
       expect(substituteDnaVars('dna_my_vars', vars), 'dna_my_vars');
       expect(substituteDnaVars('xdnaMyVar', vars), 'xdnaMyVar');
     });
 
     test('supports composites', () {
-      const vars = DnaVars(values: {'myClass': 'myValue'});
+      const vars = DnaVars(values: {'dnaMyClass': 'myValue'});
       expect(
         substituteDnaVars('class DnaMyClassTest {}', vars),
         'class MyValueTest {}',
@@ -132,7 +142,7 @@ kebab: gg-template-project''');
     });
 
     test('inserts non-identifier values verbatim for every form', () {
-      const vars = DnaVars(values: {'copyrightHolder': 'MY GREAT Limited'});
+      const vars = DnaVars(values: {'dnaCopyrightHolder': 'MY GREAT Limited'});
       expect(
         substituteDnaVars('(c) dnaCopyrightHolder', vars),
         '(c) MY GREAT Limited',
@@ -145,7 +155,7 @@ kebab: gg-template-project''');
 
     test('longer variable names win over shorter prefixes', () {
       const vars = DnaVars(
-        values: {'project': 'p', 'projectName': 'longWins'},
+        values: {'dnaProject': 'p', 'dnaProjectName': 'longWins'},
       );
       expect(substituteDnaVars('dnaProjectName', vars), 'longWins');
       expect(substituteDnaVars('dnaProject', vars), 'p');
@@ -156,7 +166,9 @@ kebab: gg-template-project''');
     });
 
     test('replaces inside JSON keys and values', () {
-      const vars = DnaVars(values: {'myKey': 'realKey', 'myVal': 'realVal'});
+      const vars = DnaVars(
+        values: {'dnaMyKey': 'realKey', 'dnaMyVal': 'realVal'},
+      );
       expect(
         substituteDnaVars('{"dnaMyKey": "dnaMyVal"}', vars),
         '{"realKey": "realVal"}',

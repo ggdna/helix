@@ -88,7 +88,7 @@ Helix overwrite a hand-written DNA. Run `helix init` to place it.
   "version": 1, // required
   "role": "project", // "dna" for DNA packages themselves
   "layers": ["dna_base", "dna_dart"],
-  "vars": { "projectName": "my_project" },
+  "vars": { "dnaProjectName": "my_project" },
   "claude": { "claudeMdInclude": ["doc/conventions"] },
 }
 ```
@@ -209,16 +209,18 @@ byte-identical. YAML supports whole-file replacement only —
 
 ## Variables
 
-Defined in `dna/_vars.json` (camelCase keys **without** prefix), deep-
-merged across all layers, finally overridden by `vars` in the target's
-`dna/_dna.json`:
+Defined in `dna/_vars.json` (camelCase keys that **must** start with
+`dna`), deep-merged across all layers, finally overridden by `vars` in
+the target's `dna/_dna.json`:
 
 ```json
-{ "copyrightHolder": "ggsuite", "projectName": "unnamed" }
+{ "dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed" }
 ```
 
-References carry the `dna` prefix and are replaced case-adaptively in
-every text file of the merged tree:
+A key without the `dna` prefix is a hard error: the run fails and names
+the rename it expects (`projectName` → `dnaProjectName`). Declaration and
+reference are therefore the same name, replaced case-adaptively in every
+text file of the merged tree:
 
 | Reference          | Replacement                            |
 | ------------------ | -------------------------------------- |

@@ -40,7 +40,7 @@ void main() {
               '{"name": "dna-base", "version": "1.0.0"}',
           '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
           '$root/node_modules/dna-base/dna/_vars.json':
-              '{"copyrightHolder": "ggsuite", "projectName": "unnamed"}',
+              '{"dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed"}',
           '$root/node_modules/dna-base/dna/LICENSE':
               'MIT (c) dnaCopyrightHolder\n',
           '$root/node_modules/dna-base/dna/doc/develop.md': '''
@@ -148,7 +148,7 @@ Run dart pub upgrade.
         extra: {
           '$root/$dnaConfigPath': '{"version": $dnaFormatVersion, '
               '"layers": ["dna-dart"], '
-              '"vars": {"projectName": "my_project"}}',
+              '"vars": {"dnaProjectName": "my_project"}}',
         },
       );
       final r = instantiateDna(
@@ -194,7 +194,7 @@ Run dart pub upgrade.
       expect(host.existsFile('$root/dna/_vars.json'), isTrue);
       expect(
         host.readString('$root/dna/_vars.json'),
-        contains('"projectName": "my_project"'),
+        contains('"dnaProjectName": "my_project"'),
       );
 
       // Sidecars are consumed.
@@ -489,7 +489,7 @@ packages:
       expect(generated.containsKey('vars'), isFalse);
       expect(
         host.readString('$root/dna/_vars.json'),
-        contains('copyrightHolder'),
+        contains('dnaCopyrightHolder'),
       );
     });
 

@@ -12,14 +12,15 @@ import 'jsonc.dart';
 /// private per the `_` convention, deep-merged across layers.
 const String dnaVarsFilename = '_vars.json';
 
-/// Key pattern for variable names: camelCase without the `dna` prefix.
-final RegExp dnaVarKeyRe = RegExp(r'^[a-z][a-zA-Z0-9]*$');
+/// Key pattern for variable names: camelCase with the mandatory `dna`
+/// prefix — declaration and reference read the same (`dnaProjectName`).
+final RegExp dnaVarKeyRe = RegExp(r'^dna[A-Z][a-zA-Z0-9]*$');
 
 // .............................................................................
 /// Parses a `_vars.json` [jsonContent] into raw entries. Values are coerced
 /// to strings (numbers, booleans); `null` survives as a deletion marker for
-/// [mergeDnaVarEntries]. Invalid keys or nested values are skipped with a
-/// warning (prefixed with [sourceLabel]).
+/// [mergeDnaVarEntries]. Nested values are skipped with a warning (prefixed
+/// with [sourceLabel]); a key without the `dna` prefix is a hard error.
 ({Map<String, Object?> entries, List<String> warnings}) parseDnaVarEntries(
   String jsonContent, {
   required String sourceLabel,
@@ -43,6 +44,10 @@ final RegExp dnaVarKeyRe = RegExp(r'^[a-z][a-zA-Z0-9]*$');
 
 // .............................................................................
 /// Validates an already-decoded variables map (see [parseDnaVarEntries]).
+///
+/// Throws a [FormatException] for a key that is not `dna`-prefixed
+/// camelCase — the reference form is the declaration form, so a variable
+/// that cannot be referenced is a configuration error, not a warning.
 ({Map<String, Object?> entries, List<String> warnings}) validateDnaVarEntries(
   Map<String, dynamic> decoded, {
   required String sourceLabel,
@@ -52,16 +57,9 @@ final RegExp dnaVarKeyRe = RegExp(r'^[a-z][a-zA-Z0-9]*$');
   for (final entry in decoded.entries) {
     final key = entry.key;
     if (!dnaVarKeyRe.hasMatch(key)) {
-      warnings.add(
-        '$sourceLabel: key "$key" is not camelCase without prefix — '
-        'skipped.',
-      );
-      continue;
-    }
-    if (RegExp('^dna[A-Z]').hasMatch(key)) {
-      warnings.add(
-        '$sourceLabel: key "$key" starts with "dna" — variables are '
-        'defined without the prefix and referenced with it.',
+      throw FormatException(
+        '$sourceLabel: variable "$key" must be camelCase and start with '
+        '"dna" — rename it to "${_suggestedKey(key)}".',
       );
     }
     final value = entry.value;
@@ -79,6 +77,14 @@ final RegExp dnaVarKeyRe = RegExp(r'^[a-z][a-zA-Z0-9]*$');
     }
   }
   return (entries: entries, warnings: warnings);
+}
+
+// .............................................................................
+/// The `dna`-prefixed camelCase key [key] was probably meant to be.
+String _suggestedKey(String key) {
+  final words = splitIntoWords(key).where((w) => w != 'dna').toList();
+  if (words.isEmpty) return 'dnaMyVariable';
+  return 'dna${words.map(_capitalize).join()}';
 }
 
 // .............................................................................
@@ -102,7 +108,7 @@ Map<String, Object?> mergeDnaVarEntries(
 // .............................................................................
 /// The effective variable set used for substitution.
 class DnaVars {
-  /// Creates the variable set from canonical camelCase [values].
+  /// Creates the variable set from canonical `dna`-prefixed [values].
   const DnaVars({this.values = const {}});
 
   /// Builds the set from merged raw [entries], dropping deletion markers.
@@ -113,7 +119,7 @@ class DnaVars {
         },
       );
 
-  /// Canonical camelCase variable names without prefix → values.
+  /// Canonical `dna`-prefixed camelCase variable names → values.
   final Map<String, String> values;
 
   /// JSON-encodable representation (canonical key order as inserted).
@@ -151,7 +157,10 @@ String substituteDnaVars(String content, DnaVars vars) {
   final keys = vars.values.keys.toList()
     ..sort((a, b) => b.length.compareTo(a.length));
   for (final key in keys) {
-    final words = splitIntoWords(key);
+    // Keys carry the `dna` prefix; the forms below re-add it per casing,
+    // so strip it once here.
+    final words = splitIntoWords(key).skip(1).toList();
+    if (words.isEmpty) continue;
     final value = vars.values[key]!;
     for (final form in DnaVarForm.values) {
       final pattern = _referencePattern(words, form);

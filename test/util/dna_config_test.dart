@@ -63,14 +63,14 @@ void main() {
   // the role
   "role": "dna",
   "layers": ["dna_base", "@tssuite/dna-dart"],
-  "vars": {"projectName": "my_project"},
+  "vars": {"dnaProjectName": "my_project"},
   "claude": {"claudeMdInclude": ["doc/conventions"]},
 }'''),
         root,
       );
       expect(r.config.role, DnaRole.dna);
       expect(r.config.layers, ['dna_base', '@tssuite/dna-dart']);
-      expect(r.config.vars, {'projectName': 'my_project'});
+      expect(r.config.vars, {'dnaProjectName': 'my_project'});
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
       expect(r.warnings, isEmpty);
     });
@@ -194,13 +194,20 @@ void main() {
       expect(r.config.layers, isEmpty);
     });
 
-    test('validates vars with warnings', () {
-      final r = readDnaConfig(
-        hostWith('{"vars": {"Bad_Key": "x", "ok": "y"}}'),
-        root,
+    test('rejects vars that do not start with dna', () {
+      expect(
+        () => readDnaConfig(
+          hostWith('{"vars": {"projectName": "x"}}'),
+          root,
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('dnaProjectName'),
+          ),
+        ),
       );
-      expect(r.config.vars, {'ok': 'y'});
-      expect(r.warnings.single, contains('Bad_Key'));
     });
 
     test('a legacy .gg/dna.json is simply not read', () {

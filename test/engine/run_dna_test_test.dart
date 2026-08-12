@@ -57,6 +57,26 @@ void main() {
       expect(host.commits, hasLength(1));
     });
 
+    test('a variable without the dna prefix fails the run', () async {
+      final host = makeHost(
+        extra: {
+          '$root/node_modules/a-dna/dna/_vars.json': '{"projectName": "p"}',
+        },
+      );
+      await expectLater(
+        () => run(host),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('projectName'), contains('dnaProjectName')),
+          ),
+        ),
+      );
+      // Nothing was written — the run stops while merging the layers.
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+    });
+
     test('dot_ escapes in dna/ fail with a rename instruction', () async {
       final host = makeHost(extra: {'$root/dna/dot_vscode/tasks.json': '{}\n'});
       await expectLater(

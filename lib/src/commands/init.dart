@@ -69,7 +69,7 @@ String dnaConfigSkeleton(List<String> layers) {
   // Transitive parents come from each layer's own dna/_dna.json.
   "layers": [$list]
 
-  // "vars": { "projectName": "my-project" },
+  // "vars": { "dnaProjectName": "my-project" },
   // "claude": { "claudeMdInclude": ["doc/conventions"] }
 }
 ''';
