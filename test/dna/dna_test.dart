@@ -1,0 +1,14 @@
+// Placed by `gg_dna init` — instantiates and verifies this project's DNA
+// on every test run. The logic lives in the gg_dna dev-dependency and is
+// updated through normal dependency updates.
+
+import 'package:gg_dna/gg_dna.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test(
+    'dna is instantiated and unmodified',
+    () => runDnaTest(),
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+}

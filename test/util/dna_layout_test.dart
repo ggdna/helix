@@ -32,10 +32,23 @@ void main() {
       expect(decodeDotSegments('doc/dot-hidden.md'), 'doc/.hidden.md');
     });
 
+    test('every dot_ segment becomes a leading dot too', () {
+      expect(
+        decodeDotSegments('dot_vscode/settings.json'),
+        '.vscode/settings.json',
+      );
+      expect(
+        decodeDotSegments('dot_claude/skills/init/SKILL.md'),
+        '.claude/skills/init/SKILL.md',
+      );
+      expect(decodeDotSegments('doc/dot_hidden.md'), 'doc/.hidden.md');
+    });
+
     test('leaves everything else alone', () {
       expect(decodeDotSegments('doc/develop.md'), 'doc/develop.md');
       // Not a segment prefix — only a leading `dot-` escapes.
       expect(decodeDotSegments('doc/my-dot-file.md'), 'doc/my-dot-file.md');
+      expect(decodeDotSegments('doc/my_dot_file.md'), 'doc/my_dot_file.md');
       expect(
         decodeDotSegments('.vscode/settings.json'),
         '.vscode/settings.json',

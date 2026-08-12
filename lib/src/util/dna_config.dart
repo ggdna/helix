@@ -71,7 +71,12 @@ class DnaConfig {
 
 // .............................................................................
 /// Reads the DNA config of [targetRoot] from `dna/_dna.json`. A missing
-/// file yields the default config.
+/// file yields the default config — but only when there is no `dna/`
+/// folder at all. A `dna/` folder without `_dna.json` is an error: the
+/// config is the only thing that says whether that folder is
+/// hand-authored (`role: dna`) or engine-generated, and defaulting to
+/// `project` would let the engine wipe a hand-written DNA. Run
+/// `gg_dna init` to place the config.
 ///
 /// [packageLabel] names the layer package when [targetRoot] is a resolved
 /// layer rather than the target itself — it turns parse errors into
@@ -83,12 +88,19 @@ class DnaConfig {
 }) {
   final warnings = <String>[];
   final path = '$targetRoot/$dnaConfigPath';
-  if (!host.existsFile(path)) {
-    return (config: const DnaConfig(), warnings: warnings);
-  }
-
   final where =
       packageLabel == null ? dnaConfigPath : '$packageLabel: $dnaConfigPath';
+
+  if (!host.existsFile(path)) {
+    if (host.existsDir('$targetRoot/$dnaDirname')) {
+      throw FormatException(
+        '$where is missing, but a $dnaDirname/ folder exists — the config '
+        'is what declares whether that folder is hand-authored '
+        '("role": "dna") or generated. Run `gg_dna init` to place it.',
+      );
+    }
+    return (config: const DnaConfig(), warnings: warnings);
+  }
 
   final decoded = parseJsonc(host.readString(path), sourceLabel: path);
   if (decoded is! Map<String, dynamic>) {

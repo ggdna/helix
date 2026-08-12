@@ -22,8 +22,15 @@ const String dnaConfigFilename = '_dna.json';
 const String dnaGeneratedFilename = '_generated.json';
 
 /// Prefix that escapes a leading dot in DNA content: `dot-vscode` becomes
-/// `.vscode` when instantiated.
+/// `.vscode` when instantiated. Canonical form — the one suggested in
+/// warnings and documentation.
 const String dotPrefix = 'dot-';
+
+/// All accepted escapes of a leading dot. The `dot_` form exists because
+/// snake_case layers write their folders with an underscore, so
+/// `dna/dot_vscode/` must instantiate to `.vscode/` just like
+/// `dna/dot-vscode/`.
+const List<String> dotPrefixes = [dotPrefix, 'dot_'];
 
 // .............................................................................
 /// Whether [relPosix] is private per the `_` convention: any path segment
@@ -32,19 +39,24 @@ bool isPrivatePath(String relPosix) =>
     relPosix.split('/').any((s) => s.startsWith('_'));
 
 // .............................................................................
-/// Decodes the `dot-` escape of [relPosix]: `dot-vscode/settings.json`
-/// becomes `.vscode/settings.json`.
+/// Decodes the dot escape of [relPosix]: `dot-vscode/settings.json` and
+/// `dot_vscode/settings.json` both become `.vscode/settings.json`.
 ///
 /// DNA layers ship dotfiles escaped because `dart pub publish` silently
 /// drops every path with a leading dot — a pub-installed layer would
 /// otherwise lose `.vscode/`, `.claude/` and friends. `dna/` itself keeps
 /// the escaped form, because that is what gets republished.
-String decodeDotSegments(String relPosix) => relPosix
-    .split('/')
-    .map(
-      (s) => s.startsWith(dotPrefix) ? '.${s.substring(dotPrefix.length)}' : s,
-    )
-    .join('/');
+String decodeDotSegments(String relPosix) =>
+    relPosix.split('/').map(_decodeDotSegment).join('/');
+
+String _decodeDotSegment(String segment) {
+  for (final prefix in dotPrefixes) {
+    if (segment.startsWith(prefix)) {
+      return '.${segment.substring(prefix.length)}';
+    }
+  }
+  return segment;
+}
 
 // .............................................................................
 /// Whether instantiating to [relPosix] is forbidden: git internals and the
