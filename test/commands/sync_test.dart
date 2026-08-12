@@ -5,7 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'package:args/command_runner.dart';
-import 'package:gg_dna/src/commands/sync.dart';
+import 'package:helix/src/commands/sync.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -18,7 +18,7 @@ void main() {
         CommandRunner<dynamic>('test', 'test')
           ..addCommand(Sync(ggLog: messages.add));
 
-    test('fails with the gg_dna init migration hint', () async {
+    test('fails with the helix init migration hint', () async {
       await expectLater(
         () => makeRunner().run(['sync']),
         throwsA(
@@ -26,8 +26,8 @@ void main() {
             (e) => e.message,
             'message',
             allOf(
-              contains('removed in gg_dna 5.0'),
-              contains('gg_dna init'),
+              contains('removed in helix 5.0'),
+              contains('helix init'),
               contains('dev-dependencies'),
             ),
           ),
@@ -39,7 +39,7 @@ void main() {
     test('describes itself as removed', () {
       final sync = Sync(ggLog: messages.add);
       expect(sync.name, 'sync');
-      expect(sync.description, contains('Removed since gg_dna 5.0'));
+      expect(sync.description, contains('Removed since helix 5.0'));
     });
   });
 }

@@ -1,69 +1,11 @@
 {
   "version": 1,
-  "layers": [
-    {
-      "name": "base",
-      "package": "gg_dna",
-      "ecosystem": null,
-      "resolvedVersion": "4.1.1",
-      "via": null,
-      "hash": "0xc10ccea46057d605"
-    },
-    {
-      "name": "self",
-      "package": null,
-      "ecosystem": null,
-      "resolvedVersion": null,
-      "via": null,
-      "hash": "0xc10ccea46057d605"
-    }
-  ],
+  "layers": [],
   "claude": {
     "claudeMdInclude": null
   },
-  "baseVersion": "4.1.1",
-  "baseHash": "0xc10ccea46057d605",
-  "hash": null,
-  "instances": [
-    {
-      "path": ".claude/skills/init/SKILL.md",
-      "hash": "0x0e505fab50995a94"
-    },
-    {
-      "path": ".claude/skills/new-project/SKILL.md",
-      "hash": "0xf863e80c14b5e980"
-    },
-    {
-      "path": ".claude/skills/new-ticket/SKILL.md",
-      "hash": "0xad3fcff3720d05a5"
-    },
-    {
-      "path": ".claude/skills/review/SKILL.md",
-      "hash": "0xfefedaf6c0274000"
-    },
-    {
-      "path": "doc/conventions/code-conventions.md",
-      "hash": "0x488d57d7867e43bc"
-    },
-    {
-      "path": "doc/conventions/documentation-conventions.md",
-      "hash": "0x87d6a90296b14167"
-    },
-    {
-      "path": "doc/conventions/test-conventions.md",
-      "hash": "0xa95cf04e89f66d63"
-    },
-    {
-      "path": "doc/guides/claude-code.md",
-      "hash": "0xe18e86905c716287"
-    },
-    {
-      "path": "doc/guides/dna.md",
-      "hash": "0xe5a0c0607e0f58d5"
-    },
-    {
-      "path": "scripts/README.md",
-      "hash": "0x0072d45be9d1835b"
-    }
-  ]
+  "baseVersion": "0.0.0",
+  "baseHash": null,
+  "hash": "0x6883da335b415f9d",
+  "instances": []
 }

@@ -109,7 +109,7 @@ class DnaManifestClaude {
 }
 
 // .............................................................................
-/// The bookkeeping gg_dna writes to `<target>/dna/_generated.json`.
+/// The bookkeeping helix writes to `<target>/dna/_generated.json`.
 ///
 /// It is the engine's half of the `dna/` folder: which layers produced the
 /// current state, and which project files the DNA owns. The other half,
@@ -137,10 +137,10 @@ class DnaManifest {
   /// The Claude section.
   final DnaManifestClaude claude;
 
-  /// gg_dna version that wrote the manifest.
+  /// helix version that wrote the manifest.
   final String baseVersion;
 
-  /// Hash of gg_dna's own base DNA at instantiation time.
+  /// Hash of helix's own base DNA at instantiation time.
   final String? baseHash;
 
   /// Hash of the generated `dna/` tree (`null` for role: dna).
@@ -185,7 +185,7 @@ class DnaManifest {
     if (version != dnaFormatVersion) {
       throw FormatException(
         '$dnaGeneratedPath was written in format version $version — this '
-        'gg_dna writes version $dnaFormatVersion. $_fix',
+        'helix writes version $dnaFormatVersion. $_fix',
       );
     }
 

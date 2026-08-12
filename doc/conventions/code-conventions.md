@@ -1,7 +1,7 @@
 # Code Conventions (Dart / Flutter)
 
 These rules define a uniform code style for Dart and Flutter packages. They
-are the generic base shipped with `gg_dna` — organization- or
+are the generic base shipped with `helix` — organization- or
 project-specific additions (class prefixes, the concrete license header,
 extra lints) belong in a higher DNA layer, which can override single
 sections or whole files (see `../guides/dna.md`).

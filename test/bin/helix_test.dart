@@ -8,12 +8,12 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
-import '../../bin/gg_dna.dart';
+import '../../bin/helix.dart';
 
 void main() {
   group('run(args, log)', () {
     test('runs init against an explicit target', () async {
-      final tmp = await Directory.systemTemp.createTemp('gg_dna_bin_test_');
+      final tmp = await Directory.systemTemp.createTemp('helix_bin_test_');
       try {
         await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
 

@@ -4,9 +4,9 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_dna/src/util/dna_config.dart';
-import 'package:gg_dna/src/util/dna_fs.dart';
-import 'package:gg_dna/src/util/dna_layout.dart';
+import 'package:helix/src/util/dna_config.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_layout.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -49,7 +49,7 @@ void main() {
             'message',
             allOf(
               contains(dnaConfigPath),
-              contains('gg_dna init'),
+              contains('helix init'),
             ),
           ),
         ),
@@ -62,15 +62,15 @@ void main() {
 {
   // the role
   "role": "dna",
-  "layers": ["base_dna", "@tssuite/dna-dart"],
-  "vars": {"projectName": "my_project"},
+  "layers": ["dna_base", "@tssuite/dna-dart"],
+  "vars": {"dnaProjectName": "my_project"},
   "claude": {"claudeMdInclude": ["doc/conventions"]},
 }'''),
         root,
       );
       expect(r.config.role, DnaRole.dna);
-      expect(r.config.layers, ['base_dna', '@tssuite/dna-dart']);
-      expect(r.config.vars, {'projectName': 'my_project'});
+      expect(r.config.layers, ['dna_base', '@tssuite/dna-dart']);
+      expect(r.config.vars, {'dnaProjectName': 'my_project'});
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
       expect(r.warnings, isEmpty);
     });
@@ -105,13 +105,13 @@ void main() {
         () => readDnaConfig(
           hostWith('{"role": "x"}'),
           root,
-          packageLabel: '@tssuite/base-dna',
+          packageLabel: '@tssuite/dna-base',
         ),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('@tssuite/base-dna'),
+            contains('@tssuite/dna-base'),
           ),
         ),
       );
@@ -137,7 +137,7 @@ void main() {
 
     test('rejects a path where a package name belongs', () {
       expect(
-        () => readDnaConfig(hostWith('{"layers": ["../base_dna"]}'), root),
+        () => readDnaConfig(hostWith('{"layers": ["../dna_base"]}'), root),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -194,13 +194,20 @@ void main() {
       expect(r.config.layers, isEmpty);
     });
 
-    test('validates vars with warnings', () {
-      final r = readDnaConfig(
-        hostWith('{"vars": {"Bad_Key": "x", "ok": "y"}}'),
-        root,
+    test('rejects vars that do not start with dna', () {
+      expect(
+        () => readDnaConfig(
+          hostWith('{"vars": {"projectName": "x"}}'),
+          root,
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('dnaProjectName'),
+          ),
+        ),
       );
-      expect(r.config.vars, {'ok': 'y'});
-      expect(r.warnings.single, contains('Bad_Key'));
     });
 
     test('a legacy .gg/dna.json is simply not read', () {

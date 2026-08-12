@@ -1,4 +1,4 @@
-# gg_dna 5.0 — replica layout, instances, dev-dependency distribution
+# helix 5.0 — replica layout, instances, dev-dependency distribution
 
 Decision log of the v5 redesign (ticket "dna", 2026-08-05). Supersedes
 the 4.0 design documented in `dna_src_and_overrides_md.md` where they
@@ -14,22 +14,22 @@ conflict.
    test verifies this on every run; hand-edited instances fail with the
    hint to edit the owning DNA instead.
 3. **Inheritance tree** — DNA packages are published to the registry
-   of the ecosystems that consume them: `base_dna` is a hybrid
+   of the ecosystems that consume them: `dna_base` is a hybrid
    (pub.dev + npm), `dna_dart` is pub.dev only, `dna-ts` npm only.
-   Package and repository names match (`base_dna`, `dna_dart`). Consumers declare DNAs as dev-dependencies; parent DNAs
+   Package and repository names match (`dna_base`, `dna_dart`). Consumers declare DNAs as dev-dependencies; parent DNAs
    are regular dependencies of their child, so npm/pub resolve the tree
-   transitively. gg_dna reads installed packages instead of cloning;
+   transitively. helix reads installed packages instead of cloning;
    the last override wins.
 4. **Default order** = the declaration order of DNA dev-dependencies in
    `package.json`/`pubspec.yaml`; `.gg/dna.json` `order` overrides.
 5. **Configuration only in `.gg/dna.json`** — never in
    `pubspec.yaml`/`package.json`/`dna.yaml`.
-6. **`gg_dna init` replaces `gg_dna sync`** — init only places the
+6. **`helix init` replaces `helix sync`** — init only places the
    wrapper test (+ config skeleton + gitignore exception); the
-   instantiation runs inside the test via the gg_dna library (Dart
-   in-process; TypeScript via `@tssuite/gg-dna`, the engine compiled to
+   instantiation runs inside the test via the helix library (Dart
+   in-process; TypeScript via `@tssuite/helix`, the engine compiled to
    WebAssembly with fs/git callbacks injected — project
-   `gg_dna-js-bridge`, derived from `gg-bridge-dart-typescript`).
+   `helix-js-bridge`, derived from `gg-bridge-dart-typescript`).
 7. **JSON overrides** via sidecar `X.overrides.json`: deep-merge by
    default, `null` deletes, `"key!"` replaces, `"key+"` joins arrays.
 8. **Variables** in `dna/_vars.json`, referenced case-adaptively as
@@ -51,8 +51,8 @@ conflict.
     referenced from CLAUDE.md via `@`-imports).
 13. **Language**: DNA content is English; legacy German docs are
     translated during migration.
-14. **`gg_dna_ggsuite` is retired** — general DNA docs moved into
-    gg_dna's base DNA, org-specific content moves to `base_dna`.
+14. **`helix_ggsuite` is retired** — general DNA docs moved into
+    helix's base DNA, org-specific content moves to `dna_base`.
 
 ## Engine architecture
 

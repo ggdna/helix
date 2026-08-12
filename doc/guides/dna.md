@@ -3,15 +3,16 @@
 The DNA system keeps a family of repositories consistent: shared
 conventions, Claude skills, scripts, and configuration are written
 **once** in DNA packages and **instantiated** into every consuming
-project. This guide explains the system (gg_dna 5.x) for human
+project. This guide explains the system (Helix 5.x) for human
 developers.
 
 Two things are easy to confuse:
 
-- **`gg_dna` is the engine** — the tool that resolves, merges and
-  instantiates DNA. It carries no project conventions of its own.
+- **Helix is the engine** — the tool that resolves, merges and
+  instantiates DNA. It ships no `dna/` folder and therefore no
+  conventions of its own.
 - **The DNA is the content** — it lives in the DNA packages
-  (`base_dna`, `dna_dart`, `dna-ts`, `ds-dna`, …). That is where you
+  (`dna_base`, `dna_dart`, `dna-ts`, `ds-dna`, …). That is where you
   edit anything you want your projects to inherit.
 
 ## What a DNA Is
@@ -39,29 +40,32 @@ reason: that is the one folder both ecosystems publish.
 ## Layers and Inheritance
 
 Projects consume DNAs as dependencies (pub/npm). A DNA declares its own
-parents the same way. gg_dna expands this into an inheritance tree and
+parents the same way. Helix expands this into an inheritance tree and
 merges the `dna/` replicas bottom-up:
 
-1. the base DNA shipped with gg_dna itself (always the lowest layer),
-2. the layers listed in `"layers"`, parents before children — a layer's
+1. the layers listed in `"layers"`, parents before children — a layer's
    parents come from its own `dna/_dna.json`,
-3. in a `role: dna` repo: the repo's own `dna/` folder as the top layer.
+2. in a `role: dna` repo: the repo's own `dna/` folder as the top layer.
+
+Helix itself ships no `dna/` folder, so it contributes no layer: every
+file a project receives comes from a DNA package it declares. What a
+project inherits is therefore fully described by its `"layers"`.
 
 Later layers win on path collisions; diamond dependencies are merged only
 once. Layers are named by the **package name** they are declared under in
 `pubspec.yaml`/`package.json` — never by a path:
 
 ```jsonc
-{ "version": 1, "layers": ["base_dna"] }
+{ "version": 1, "layers": ["dna_base"] }
 ```
 
 A DNA published to both registries is one layer, not two: the npm scope is
-dropped when folding a name to its identity, so `@tssuite/base-dna` and
-`base_dna` mean the same thing.
+dropped when folding a name to its identity, so `@tssuite/dna-base` and
+`dna_base` mean the same thing.
 
 For local development nothing DNA-specific is needed — `gg_localize_refs`
 points `pubspec_overrides.yaml`/`pnpm-workspace.yaml` at the sibling
-checkouts, and the engine follows whatever the package manager resolved.
+checkouts, and Helix follows whatever the package manager resolved.
 
 ## Public vs. Private: the `_` Convention
 
@@ -69,12 +73,12 @@ Every file of the merged replica whose path contains **no segment starting
 with `_`** is public and is copied to its project location as an
 **instance**. Paths with a leading-underscore segment (`dna/_vars.json`,
 `dna/_drafts/…`) stay inside `dna/`. Override sidecars (`*.overrides.md`,
-`*.overrides.json`, `global.overrides.md`) are consumed by the engine and
+`*.overrides.json`, `global.overrides.md`) are consumed by Helix and
 never instantiated.
 
 ## Instances and the Placed Test
 
-`gg_dna init` is the only CLI command. It places a wrapper test (Dart:
+`helix init` is the only CLI command. It places a wrapper test (Dart:
 `test/dna/dna_test.dart`, TypeScript: `test/dna/dna.spec.ts`) and a
 `dna/_dna.json` skeleton with `layers` pre-filled from the DNA packages
 you have installed. From then on **every test run instantiates the DNA**: merge all layers, apply
@@ -93,7 +97,7 @@ Outcomes (golden-update semantics):
 
 Two rules follow from this:
 
-- **Per-file guard**: gg_dna never overwrites a file that carries
+- **Per-file guard**: Helix never overwrites a file that carries
   uncommitted work — it names those files and writes nothing, so every
   DNA change appears as a reviewable diff on top of a commit. Dirty files
   the DNA does not touch are ignored: you can keep working while the DNA
@@ -105,14 +109,14 @@ Two rules follow from this:
 
   ```text
   Generated files modified by hand:
-  Move edits from doc/develop.md to base_dna/dna/doc/develop.md.
+  Move edits from doc/develop.md to dna_base/dna/doc/develop.md.
   ```
 
 Getting started in a consumer:
 
 ```bash
-dart pub add --dev gg_dna     # declare the DNA(s) as dev-dependencies
-dart run gg_dna init          # place the test + config skeleton
+dart pub add --dev helix     # declare the DNA(s) as dev-dependencies
+dart run helix init          # place the test + config skeleton
 git add -A && git commit -m "Add DNA"
 dart test                     # first run instantiates → "review & commit"
 git add -A && git commit -m "Instantiate DNA"
@@ -168,17 +172,19 @@ JSONC (comments, trailing commas) is tolerated in DNA JSON files.
 
 ## Variables
 
-Layers define variables in `dna/_vars.json` — camelCase keys **without**
-prefix:
+Layers define variables in `dna/_vars.json` — camelCase keys that
+**must** start with `dna`; a key without the prefix fails the placed test
+with the rename it expects:
 
 ```json
-{ "projectName": "my-project", "orgName": "acme" }
+{ "dnaProjectName": "my-project", "dnaOrgName": "acme" }
 ```
 
 Variable files merge across layers (`null` deletes an inherited
-variable); a project can override values via `"vars"` in `dna/_dna.json`.
-In DNA content, variables are referenced **with the `dna` prefix**, and
-each reference form renders the value in its own casing:
+variable); a project can override values via `"vars"` in `dna/_dna.json`,
+under the same prefixed keys. In DNA content, variables are referenced by
+the very same name, and each reference form renders the value in its own
+casing:
 
 | Reference | Renders as (value `my-project`) |
 |---|---|
@@ -190,6 +196,18 @@ each reference form renders the value in its own casing:
 
 Values that are not identifier-like (sentences, spaces) are inserted
 verbatim in all forms. Unknown references stay literal.
+
+A value may itself reference other variables — in any of the five forms:
+
+```json
+{ "dnaOrg": "acme", "dnaTitle": "Built by dnaOrg" }
+```
+
+`dnaTitle` becomes `Built by acme`. Helix loops over the values until no
+reference to a known variable is left, at most 10 passes. Two setups are
+rejected before instantiation starts: a cycle (`dnaA` → `dnaB` → `dnaA`,
+including a variable referencing itself), reported with the path that
+closes it, and a chain reaching deeper than 10 levels.
 
 ## File-Naming Conversion
 
@@ -211,8 +229,8 @@ instances are rewritten automatically.
 {
   "version": 1,                 // required
   "role": "project",            // "dna" for DNA repositories
-  "layers": ["base_dna"],       // package names, in application order
-  "vars": { "projectName": "my-project" },
+  "layers": ["dna_base"],       // package names, in application order
+  "vars": { "dnaProjectName": "my-project" },
   "fileNaming": "snake_case",   // camelCase | kebab-case | keep
   "claude": { "claudeMdInclude": ["doc/conventions"] }
 }
@@ -220,19 +238,20 @@ instances are rewritten automatically.
 
 Only `version` is required. `claude.claudeMdInclude` maintains a managed
 block of `@` imports in the project's `CLAUDE.md` (folders expand to their
-`.md` files) between `<!-- gg_dna:claude_md:start -->` and
-`<!-- gg_dna:claude_md:end -->`. `CLAUDE.md` itself is never a DNA
+`.md` files) between `<!-- helix:claude_md:start -->` and
+`<!-- helix:claude_md:end -->`. `CLAUDE.md` itself is never a DNA
 instance — only that block is managed; everything outside it belongs to
 the project.
 
-The engine writes nothing into this file. Its own bookkeeping — the
+Helix writes nothing into this file. Its own bookkeeping — the
 resolved layers, their versions and hashes, and the list of instances it
 owns — goes to `dna/_generated.json`, which is machine-owned and should
 never be edited by hand.
 
-## What the Base DNA Ships
+## Where the Content Lives
 
-The gg_dna package itself carries the lowest layer:
+Helix ships no content. The lowest layer of a typical setup is
+`dna_base`, which carries what every repository of the family shares:
 
 - `doc/conventions/` — code, test, and documentation conventions,
 - `doc/guides/` — this guide and a Claude Code quick start,
@@ -240,5 +259,7 @@ The gg_dna package itself carries the lowest layer:
   `review` skills,
 - `scripts/` — a placeholder for helper scripts of higher layers.
 
-Organization DNAs layer their specifics (license headers, tooling
-commands, org-specific guides) on top via the override mechanisms above.
+Language and organization DNAs layer their specifics (license headers,
+tooling commands, org-specific guides) on top via the override mechanisms
+above. To change any of it, edit the DNA package — never the instance,
+and never Helix.

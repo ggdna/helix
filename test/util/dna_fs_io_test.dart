@@ -6,7 +6,7 @@
 
 import 'dart:io';
 
-import 'package:gg_dna/src/util/dna_fs_io.dart';
+import 'package:helix/src/util/dna_fs_io.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -15,7 +15,7 @@ void main() {
     late IoDnaHost host;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('gg_dna_fs_io_test_');
+      tmp = Directory.systemTemp.createTempSync('helix_fs_io_test_');
       host = IoDnaHost(git: (_, __) => '');
     });
 
@@ -110,7 +110,7 @@ void main() {
     });
 
     test('really commits in a git repository', () {
-      final tmp = Directory.systemTemp.createTempSync('gg_dna_commit_test_');
+      final tmp = Directory.systemTemp.createTempSync('helix_commit_test_');
       try {
         final host = IoDnaHost();
         String git(List<String> args) => Process.runSync(

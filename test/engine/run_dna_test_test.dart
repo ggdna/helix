@@ -6,7 +6,7 @@
 
 import 'dart:io';
 
-import 'package:gg_dna/gg_dna.dart';
+import 'package:helix/helix.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -55,6 +55,26 @@ void main() {
       log.clear();
       await run(host);
       expect(host.commits, hasLength(1));
+    });
+
+    test('a variable without the dna prefix fails the run', () async {
+      final host = makeHost(
+        extra: {
+          '$root/node_modules/a-dna/dna/_vars.json': '{"projectName": "p"}',
+        },
+      );
+      await expectLater(
+        () => run(host),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('projectName'), contains('dnaProjectName')),
+          ),
+        ),
+      );
+      // Nothing was written — the run stops while merging the layers.
+      expect(host.existsFile('$root/LICENSE'), isFalse);
     });
 
     test('dot_ escapes in dna/ fail with a rename instruction', () async {
@@ -181,7 +201,7 @@ void main() {
 
     test('defaults target root and base DNA when not given', () async {
       // The in-memory host keeps this side-effect free: the defaults
-      // (current directory, resolved gg_dna package root) are exercised,
+      // (current directory, resolved helix package root) are exercised,
       // but nothing is ever read from or written to the real repository.
       final host = MemoryDnaHost();
       await expectLater(
@@ -203,7 +223,7 @@ void main() {
     late Directory tmp;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('gg_dna_run_test_');
+      tmp = Directory.systemTemp.createTempSync('helix_run_test_');
     });
 
     tearDown(() {
@@ -240,11 +260,11 @@ void main() {
     });
   });
 
-  group('ggDnaPackageRoot', () {
-    test('resolves the installed gg_dna package root', () async {
-      final path = await ggDnaPackageRoot();
+  group('helixPackageRoot', () {
+    test('resolves the installed helix package root', () async {
+      final path = await helixPackageRoot();
       expect(path, isNot(contains(r'\')));
-      expect(path.endsWith('gg_dna'), isTrue, reason: path);
+      expect(path.endsWith('helix'), isTrue, reason: path);
     });
   });
 

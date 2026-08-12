@@ -18,8 +18,8 @@ import 'package_resolution.dart';
 const int maxLayerDepth = 10;
 
 /// Canonical names of the engine itself and its bridges — never DNA
-/// layers, because gg_dna's own `dna/` is always the implicit base layer.
-const Set<String> enginePackageNames = {'gg-dna', 'gg-dna-js'};
+/// layers, because helix's own `dna/` is always the implicit base layer.
+const Set<String> enginePackageNames = {'helix', 'helix-js'};
 
 // .............................................................................
 /// One resolved layer of the inheritance tree, parents before children.
@@ -42,7 +42,7 @@ class ResolvedLayer {
   /// Root folder of the layer checkout (its `dna/` lives below).
   final String root;
 
-  /// Package name as installed (`base_dna`, `@tssuite/base-dna`).
+  /// Package name as installed (`dna_base`, `@tssuite/dna-base`).
   final String package;
 
   /// Which ecosystem provided the copy that was used.
@@ -98,7 +98,7 @@ class ResolvedLayer {
     final name = canonicalPackageName(rawName);
     if (enginePackageNames.contains(name)) {
       throw const FormatException(
-        'gg_dna itself is the engine — its base DNA is always layer 0 '
+        'helix itself is the engine — its base DNA is always layer 0 '
         'and must not be listed as a DNA layer.',
       );
     }
@@ -217,7 +217,7 @@ void _warnOnDivergentCopies(
 
 // .............................................................................
 /// Package names declared by the manifests at [root] that resolve to DNA
-/// packages — the starting point `gg_dna init` writes into `layers`.
+/// packages — the starting point `helix init` writes into `layers`.
 ///
 /// Only a suggestion: the engine itself never infers layers, so what is
 /// not listed in `dna/_dna.json` is not applied.

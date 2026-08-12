@@ -3,7 +3,7 @@
 Documentation is **functional**, not "pretty". Every piece of
 documentation has a clear goal: API understanding, reproducibility,
 traceability of changes. This file is the generic base shipped with
-`gg_dna`; organization-specific tooling notes (CI workflows, commit
+`helix`; organization-specific tooling notes (CI workflows, commit
 wrappers) belong in a higher DNA layer.
 
 ## 1. Doc Comments in Code (`///`)
@@ -145,8 +145,8 @@ Recommended content:
   them with `@` imports (e.g. `@doc/conventions/code-conventions.md`)
   instead of duplicating their content. When `dna/_dna.json` configures
   `claude.claudeMdInclude`, the DNA test maintains such an import
-  block automatically between `<!-- gg_dna:claude_md:start -->` and
-  `<!-- gg_dna:claude_md:end -->` — leave those markers untouched and put
+  block automatically between `<!-- helix:claude_md:start -->` and
+  `<!-- helix:claude_md:end -->` — leave those markers untouched and put
   hand-written notes outside the block.
 
 Not in CLAUDE.md: onboarding prose, marketing, anything that is better

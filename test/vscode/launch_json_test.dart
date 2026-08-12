@@ -20,24 +20,24 @@ void main() {
 
       final parsedLaunchJson = jsonDecode(launchJson) as Map<String, dynamic>;
 
-      // Ensure there is a configuration for executing bin/gg_dna.dart
+      // Ensure there is a configuration for executing bin/helix.dart
       final configurations =
           parsedLaunchJson['configurations'] as List<dynamic>;
 
-      final ggDna = configurations.firstWhere(
+      final helix = configurations.firstWhere(
         (dynamic configuration) =>
-            configuration['name'].toString() == 'gg_dna.dart',
+            configuration['name'].toString() == 'helix.dart',
       );
 
       expect(
-        ggDna,
+        helix,
         isNotNull,
-        reason: 'Item for executing bin/gg_dna.dart not found',
+        reason: 'Item for executing bin/helix.dart not found',
       );
 
-      expect(ggDna['name'], 'gg_dna.dart');
-      expect(ggDna['type'], 'dart');
-      expect(ggDna['request'], 'launch');
+      expect(helix['name'], 'helix.dart');
+      expect(helix['type'], 'dart');
+      expect(helix['request'], 'launch');
 
       // Ensure there is a coniguration for executing the current file
       final currentFile = parsedLaunchJson['configurations'].firstWhere(

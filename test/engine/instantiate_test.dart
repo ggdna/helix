@@ -8,12 +8,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:gg_dna/src/engine/instantiate.dart';
-import 'package:gg_dna/src/util/dna_config.dart';
-import 'package:gg_dna/src/util/dna_fs.dart';
-import 'package:gg_dna/src/util/dna_fs_io.dart';
-import 'package:gg_dna/src/util/dna_layout.dart';
-import 'package:gg_dna/src/util/dna_manifest.dart';
+import 'package:helix/src/engine/instantiate.dart';
+import 'package:helix/src/util/dna_config.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_fs_io.dart';
+import 'package:helix/src/util/dna_layout.dart';
+import 'package:helix/src/util/dna_manifest.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -24,7 +24,7 @@ void main() {
       '{"version": $dnaFormatVersion, "role": "dna", '
       '"layers": [${layers.map((l) => '"$l"').join(', ')}]}';
 
-  /// Builds a target with base-dna and dna-dart installed via npm and a
+  /// Builds a target with dna-base and dna-dart installed via npm and a
   /// pubspec.
   MemoryDnaHost makeHost({Map<String, String> extra = const {}}) =>
       MemoryDnaHost(
@@ -35,15 +35,15 @@ void main() {
               '{"dna-dart": "^1.0.0"}}',
           '$root/$dnaConfigPath':
               '{"version": $dnaFormatVersion, "layers": ["dna-dart"]}',
-          // base-dna (installed transitively) ..........................
-          '$root/node_modules/base-dna/package.json':
-              '{"name": "base-dna", "version": "1.0.0"}',
-          '$root/node_modules/base-dna/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/base-dna/dna/_vars.json':
-              '{"copyrightHolder": "ggsuite", "projectName": "unnamed"}',
-          '$root/node_modules/base-dna/dna/LICENSE':
+          // dna-base (installed transitively) ..........................
+          '$root/node_modules/dna-base/package.json':
+              '{"name": "dna-base", "version": "1.0.0"}',
+          '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
+          '$root/node_modules/dna-base/dna/_vars.json':
+              '{"dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed"}',
+          '$root/node_modules/dna-base/dna/LICENSE':
               'MIT (c) dnaCopyrightHolder\n',
-          '$root/node_modules/base-dna/dna/doc/develop.md': '''
+          '$root/node_modules/dna-base/dna/doc/develop.md': '''
 # Develop
 
 Package manager: {{@pm:npm}}.
@@ -52,21 +52,21 @@ Package manager: {{@pm:npm}}.
 
 Run {{@pm:npm}} update.
 ''',
-          '$root/node_modules/base-dna/dna/dot-vscode/settings.json': '''
+          '$root/node_modules/dna-base/dna/dot-vscode/settings.json': '''
 {
   // base settings
   "editor.rulers": [80],
   "files.trimTrailingWhitespace": true
 }
 ''',
-          '$root/node_modules/base-dna/dna/dot-vscode/extensions.json':
+          '$root/node_modules/dna-base/dna/dot-vscode/extensions.json':
               '{"recommendations": ["esbenp.prettier-vscode"]}\n',
           // dna-dart ...................................................
           '$root/node_modules/dna-dart/package.json':
               '{"name": "dna-dart", "version": "1.0.0", '
-                  '"dependencies": {"base-dna": "^1.0.0"}}',
+                  '"dependencies": {"dna-base": "^1.0.0"}}',
           '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig([
-            'base-dna',
+            'dna-base',
           ]),
           '$root/node_modules/dna-dart/dna/doc/develop.overrides.md': '''
 ## [@update] Update dependencies
@@ -89,7 +89,7 @@ Run dart pub upgrade.
     late Directory tmp;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('gg_dna_prune_test_');
+      tmp = Directory.systemTemp.createTempSync('helix_prune_test_');
     });
 
     tearDown(() {
@@ -148,7 +148,7 @@ Run dart pub upgrade.
         extra: {
           '$root/$dnaConfigPath': '{"version": $dnaFormatVersion, '
               '"layers": ["dna-dart"], '
-              '"vars": {"projectName": "my_project"}}',
+              '"vars": {"dnaProjectName": "my_project"}}',
         },
       );
       final r = instantiateDna(
@@ -194,7 +194,7 @@ Run dart pub upgrade.
       expect(host.existsFile('$root/dna/_vars.json'), isTrue);
       expect(
         host.readString('$root/dna/_vars.json'),
-        contains('"projectName": "my_project"'),
+        contains('"dnaProjectName": "my_project"'),
       );
 
       // Sidecars are consumed.
@@ -210,7 +210,7 @@ Run dart pub upgrade.
       // Manifest v5 with recursive layer info.
       final manifest = DnaManifest.read(host, root)!;
       expect(manifest.layers.map((l) => l.name).toList(), [
-        'base-dna',
+        'dna-base',
         'dna-dart',
       ]);
       expect(manifest.layers.first.via, 'dna-dart');
@@ -234,7 +234,7 @@ Run dart pub upgrade.
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
 
       host.writeString(
-        '$root/node_modules/base-dna/dna/dot-vscode/extensions.json',
+        '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
         '{"recommendations": ["esbenp.prettier-vscode", "new.extension"]}\n',
       );
       final r = instantiateDna(
@@ -290,7 +290,7 @@ Run dart pub upgrade.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.sources['LICENSE'], 'base-dna/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna-base/dna/LICENSE');
       expect(
         r.modifiedInstances,
         contains('LICENSE'),
@@ -315,14 +315,14 @@ Run dart pub upgrade.
       final host = MemoryDnaHost(
         files: {
           '$root/pubspec.yaml': 'name: consumer\n'
-              'dev_dependencies:\n  base_dna: ^1.0.0\n',
+              'dev_dependencies:\n  dna_base: ^1.0.0\n',
           '$root/$dnaConfigPath':
-              '{"version": $dnaFormatVersion, "layers": ["base-dna"]}',
+              '{"version": $dnaFormatVersion, "layers": ["dna-base"]}',
           '$root/.dart_tool/package_config.json': '{"packages": [ '
-              '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-          '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.0\n',
-          '/cache/base_dna/$dnaConfigPath': layerConfig(),
-          '/cache/base_dna/dna/LICENSE': 'MIT\n',
+              '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+          '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
+          '/cache/dna_base/$dnaConfigPath': layerConfig(),
+          '/cache/dna_base/dna/LICENSE': 'MIT\n',
         },
       );
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
@@ -332,7 +332,7 @@ Run dart pub upgrade.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.sources['LICENSE'], 'base_dna/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna_base/dna/LICENSE');
     });
 
     test('a localized layer is shown as the folder to open', () {
@@ -420,7 +420,7 @@ packages:
 
       // User moves the change into the DNA source instead.
       host.writeString(
-        '$root/node_modules/base-dna/dna/LICENSE',
+        '$root/node_modules/dna-base/dna/LICENSE',
         'MIT (c) dnaCopyrightHolder — edited\n',
       );
       final healed = instantiateDna(
@@ -489,7 +489,7 @@ packages:
       expect(generated.containsKey('vars'), isFalse);
       expect(
         host.readString('$root/dna/_vars.json'),
-        contains('copyrightHolder'),
+        contains('dnaCopyrightHolder'),
       );
     });
 
@@ -538,7 +538,7 @@ packages:
 
       // The DNA changes and the target instance is dirty at the same time.
       host.writeString(
-        '$root/node_modules/base-dna/dna/LICENSE',
+        '$root/node_modules/dna-base/dna/LICENSE',
         'MIT (c) dnaCopyrightHolder — new\n',
       );
       host.uncommitted.add('LICENSE');
@@ -553,7 +553,7 @@ packages:
       expect(r.updated, isEmpty);
       expect(host.files, before);
       expect(r.messages, contains(uncommittedTargetsMessage));
-      expect(r.sources['LICENSE'], 'base-dna/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna-base/dna/LICENSE');
     });
 
     test('an uncommitted file that is only created does not block', () {
@@ -620,7 +620,7 @@ packages:
 
       // The DNA stops shipping the extensions file.
       host.deleteFile(
-        '$root/node_modules/base-dna/dna/dot-vscode/extensions.json',
+        '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
       );
       host.deleteFile(
         '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json',
@@ -641,7 +641,7 @@ packages:
       instantiateDna(host: host2, targetRoot: root, baseVersion: '4.0.0');
       host2.writeString('$root/.vscode/extensions.json', '{"mine": 1}');
       host2.deleteFile(
-        '$root/node_modules/base-dna/dna/dot-vscode/extensions.json',
+        '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
       );
       host2.deleteFile(
         '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json',
@@ -659,23 +659,23 @@ packages:
     });
 
     test('role dna: own dna/ is synced whatever layers are declared', () {
-      // Two declared layers, a chain (dna-dart -> base-dna), each shipping
+      // Two declared layers, a chain (dna-dart -> dna-base), each shipping
       // the same paths as the target. The own dna/ still wins every
       // conflict and still contributes its exclusive files.
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"name": "leaf-dna", "version": "1.0.0", '
-              '"dependencies": {"dna-dart": "^1.0.0", "base-dna": "^1.0.0"}}',
-          '$root/$dnaConfigPath': layerConfig(['base-dna', 'dna-dart']),
-          '$root/node_modules/base-dna/package.json':
-              '{"name": "base-dna", "version": "1.0.0"}',
-          '$root/node_modules/base-dna/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/base-dna/dna/doc/develop.md': '# Base\n',
+              '"dependencies": {"dna-dart": "^1.0.0", "dna-base": "^1.0.0"}}',
+          '$root/$dnaConfigPath': layerConfig(['dna-base', 'dna-dart']),
+          '$root/node_modules/dna-base/package.json':
+              '{"name": "dna-base", "version": "1.0.0"}',
+          '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
+          '$root/node_modules/dna-base/dna/doc/develop.md': '# Base\n',
           '$root/node_modules/dna-dart/package.json':
               '{"name": "dna-dart", "version": "1.0.0", '
-                  '"dependencies": {"base-dna": "^1.0.0"}}',
+                  '"dependencies": {"dna-base": "^1.0.0"}}',
           '$root/node_modules/dna-dart/$dnaConfigPath':
-              layerConfig(['base-dna']),
+              layerConfig(['dna-base']),
           '$root/node_modules/dna-dart/dna/doc/develop.md': '# Dart\n',
           '$root/dna/doc/develop.md': '# Own version\n',
           '$root/dna/doc/only-here.md': '# Only in the own DNA\n',
@@ -699,7 +699,7 @@ packages:
       final manifest = DnaManifest.read(host, root)!;
       expect(
         manifest.layers.map((l) => l.name),
-        ['base-dna', 'dna-dart', 'self'],
+        ['dna-base', 'dna-dart', 'self'],
       );
     });
 
@@ -707,13 +707,13 @@ packages:
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"name": "dna-dart", "version": "1.0.0", '
-              '"dependencies": {"base-dna": "^1.0.0"}}',
-          '$root/$dnaConfigPath': layerConfig(['base-dna']),
-          '$root/node_modules/base-dna/package.json':
-              '{"name": "base-dna", "version": "1.0.0"}',
-          '$root/node_modules/base-dna/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/base-dna/dna/doc/develop.md': '# Base\n',
-          '$root/node_modules/base-dna/dna/LICENSE': 'MIT\n',
+              '"dependencies": {"dna-base": "^1.0.0"}}',
+          '$root/$dnaConfigPath': layerConfig(['dna-base']),
+          '$root/node_modules/dna-base/package.json':
+              '{"name": "dna-base", "version": "1.0.0"}',
+          '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
+          '$root/node_modules/dna-base/dna/doc/develop.md': '# Base\n',
+          '$root/node_modules/dna-base/dna/LICENSE': 'MIT\n',
           '$root/dna/doc/develop.md': '# Own version\n',
           '$root/dna/dot-vscode/settings.json': '{"a": 1}\n',
         },
@@ -744,7 +744,7 @@ packages:
       // The hand-authored config survives inside the hand-authored dna/.
       expect(
         host.readString('$root/$dnaConfigPath'),
-        layerConfig(['base-dna']),
+        layerConfig(['dna-base']),
       );
     });
 
@@ -852,7 +852,7 @@ packages:
       final claude = host.readString('$root/CLAUDE.md');
       expect(claude, contains('# My project'));
       expect(claude, contains('@doc/develop.md'));
-      expect(claude, contains('<!-- gg_dna:claude_md:start -->'));
+      expect(claude, contains('<!-- helix:claude_md:start -->'));
     });
 
     test('yaml overrides and legacy .tag.md files are hard errors', () {
@@ -994,7 +994,7 @@ packages:
     test('global.overrides.md rewrites string tags across all files', () {
       final host = makeHost(
         extra: {
-          '$root/node_modules/base-dna/dna/doc/other.md':
+          '$root/node_modules/dna-base/dna/doc/other.md':
               'Manager: {{@pm:npm}}\n',
           '$root/node_modules/dna-dart/dna/global.overrides.md':
               '<!-- @pm --> dart pub <!-- @pm -->\n',
@@ -1082,10 +1082,10 @@ Not allowed globally.
       expect(host.readBytes('$root/doc/legacy.txt'), latin1);
     });
 
-    test('base DNA of gg_dna itself is layer 0', () {
+    test('base DNA of helix itself is layer 0', () {
       final host = makeHost(
         extra: {
-          '/gg/dna/doc/base-doc.md': '# From gg_dna base\n',
+          '/gg/dna/doc/base-doc.md': '# From helix base\n',
         },
       );
       instantiateDna(
@@ -1097,7 +1097,7 @@ Not allowed globally.
       expect(host.existsFile('$root/dna/doc/base-doc.md'), isTrue);
       expect(host.existsFile('$root/doc/base-doc.md'), isTrue);
       // The engine's built-in base DNA points at the repo's dna/ folder,
-      // never at a gg_dna package path.
+      // never at a helix package path.
       host.writeString('$root/doc/base-doc.md', 'hand edited\n');
       final modified = instantiateDna(
         host: host,

@@ -4,11 +4,11 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_dna/src/util/dna_config.dart';
-import 'package:gg_dna/src/util/dna_fs.dart';
-import 'package:gg_dna/src/util/dna_layout.dart';
-import 'package:gg_dna/src/util/dna_manifest.dart';
-import 'package:gg_dna/src/util/json_merge.dart';
+import 'package:helix/src/util/dna_config.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_layout.dart';
+import 'package:helix/src/util/dna_manifest.dart';
+import 'package:helix/src/util/json_merge.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -17,8 +17,8 @@ void main() {
   const manifest = DnaManifest(
     layers: [
       DnaManifestLayer(
-        name: 'base-dna',
-        package: '@tssuite/base-dna',
+        name: 'dna-base',
+        package: '@tssuite/dna-base',
         ecosystem: 'node',
         resolvedVersion: '1.0.0',
         via: 'dna-dart',
@@ -47,8 +47,8 @@ void main() {
 
       final read = DnaManifest.read(host, root)!;
       expect(read.layers, hasLength(2));
-      expect(read.layers.first.name, 'base-dna');
-      expect(read.layers.first.package, '@tssuite/base-dna');
+      expect(read.layers.first.name, 'dna-base');
+      expect(read.layers.first.package, '@tssuite/dna-base');
       expect(read.layers.first.ecosystem, 'node');
       expect(read.layers.first.via, 'dna-dart');
       expect(read.layers.first.resolvedVersion, '1.0.0');

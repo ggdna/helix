@@ -8,7 +8,7 @@ library;
 
 export 'src/engine/instantiate.dart';
 export 'src/engine/run_dna_test.dart';
-export 'src/gg_dna.dart';
+export 'src/helix.dart';
 export 'src/util/dna_config.dart';
 export 'src/util/dna_fs.dart';
 export 'src/util/dna_fs_io.dart';

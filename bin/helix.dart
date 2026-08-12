@@ -7,7 +7,7 @@
 
 import 'package:gg_args/gg_args.dart';
 import 'package:gg_log/gg_log.dart';
-import 'package:gg_dna/gg_dna.dart';
+import 'package:helix/helix.dart';
 
 // .............................................................................
 Future<void> run({
@@ -16,7 +16,7 @@ Future<void> run({
 }) =>
     GgCommandRunner(
       ggLog: ggLog,
-      command: GgDna(ggLog: ggLog),
+      command: Helix(ggLog: ggLog),
     ).run(args: args);
 
 // .............................................................................
