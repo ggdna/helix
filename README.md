@@ -78,6 +78,12 @@ with a leading dot, so a config below `.gg/` never reaches a
 pub-installed consumer. The engine only ever *reads* this file; what it
 writes goes to `dna/_generated.json`.
 
+A project without a `dna/` folder and without this file is simply not a
+DNA project. A `dna/` folder **without** `_dna.json` is a hard error —
+the config is what declares whether that folder is hand-authored
+(`"role": "dna"`) or engine-generated, and guessing `project` would let
+the engine overwrite a hand-written DNA. Run `gg_dna init` to place it.
+
 ```jsonc
 {
   "version": 1, // required
@@ -96,6 +102,11 @@ writes goes to `dna/_generated.json`.
   `dna/` folder alone does not.
 - `layers` lists package names in application order. A dependency that
   is not listed is not a layer.
+
+With `role: "dna"` the repo's own `dna/` is applied unconditionally and
+always last — with an empty `layers`, with one layer, with a whole tree
+of them, and even when a declared layer is another copy of the same
+package. It always contributes its files and always wins a conflict.
 
 ## The replica layout
 
@@ -117,7 +128,9 @@ writes goes to `dna/_generated.json`.
   `dna/.vscode/` loses it the moment it is consumed from pub. The escape
   is decoded when instantiating; `dna/` itself keeps it, because that is
   what gets republished. A layer shipping literal dotfiles is warned
-  about.
+  about. The snake_case variant `dot_` is decoded as well, so
+  `dna/dot_vscode/` instantiates to `.vscode/` just like
+  `dna/dot-vscode/`; `dot-` stays the canonical, documented form.
 - **Private**: path segments starting with `_` (e.g. `_vars.json`) stay
   inside `dna/` and are never instantiated.
 - **Public**: everything else becomes an instance.

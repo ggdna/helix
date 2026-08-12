@@ -658,6 +658,51 @@ packages:
       );
     });
 
+    test('role dna: own dna/ is synced whatever layers are declared', () {
+      // Two declared layers, a chain (dna-dart -> base-dna), each shipping
+      // the same paths as the target. The own dna/ still wins every
+      // conflict and still contributes its exclusive files.
+      final host = MemoryDnaHost(
+        files: {
+          '$root/package.json': '{"name": "leaf-dna", "version": "1.0.0", '
+              '"dependencies": {"dna-dart": "^1.0.0", "base-dna": "^1.0.0"}}',
+          '$root/$dnaConfigPath': layerConfig(['base-dna', 'dna-dart']),
+          '$root/node_modules/base-dna/package.json':
+              '{"name": "base-dna", "version": "1.0.0"}',
+          '$root/node_modules/base-dna/$dnaConfigPath': layerConfig(),
+          '$root/node_modules/base-dna/dna/doc/develop.md': '# Base\n',
+          '$root/node_modules/dna-dart/package.json':
+              '{"name": "dna-dart", "version": "1.0.0", '
+                  '"dependencies": {"base-dna": "^1.0.0"}}',
+          '$root/node_modules/dna-dart/$dnaConfigPath':
+              layerConfig(['base-dna']),
+          '$root/node_modules/dna-dart/dna/doc/develop.md': '# Dart\n',
+          '$root/dna/doc/develop.md': '# Own version\n',
+          '$root/dna/doc/only-here.md': '# Only in the own DNA\n',
+        },
+      );
+      instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4.0.0',
+      );
+
+      // Applied last: the own file wins over both layers …
+      expect(host.readString('$root/doc/develop.md'), '# Own version\n');
+      // … and a file no layer ships is instantiated all the same.
+      expect(
+        host.readString('$root/doc/only-here.md'),
+        '# Only in the own DNA\n',
+      );
+
+      // The ordering the win depends on, asserted directly.
+      final manifest = DnaManifest.read(host, root)!;
+      expect(
+        manifest.layers.map((l) => l.name),
+        ['base-dna', 'dna-dart', 'self'],
+      );
+    });
+
     test('role dna: own dna/ is the last layer and never overwritten', () {
       final host = MemoryDnaHost(
         files: {

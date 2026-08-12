@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A `dna/` folder without `dna/_dna.json` is a hard error instead of
+silently falling back to `"role": "project"` — that fallback let the
+engine treat a hand-authored DNA as generated content.
+- Ensure correct naming, Require dna/_dna.json
+
+### Fixed
+
+- The snake_case dot escape `dot_` is decoded like `dot-`, so
+`dna/dot_vscode/settings.json` also instantiates to
+`.vscode/settings.json`.
+
 ## 4.1.0 - 2026-08-09
 
 ### Changed

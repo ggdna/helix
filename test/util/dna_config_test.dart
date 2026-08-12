@@ -37,6 +37,26 @@ void main() {
       expect(r.warnings, isEmpty);
     });
 
+    test('a dna/ folder without _dna.json is an error', () {
+      final host = hostWith(
+        null,
+        extra: {'$root/$dnaDirname/doc/develop.md': '# Develop\n'},
+      );
+      expect(
+        () => readDnaConfig(host, root),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains(dnaConfigPath),
+              contains('gg_dna init'),
+            ),
+          ),
+        ),
+      );
+    });
+
     test('parses a full config (JSONC tolerated)', () {
       final r = readDnaConfig(
         hostWith('''

@@ -160,9 +160,19 @@ DnaInstantiationResult instantiateDna({
         root: layer.root,
         display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
       ),
+    // The repository's own `dna/` is applied unconditionally and always
+    // last — however many layers `_dna.json` declares, and whether or not
+    // one of them happens to be another copy of this same package. It is
+    // hand-authored, so it is the one layer that must never lose a
+    // conflict, and it must be instantiated even when a declared layer
+    // ships nothing at all.
     if (config.role == DnaRole.dna)
       (label: 'self', root: targetRoot, display: dnaDirname),
   ];
+  assert(
+    config.role != DnaRole.dna || sources.last.label == 'self',
+    'the own dna/ must stay the last source',
+  );
 
   // 2. Merge all replicas in order, tracking which DNA file each merged
   // path last came from.
