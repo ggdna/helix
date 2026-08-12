@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- BREAKING: File-naming conversion at instantiation. DNA files now
+instantiate under exactly the name they carry in the layer — no
+kebab/snake/camel conversion, and no rewriting of references to renamed
+files. The `fileNaming` config key is gone; a `_dna.json` still setting
+it now warns as an unknown key. Layers that relied on conversion must
+rename their DNA files to the name the target should see.
+- BREAKING: The `dot_` dot escape. `dot-` is the only accepted form; the
+`dot_` variant only existed for snake_case layers, which the removal of
+file-naming conversion makes obsolete. The placed DNA test now rejects a
+`dot_`-escaped path in `dna/` before instantiating and reports the
+rename to make (`Rename dna/dot_vscode to dna/dot-vscode.`) instead of
+silently instantiating a literal `dot_vscode/` folder.
+- Remove auto renaming of dna files. Did break links.
+
 ## 4.1.1 - 2026-08-12
 
 ### Changed

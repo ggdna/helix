@@ -8,7 +8,7 @@ wrappers) belong in a higher DNA layer.
 
 ## 1. Doc Comments in Code (`///`)
 
-See `code_conventions.md` §7 (including the density guidance: at most 3
+See `code-conventions.md` §7 (including the density guidance: at most 3
 lines before classes, one line per member by default). In addition:
 
 - **What, not how.** "Returns the list value at index `[i]`" — not "Loops
@@ -17,7 +17,7 @@ lines before classes, one line per member by default). In addition:
   "Throws when ..."); no "Will update", no imperative "Update the state.".
 - **Parameters**: mention them in the summary line with `[name]`
   references (`/// Runs [task] and prints its success or error state.`);
-  switch to the `- [name]` bullet syntax of `code_conventions.md` §7 when
+  switch to the `- [name]` bullet syntax of `code-conventions.md` §7 when
   their behavior needs real explanation.
 - **Examples and longer explanations** belong in the README or a library
   header; a fenced `dart` block in a doc comment only when the call is not
@@ -142,7 +142,7 @@ Recommended content:
   project-specific workflows, the commands that matter.
 - **References to the instantiated conventions**: the DNA places these
   convention documents at `doc/conventions/` in every consumer. Import
-  them with `@` imports (e.g. `@doc/conventions/code_conventions.md`)
+  them with `@` imports (e.g. `@doc/conventions/code-conventions.md`)
   instead of duplicating their content. When `dna/_dna.json` configures
   `claude.claudeMdInclude`, the DNA test maintains such an import
   block automatically between `<!-- gg_dna:claude_md:start -->` and

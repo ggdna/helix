@@ -32,7 +32,6 @@ void main() {
       expect(r.config.role, DnaRole.project);
       expect(r.config.layers, isEmpty);
       expect(r.config.vars, isEmpty);
-      expect(r.config.fileNaming, isNull);
       expect(r.config.claude.claudeMdInclude, isNull);
       expect(r.warnings, isEmpty);
     });
@@ -65,7 +64,6 @@ void main() {
   "role": "dna",
   "layers": ["base_dna", "@tssuite/dna-dart"],
   "vars": {"projectName": "my_project"},
-  "fileNaming": "snake_case",
   "claude": {"claudeMdInclude": ["doc/conventions"]},
 }'''),
         root,
@@ -73,7 +71,6 @@ void main() {
       expect(r.config.role, DnaRole.dna);
       expect(r.config.layers, ['base_dna', '@tssuite/dna-dart']);
       expect(r.config.vars, {'projectName': 'my_project'});
-      expect(r.config.fileNaming, FileNaming.snakeCase);
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
       expect(r.warnings, isEmpty);
     });
@@ -120,15 +117,13 @@ void main() {
       );
     });
 
-    test('rejects invalid role, layers and fileNaming', () {
+    test('rejects invalid role, layers and vars', () {
       for (final config in [
         '{"role": "x"}',
         '{"layers": "x"}',
         '{"layers": ["a", "a"]}',
         '{"layers": [""]}',
         '{"layers": [1]}',
-        '{"fileNaming": "Pascal"}',
-        '{"fileNaming": 1}',
         '{"vars": "x"}',
         '[1]',
       ]) {

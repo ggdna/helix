@@ -57,6 +57,37 @@ void main() {
       expect(host.commits, hasLength(1));
     });
 
+    test('dot_ escapes in dna/ fail with a rename instruction', () async {
+      final host = makeHost(extra: {'$root/dna/dot_vscode/tasks.json': '{}\n'});
+      await expectLater(
+        () => run(host),
+        throwsA(
+          isA<Exception>().having(
+            (e) => '$e',
+            'message',
+            allOf(
+              contains(invalidDotEscapesMessage),
+              contains('dna/dot_vscode'),
+              contains('dna/dot-vscode'),
+            ),
+          ),
+        ),
+      );
+      // Nothing was written — the run stops before instantiating.
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+    });
+
+    test('dot- escapes and dot_ outside dna/ pass', () async {
+      final host = makeHost(
+        extra: {
+          '$root/node_modules/a-dna/dna/dot-vscode/tasks.json': '{}\n',
+          '$root/dot_elsewhere/x.txt': 'x\n',
+        },
+      );
+      await run(host);
+      expect(host.existsFile('$root/.vscode/tasks.json'), isTrue);
+    });
+
     test('files stay for a manual commit when git cannot commit', () async {
       final host = makeHost()..commitError = 'no git identity';
       await expectLater(

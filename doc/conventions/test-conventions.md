@@ -13,7 +13,7 @@ layer.
   - `lib/src/sub/bar.dart` → `test/sub/bar_test.dart`
 - **One test file per source file.**
 - Test files start with the **license header** (see
-  `code_conventions.md`, §2).
+  `code-conventions.md`, §2).
 - Top-level `main()` function, no explicit return type.
 
 ## 2. Imports in Tests

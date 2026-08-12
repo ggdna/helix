@@ -47,7 +47,6 @@ class DnaConfig {
     this.role = DnaRole.project,
     this.layers = const [],
     this.vars = const {},
-    this.fileNaming,
     this.claude = const DnaClaudeConfig(),
   });
 
@@ -61,9 +60,6 @@ class DnaConfig {
 
   /// Raw variable entries (`null` values delete inherited variables).
   final Map<String, Object?> vars;
-
-  /// Instance file-naming standard; `null` = default by project type.
-  final FileNaming? fileNaming;
 
   /// The Claude tool configuration.
   final DnaClaudeConfig claude;
@@ -114,7 +110,6 @@ class DnaConfig {
     'role',
     'layers',
     'vars',
-    'fileNaming',
     'claude',
   };
   for (final key in decoded.keys) {
@@ -128,7 +123,6 @@ class DnaConfig {
       role: _parseRole(decoded['role'], where),
       layers: _parseLayers(decoded['layers'], where),
       vars: _parseVars(decoded['vars'], where, warnings),
-      fileNaming: _parseFileNamingValue(decoded['fileNaming'], where),
       claude: _parseClaude(decoded['claude'], where, warnings),
     ),
     warnings: warnings,
@@ -202,15 +196,6 @@ Map<String, Object?> _parseVars(
   final validated = validateDnaVarEntries(value, sourceLabel: '$where vars');
   warnings.addAll(validated.warnings);
   return validated.entries;
-}
-
-// .............................................................................
-FileNaming? _parseFileNamingValue(Object? value, String where) {
-  if (value == null) return null;
-  if (value is! String) {
-    throw FormatException('$where: fileNaming must be a string.');
-  }
-  return parseFileNaming(value);
 }
 
 // .............................................................................

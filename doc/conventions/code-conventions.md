@@ -19,7 +19,7 @@ sections or whole files (see `../guides/dna.md`).
   (`foo_bar.dart` contains `class FooBar`). Closely related small helpers
   (enums, typedefs, short data classes) may live in the same file.
 - **Tests mirror `lib/src/` 1:1**: `lib/src/foo.dart` →
-  `test/foo_test.dart`. See `test_conventions.md`.
+  `test/foo_test.dart`. See `test-conventions.md`.
 
 ## 2. License Header
 
