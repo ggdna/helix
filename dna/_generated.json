@@ -7,7 +7,7 @@
       "ecosystem": null,
       "resolvedVersion": "0.0.0",
       "via": null,
-      "hash": "0x41698e502ef47931"
+      "hash": "0x2bdc1668b77359fb"
     },
     {
       "name": "self",
@@ -15,14 +15,14 @@
       "ecosystem": null,
       "resolvedVersion": null,
       "via": null,
-      "hash": "0x41698e502ef47931"
+      "hash": "0x2bdc1668b77359fb"
     }
   ],
   "claude": {
     "claudeMdInclude": null
   },
   "baseVersion": "0.0.0",
-  "baseHash": "0x41698e502ef47931",
+  "baseHash": "0x2bdc1668b77359fb",
   "hash": null,
   "instances": [
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "doc/guides/dna.md",
-      "hash": "0xce9b43aa973ed874"
+      "hash": "0xe85d5e38a0ee29b2"
     },
     {
       "path": "scripts/README.md",
