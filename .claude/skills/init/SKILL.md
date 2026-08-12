@@ -1,16 +1,16 @@
 ---
 name: init
-description: Initialize a new CLAUDE.md file with codebase documentation. Detects the project type, asks the user to confirm, and references the matching guide from `doc/guides/` in the generated CLAUDE.md. Preserves the gg_dna-managed import block. Use when the user says "/init", "create a CLAUDE.md", or asks to set up Claude Code for the repository.
+description: Initialize a new CLAUDE.md file with codebase documentation. Detects the project type, asks the user to confirm, and references the matching guide from `doc/guides/` in the generated CLAUDE.md. Preserves the helix-managed import block. Use when the user says "/init", "create a CLAUDE.md", or asks to set up Claude Code for the repository.
 ---
 
 # Initialize CLAUDE.md (DNA-aware)
 
 Analyze the current repository and produce a CLAUDE.md tailored to it.
-This skill is aware of the **DNA layout** used by `gg_dna` consumers:
+This skill is aware of the **DNA layout** used by `helix` consumers:
 guides shipped by DNA layers are instantiated at `doc/guides/`,
 conventions at `doc/conventions/`, and CLAUDE.md may contain a **managed
-import block** (between `<!-- gg_dna:claude_md:start -->` and
-`<!-- gg_dna:claude_md:end -->`) that is maintained by the DNA test and
+import block** (between `<!-- helix:claude_md:start -->` and
+`<!-- helix:claude_md:end -->`) that is maintained by the DNA test and
 must be preserved verbatim.
 
 The end result is one CLAUDE.md at the repo root that combines:
@@ -118,8 +118,8 @@ Write `CLAUDE.md` at the repo root with this exact ordering:
    step 2, simply omit this section.
 
 4. **Managed DNA block** — if the existing CLAUDE.md contains a block
-   between `<!-- gg_dna:claude_md:start -->` and
-   `<!-- gg_dna:claude_md:end -->`, keep it exactly where and as it is.
+   between `<!-- helix:claude_md:start -->` and
+   `<!-- helix:claude_md:end -->`, keep it exactly where and as it is.
 
 If `CLAUDE.md` already exists:
 

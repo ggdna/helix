@@ -7,7 +7,7 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
-/// Migration stub: `gg_dna sync` was replaced by `gg_dna init` — the
+/// Migration stub: `helix sync` was replaced by `helix init` — the
 /// instantiation itself runs inside the placed test.
 class Sync extends Command<dynamic> {
   /// Constructor.
@@ -21,14 +21,14 @@ class Sync extends Command<dynamic> {
 
   @override
   final description =
-      'Removed since gg_dna 5.0 — run `gg_dna init` once; instantiation '
+      'Removed since helix 5.0 — run `helix init` once; instantiation '
       'runs in your tests.';
 
   // ...........................................................................
   @override
   Future<void> run() async {
     usageException(
-      'gg_dna sync was removed in gg_dna 5.0. Run `gg_dna init` once — '
+      'helix sync was removed in helix 5.0. Run `helix init` once — '
       'the placed test instantiates the DNAs declared as '
       'dev-dependencies on every test run.',
     );

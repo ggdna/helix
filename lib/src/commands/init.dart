@@ -16,11 +16,11 @@ import '../util/package_resolution.dart';
 
 /// Content of the placed Dart wrapper test.
 const String dartWrapperTest = '''
-// Placed by `gg_dna init` — instantiates and verifies this project's DNA
-// on every test run. The logic lives in the gg_dna dev-dependency and is
+// Placed by `helix init` — instantiates and verifies this project's DNA
+// on every test run. The logic lives in the helix dev-dependency and is
 // updated through normal dependency updates.
 
-import 'package:gg_dna/gg_dna.dart';
+import 'package:helix/helix.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -34,11 +34,11 @@ void main() {
 
 /// Content of the placed vitest wrapper spec.
 const String tsWrapperTest = '''
-// Placed by `gg_dna init` — instantiates and verifies this project's DNA
-// on every test run. The logic lives in the @tssuite/gg_dna-js
+// Placed by `helix init` — instantiates and verifies this project's DNA
+// on every test run. The logic lives in the @tssuite/helix-js
 // dev-dependency and is updated through normal dependency updates.
 
-import { runDnaTest } from '@tssuite/gg_dna-js';
+import { runDnaTest } from '@tssuite/helix-js';
 import { test } from 'vitest';
 
 test(
@@ -113,7 +113,7 @@ class Init extends Command<dynamic> {
     final isNode = _host.existsFile('$root/package.json');
     if (!isDart && !isNode) {
       usageException(
-        'No pubspec.yaml or package.json found in "$root" — run gg_dna '
+        'No pubspec.yaml or package.json found in "$root" — run helix '
         'init inside a project.',
       );
     }

@@ -6,10 +6,10 @@
 
   "configurations": [
     {
-      "name": "gg_dna.dart",
+      "name": "helix.dart",
       "type": "dart",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/gg_dna.dart",
+      "program": "${workspaceFolder}/bin/helix.dart",
       "args": ["--param", "value"],
       "console": "debugConsole"
     },

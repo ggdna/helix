@@ -6,9 +6,9 @@
 
 import 'dart:typed_data';
 
-import 'package:gg_dna/src/util/dna_fs.dart';
-import 'package:gg_dna/src/util/dna_layout.dart';
-import 'package:gg_dna/src/util/dna_tree_hash.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_layout.dart';
+import 'package:helix/src/util/dna_tree_hash.dart';
 import 'package:test/test.dart';
 
 void main() {

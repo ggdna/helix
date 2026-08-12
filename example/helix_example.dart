@@ -6,5 +6,5 @@
 // found in the LICENSE file in the root of this package.
 
 Future<void> main() async {
-  print('Look into tests, to see ggDna in action.');
+  print('Look into tests, to see helix in action.');
 }

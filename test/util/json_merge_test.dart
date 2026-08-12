@@ -4,7 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_dna/src/util/json_merge.dart';
+import 'package:helix/src/util/json_merge.dart';
 import 'package:test/test.dart';
 
 void main() {

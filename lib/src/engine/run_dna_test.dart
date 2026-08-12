@@ -9,14 +9,14 @@ import 'dart:isolate';
 
 import 'package:gg_console_colors/gg_console_colors.dart';
 
-import '../gg_dna_version.dart';
+import '../helix_version.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
 import '../util/dna_layout.dart';
 import 'instantiate.dart';
 
 /// Entry point for the placed DNA test (`test/dna/dna_test.dart` imports
-/// gg_dna as dev-dependency and calls this). Runs one instantiation over
+/// helix as dev-dependency and calls this). Runs one instantiation over
 /// the current project and throws when the project is not in a clean,
 /// up-to-date DNA state:
 ///
@@ -35,7 +35,7 @@ Future<void> runDnaTest({
 }) async {
   final effectiveHost = host ?? IoDnaHost();
   final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
-  final base = baseDnaRoot ?? await ggDnaPackageRoot();
+  final base = baseDnaRoot ?? await helixPackageRoot();
   final emit = log ?? print; // coverage:ignore-line
 
   final invalidEscapes = invalidDotEscapes(effectiveHost, root);
@@ -50,7 +50,7 @@ Future<void> runDnaTest({
     host: effectiveHost,
     targetRoot: root,
     baseDnaRoot: base,
-    baseVersion: ggDnaVersion,
+    baseVersion: helixVersion,
   );
 
   for (final warning in result.warnings) {
@@ -137,16 +137,16 @@ String describeDnaSources(
     }).join('\n');
 
 // .............................................................................
-/// Resolves the root folder of the installed gg_dna package (its own
+/// Resolves the root folder of the installed helix package (its own
 /// `dna/` folder is the implicit base layer).
-Future<String> ggDnaPackageRoot() async {
+Future<String> helixPackageRoot() async {
   final uri = await Isolate.resolvePackageUri(
-    Uri.parse('package:gg_dna/gg_dna.dart'),
+    Uri.parse('package:helix/helix.dart'),
   );
   if (uri == null) {
     // coverage:ignore-start
     throw Exception(
-      'Cannot resolve the gg_dna package root — pass baseDnaRoot '
+      'Cannot resolve the helix package root — pass baseDnaRoot '
       'explicitly.',
     );
     // coverage:ignore-end

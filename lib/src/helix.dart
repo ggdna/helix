@@ -10,10 +10,10 @@ import 'package:gg_log/gg_log.dart';
 import 'commands/init.dart';
 import 'commands/sync.dart';
 
-/// The command line interface for GgDna
-class GgDna extends Command<dynamic> {
+/// The command line interface for Helix
+class Helix extends Command<dynamic> {
   /// Constructor
-  GgDna({required this.ggLog}) {
+  Helix({required this.ggLog}) {
     addSubcommand(Init(ggLog: ggLog));
     addSubcommand(Sync(ggLog: ggLog));
   }
@@ -23,10 +23,10 @@ class GgDna extends Command<dynamic> {
 
   // ...........................................................................
   @override
-  final name = 'ggDna';
+  final name = 'helix';
   @override
   final description = 'The DNA engine — resolves the DNA packages declared as '
-      'dev-dependencies (base_dna, dna_dart, dna-ts, …) and instantiates '
-      'their content into this repo. Run `gg_dna init` once; the placed '
+      'dev-dependencies (dna_base, dna_dart, dna-ts, …) and instantiates '
+      'their content into this repo. Run `helix init` once; the placed '
       'test keeps the project in sync.';
 }

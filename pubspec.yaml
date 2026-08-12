@@ -1,7 +1,7 @@
-name: gg_dna
+name: helix
 description: The DNA engine - resolves DNA packages declared as dev-dependencies, merges their dna folders and instantiates configs, docs, scripts and agent skills into the target repo.
-version: 4.1.2
-repository: https://github.com/ggsuite/gg_dna.git
+version: 0.0.0
+repository: https://github.com/ggsuite/helix.git
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -20,4 +20,4 @@ dev_dependencies:
   test: ^1.31.2
 
 executables:
-  gg_dna:
+  helix:

@@ -46,7 +46,7 @@ class LocatedPackage {
   });
 
   /// Canonical identity (lowercase, npm scope stripped, `_` folded to
-  /// `-`) — `@tssuite/base-dna` and `base_dna` share it.
+  /// `-`) — `@tssuite/dna-base` and `dna_base` share it.
   final String identity;
 
   /// The package name as installed, in its ecosystem's spelling.
@@ -70,7 +70,7 @@ class LocatedPackage {
 /// to `-`.
 ///
 /// The same DNA published to both registries collapses to one identity:
-/// `@tssuite/base-dna`, `base-dna` and `base_dna` are all `base-dna`. A
+/// `@tssuite/dna-base`, `dna-base` and `dna_base` are all `dna-base`. A
 /// repository may therefore declare it in `package.json` *and*
 /// `pubspec.yaml` — dual publication is the normal case — without the
 /// layer being applied twice.
@@ -313,8 +313,8 @@ class PackageResolution {
   // ...........................................................................
   // Candidates cover the spelling written in the config, the canonical
   // one, and whatever the ecosystem actually installed — that last group
-  // is what lets a pub-declared parent (`base_dna`) resolve inside a
-  // node-only consumer where the package is `@tssuite/base-dna`.
+  // is what lets a pub-declared parent (`dna_base`) resolve inside a
+  // node-only consumer where the package is `@tssuite/dna-base`.
   List<String> _nodeCandidates(String declared, String identity) =>
       _candidates([declared, identity], _nodeNames[identity]);
 

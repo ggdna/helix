@@ -4,8 +4,8 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_dna/src/util/dna_fs.dart';
-import 'package:gg_dna/src/util/package_resolution.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/package_resolution.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -16,9 +16,9 @@ void main() {
 
   group('canonicalPackageName', () {
     test('folds snake to kebab, lowercases, drops the npm scope', () {
-      expect(canonicalPackageName('base_dna'), 'base-dna');
-      expect(canonicalPackageName('Base-DNA'), 'base-dna');
-      expect(canonicalPackageName('@tssuite/base-dna'), 'base-dna');
+      expect(canonicalPackageName('dna_base'), 'dna-base');
+      expect(canonicalPackageName('Dna-Base'), 'dna-base');
+      expect(canonicalPackageName('@tssuite/dna-base'), 'dna-base');
       expect(canonicalPackageName('@carat-ds/ds_dna'), 'ds-dna');
     });
 
@@ -30,18 +30,18 @@ void main() {
   group('locate — node', () {
     test('finds the package under node_modules', () {
       final r = read({
-        '$root/node_modules/base-dna/package.json':
-            '{"name": "base-dna", "version": "1.2.3"}',
+        '$root/node_modules/dna-base/package.json':
+            '{"name": "dna-base", "version": "1.2.3"}',
       });
-      final p = r.locate('base-dna')!;
+      final p = r.locate('dna-base')!;
       expect(p.ecosystem, PackageEcosystem.node);
-      expect(p.root, '$root/node_modules/base-dna');
+      expect(p.root, '$root/node_modules/dna-base');
       expect(p.version, '1.2.3');
       expect(p.source, PackageSource.registry);
     });
 
     test('the lock file maps an identity to the installed scoped name', () {
-      // Declared as `base_dna`, installed as `@tssuite/base-dna` — only
+      // Declared as `dna_base`, installed as `@tssuite/dna-base` — only
       // the lock file can bridge the two.
       final r = read({
         '$root/pnpm-lock.yaml': '''
@@ -49,17 +49,17 @@ lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      '@tssuite/base-dna':
+      '@tssuite/dna-base':
         specifier: 1.0.0
         version: 1.0.0
 packages:
-  '@tssuite/base-dna@1.0.0':
+  '@tssuite/dna-base@1.0.0':
     resolution: {integrity: sha512-x}
 ''',
-        '$root/node_modules/@tssuite/base-dna/package.json':
-            '{"name": "@tssuite/base-dna", "version": "1.0.0"}',
+        '$root/node_modules/@tssuite/dna-base/package.json':
+            '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
       });
-      expect(r.locate('base_dna')!.packageName, '@tssuite/base-dna');
+      expect(r.locate('dna_base')!.packageName, '@tssuite/dna-base');
     });
 
     test('a link: entry is a path source', () {
@@ -69,14 +69,14 @@ lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      base-dna:
+      dna-base:
         specifier: 1.0.0
-        version: link:../base-dna
+        version: link:../dna-base
 ''',
-        '$root/node_modules/base-dna/package.json':
-            '{"name": "base-dna", "version": "1.0.0"}',
+        '$root/node_modules/dna-base/package.json':
+            '{"name": "dna-base", "version": "1.0.0"}',
       });
-      expect(r.locate('base-dna')!.source, PackageSource.path);
+      expect(r.locate('dna-base')!.source, PackageSource.path);
     });
 
     test('a transitive package is known from packages: alone', () {
@@ -95,14 +95,14 @@ importers:
 packages:
   '@tssuite/dna-dart@2.0.0':
     resolution: {integrity: sha512-x}
-  '@tssuite/base-dna@1.0.0':
+  '@tssuite/dna-base@1.0.0':
     resolution: {integrity: sha512-y}
 ''',
-        '$root/node_modules/@tssuite/base-dna/package.json':
-            '{"name": "@tssuite/base-dna"}',
+        '$root/node_modules/@tssuite/dna-base/package.json':
+            '{"name": "@tssuite/dna-base"}',
       });
-      final p = r.locate('base_dna')!;
-      expect(p.packageName, '@tssuite/base-dna');
+      final p = r.locate('dna_base')!;
+      expect(p.packageName, '@tssuite/dna-base');
       expect(p.version, '1.0.0');
     });
 
@@ -142,15 +142,15 @@ importers:
     test('resolves absolute file:// URIs and relative rootUris', () {
       // Relative rootUris are relative to the .dart_tool folder, and a
       // trailing slash must not survive into the recorded root.
-      expect(resolveRootUri('file:///abs/base_dna', '/t'), '/abs/base_dna');
-      expect(resolveRootUri('../../cache/base_dna', '/t'), '/cache/base_dna');
-      expect(resolveRootUri('../../cache/base_dna/', '/t'), '/cache/base_dna');
+      expect(resolveRootUri('file:///abs/dna_base', '/t'), '/abs/dna_base');
+      expect(resolveRootUri('../../cache/dna_base', '/t'), '/cache/dna_base');
+      expect(resolveRootUri('../../cache/dna_base/', '/t'), '/cache/dna_base');
     });
   });
 
   group('normalizePosix', () {
     test('collapses . and .. segments', () {
-      expect(normalizePosix('/t/../base_dna'), '/base_dna');
+      expect(normalizePosix('/t/../dna_base'), '/dna_base');
       expect(normalizePosix('/t/./a/b/../c'), '/t/a/c');
       expect(normalizePosix('a/../../b'), '../b');
     });
@@ -160,22 +160,22 @@ importers:
     test('finds the package through a file:// rootUri', () {
       final r = read({
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "file:///abs/base_dna"}]}',
-        '/abs/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.0\n',
-        '/abs/base_dna/dna/LICENSE': 'MIT\n',
+            '{"name": "dna_base", "rootUri": "file:///abs/dna_base"}]}',
+        '/abs/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
+        '/abs/dna_base/dna/LICENSE': 'MIT\n',
       });
-      expect(r.locate('base_dna')!.root, '/abs/base_dna');
+      expect(r.locate('dna_base')!.root, '/abs/dna_base');
     });
 
     test('finds the package through package_config.json', () {
       final r = read({
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-        '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.1\n',
+            '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+        '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
       });
-      final p = r.locate('base-dna')!;
+      final p = r.locate('dna-base')!;
       expect(p.ecosystem, PackageEcosystem.pub);
-      expect(p.root, '/cache/base_dna');
+      expect(p.root, '/cache/dna_base');
       expect(p.version, '1.0.1');
     });
 
@@ -184,41 +184,41 @@ importers:
       // reported the npm version — the 1.0.0-instead-of-1.0.1 bug.
       final r = read({
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-        '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.1\n',
-        '/cache/base_dna/package.json':
-            '{"name": "@tssuite/base-dna", "version": "1.0.0"}',
+            '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+        '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
+        '/cache/dna_base/package.json':
+            '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
       });
-      expect(r.locate('base_dna')!.version, '1.0.1');
+      expect(r.locate('dna_base')!.version, '1.0.1');
     });
 
     test('a broken pubspec leaves the version unknown', () {
       final r = read({
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-        '/cache/base_dna/pubspec.yaml': '*undefined-anchor',
-        '/cache/base_dna/dna/LICENSE': 'MIT\n',
+            '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+        '/cache/dna_base/pubspec.yaml': '*undefined-anchor',
+        '/cache/dna_base/dna/LICENSE': 'MIT\n',
       });
-      expect(r.locate('base_dna')!.version, isNull);
+      expect(r.locate('dna_base')!.version, isNull);
     });
 
     test('the lock file wins for a registry package', () {
       final r = read({
         '$root/pubspec.lock': '''
 packages:
-  base_dna:
+  dna_base:
     dependency: "direct main"
     description:
-      name: base_dna
+      name: dna_base
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
 ''',
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-        '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 9.9.9\n',
+            '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+        '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 9.9.9\n',
       });
-      expect(r.locate('base_dna')!.version, '1.0.1');
+      expect(r.locate('dna_base')!.version, '1.0.1');
       // The installed package disagrees with the pin — worth saying.
       expect(r.warnings.single, contains('run pnpm install / dart pub get'));
     });
@@ -229,19 +229,19 @@ packages:
       final r = read({
         '$root/pubspec.lock': '''
 packages:
-  base_dna:
+  dna_base:
     dependency: "direct main"
     description:
-      path: "../base_dna"
+      path: "../dna_base"
       relative: true
     source: path
     version: "1.0.0"
 ''',
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../base_dna"}]}',
-        '/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.1.0\n',
+            '{"name": "dna_base", "rootUri": "../../dna_base"}]}',
+        '/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.1.0\n',
       });
-      final p = r.locate('base_dna')!;
+      final p = r.locate('dna_base')!;
       expect(p.version, '1.1.0');
       expect(p.source, PackageSource.path);
     });
@@ -252,17 +252,17 @@ packages:
       final r = read({
         '$root/pubspec.lock': '''
 packages:
-  base_dna:
+  dna_base:
     dependency: "direct main"
     description:
-      path: "../base_dna"
+      path: "../dna_base"
       relative: true
     source: path
     version: "1.0.0"
 ''',
-        '/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.0\n',
+        '/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
       });
-      expect(r.locate('base_dna')!.root, '/base_dna');
+      expect(r.locate('dna_base')!.root, '/dna_base');
     });
 
     test('unknown packages yield null', () {
@@ -283,19 +283,19 @@ packages:
       final r = read({
         '$root/pubspec.lock': '''
 packages:
-  base_dna:
+  dna_base:
     dependency: "direct main"
     description:
-      name: base_dna
+      name: dna_base
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
 ''',
       });
-      final message = r.describeFailure('base_dna');
-      expect(message, contains('identity:            base-dna'));
+      final message = r.describeFailure('dna_base');
+      expect(message, contains('identity:            dna-base'));
       expect(message, contains('node_modules/'));
-      expect(message, contains('pubspec.lock knows base_dna 1.0.1'));
+      expect(message, contains('pubspec.lock knows dna_base 1.0.1'));
       expect(message, contains('declared but not installed'));
     });
 
@@ -306,15 +306,15 @@ lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      '@tssuite/base-dna':
+      '@tssuite/dna-base':
         specifier: 1.0.0
         version: 1.0.0
 ''',
       });
       expect(
-        r.describeFailure('base_dna'),
+        r.describeFailure('dna_base'),
         allOf(
-          contains('pnpm-lock.yaml knows @tssuite/base-dna 1.0.0'),
+          contains('pnpm-lock.yaml knows @tssuite/dna-base 1.0.0'),
           contains('declared but not installed'),
         ),
       );
@@ -329,22 +329,22 @@ lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      '@tssuite/base-dna':
+      '@tssuite/dna-base':
         specifier: 1.0.0
         version: 1.0.0
 ''',
-        '$root/node_modules/@tssuite/base-dna/package.json':
-            '{"name": "@tssuite/base-dna", "version": "1.0.0"}',
+        '$root/node_modules/@tssuite/dna-base/package.json':
+            '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
         '$root/.dart_tool/package_config.json': '{"packages": [ '
-            '{"name": "base_dna", "rootUri": "../../cache/base_dna"}]}',
-        '/cache/base_dna/pubspec.yaml': 'name: base_dna\nversion: 1.0.1\n',
+            '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+        '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
       });
-      final all = r.locateAll('base_dna');
+      final all = r.locateAll('dna_base');
       expect(all.map((p) => p.ecosystem).toList(), [
         PackageEcosystem.node,
         PackageEcosystem.pub,
       ]);
-      expect(all.every((p) => p.identity == 'base-dna'), isTrue);
+      expect(all.every((p) => p.identity == 'dna-base'), isTrue);
     });
   });
 }

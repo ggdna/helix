@@ -6,7 +6,7 @@
 
 import 'dart:io';
 
-import 'package:gg_dna/src/util/md_tags.dart';
+import 'package:helix/src/util/md_tags.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 

@@ -104,7 +104,7 @@ class DnaInstantiationResult {
   final List<String> uncommittedTargets;
 
   /// For every reported path: the DNA source file it is produced from,
-  /// e.g. `base-dna/dna/doc/develop.md` — the file to edit instead of
+  /// e.g. `dna-base/dna/doc/develop.md` — the file to edit instead of
   /// the generated one. Paths without a DNA source (the manifest, the
   /// managed CLAUDE.md block) are absent.
   final Map<String, String> sources;
@@ -358,7 +358,7 @@ DnaInstantiationResult instantiateDna({
       if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
         DnaManifestLayer(
           name: 'base',
-          package: 'gg_dna',
+          package: 'helix',
           resolvedVersion: baseVersion,
           hash: hashTree(host, '$baseDnaRoot/$dnaDirname'),
         ),

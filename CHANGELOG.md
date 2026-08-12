@@ -52,8 +52,8 @@ Without it `dart pub publish` silently drops them.
 resolved version and the installed-name index, while
 `.dart_tool/package_config.json` and `node_modules/` supply the folder.
 - The npm scope is dropped when folding a package name to its layer
-identity, so a DNA published to both registries (`@tssuite/base-dna` and
-`base_dna`) is one layer, not two. A warning fires when the two copies
+identity, so a DNA published to both registries (`@tssuite/dna-base` and
+`dna_base`) is one layer, not two. A warning fires when the two copies
 carry different `dna/` trees.
 
 ### Changed
@@ -110,7 +110,7 @@ ownership tracking, adoption of existing files, and removal of files the
 DNA no longer produces — including the folders they leave empty
 - Inheritance tree: DNAs are declared as dev-dependencies
 (npm/pub); parent DNAs are regular dependencies of their child DNA;
-gg_dna resolves the tree recursively from `node_modules/` and
+helix resolves the tree recursively from `node_modules/` and
 `.dart_tool/package_config.json` (diamond dedup, cycle detection)
 - JSON overrides: sidecar `X.overrides.json` merges into `X.json` —
 objects deep-merge, `null` deletes, `"key!"` replaces outright,
@@ -124,10 +124,10 @@ non-identifier values verbatim
 converted per target (`pubspec.yaml` → snake_case, `package.json` →
 camelCase, configurable via `fileNaming`); references to renamed files
 are rewritten in text instances
-- `gg_dna init`: places the DNA wrapper test (Dart and/or vitest), a
+- `helix init`: places the DNA wrapper test (Dart and/or vitest), a
 `.gg/dna.json` skeleton and the `!.gg/dna.json` gitignore exception
 - Public engine API: `instantiateDna()` and `runDnaTest()`
-(`package:gg_dna/gg_dna.dart`); the engine core is free of `dart:io`
+(`package:helix/helix.dart`); the engine core is free of `dart:io`
 and compilable to WebAssembly (host access via injectable `DnaHost`)
 - Per-file guard: an existing file that carries uncommitted work is
 never overwritten or deleted — the run names those files and writes
@@ -137,7 +137,7 @@ nothing; unrelated dirty files do not block it
 working tree); without a repository or git identity the files are kept
 for a manual commit
 - Provenance in every failure report: generated files are reported with
-the DNA source they are produced from (`edit instead: base_dna/dna/doc/develop.md`), so hand edits go into the DNA instead of
+the DNA source they are produced from (`edit instead: dna_base/dna/doc/develop.md`), so hand edits go into the DNA instead of
 the generated copy (`DnaInstantiationResult.sources`)
 - `global.overrides.md` in the src root of any layer: its string blocks
 rewrite `{{@tag:…}}` placeholders in every merged `.md` file; file-specific
@@ -151,7 +151,7 @@ the project root (public/private via the `_` prefix convention)
 - BREAKING: DNA configuration lives only in `.gg/dna.json`; `dna:`
 blocks in `pubspec.yaml`/`package.json` and `dna.yaml` are migration
 errors
-- BREAKING: `gg_dna sync` was replaced by `gg_dna init` — the
+- BREAKING: `helix sync` was replaced by `helix init` — the
 instantiation runs inside the placed test on every test run
 (hand-modified instances fail, DNA updates are written and committed)
 - BREAKING: git layers were removed — declare DNAs as dev-dependencies;
@@ -169,7 +169,7 @@ CLAUDE.md block (`claude_md: include:`) remains special
 - Base DNA restructured: human documentation at `dna/doc/**`
 (conventions, guides — English), skills at `dna/.claude/skills/**`
 - BREAKING: every DNA source ships its mergeable DNA under `dna/src` —
-the gg_dna base DNA, git layers, and path layers; sources without `dna/src`
+the helix base DNA, git layers, and path layers; sources without `dna/src`
 are an error with a migration hint
 - BREAKING: `<target>/dna/src` is the implicit last layer — it survives the
 sync verbatim, is never listed in the config (layer name `src` is
@@ -181,13 +181,13 @@ reserved), and replaces `dna/_override`; path layers pointing into
 (comment markers `<!-- @tag -->`); the old notation without `@` is no
 longer recognized
 - BREAKING: `.dna.json` manifest format v4 (records the implicit src
-layer; `--check` reports older manifests as outdated — run `gg_dna sync`)
+layer; `--check` reports older manifests as outdated — run `helix sync`)
 
 ### Removed
 
-- `gg_dna sync` (including `--check`, `--source`, `--target`), git tag
+- `helix sync` (including `--check`, `--source`, `--target`), git tag
 resolution, the skills mirroring and the staging/backup folders
-(`.gg_dna_staging`, `.gg_dna_backup` are no longer created)
+(`.helix_staging`, `.helix_backup` are no longer created)
 
 ## 3.1.1 - 2026-08-07
 
@@ -220,23 +220,23 @@ contains the rename below on top of the 4.0.0 changes.
 - `dna: config: claude:` section: `claude_md: include:` maintains a managed
 `@`-import block in the target's CLAUDE.md (files stay as-is, folders expand
 to their `.md` files); `skills: include:` mirrors skill folders into
-`.claude/skills` — only skills gg_dna installed are overwritten or removed,
+`.claude/skills` — only skills helix installed are overwritten or removed,
 hand-installed skills are never touched
-- `gg_dna sync` creates CLAUDE.md when missing and removes leftover pre-3.0
-`gg_dna:conventions` blocks
-- `gg_dna sync --check` also verifies the CLAUDE.md block and the installed
+- `helix sync` creates CLAUDE.md when missing and removes leftover pre-3.0
+`helix:conventions` blocks
+- `helix sync --check` also verifies the CLAUDE.md block and the installed
 skills
 
 ### Changed
 
 - BREAKING: layers now live under `dna: dependencies:` — the pre-3.0 syntax
 (layer maps directly under `dna:`) is rejected with a migration hint
-- BREAKING: `gg_dna sync` is fully non-interactive — the
+- BREAKING: `helix sync` is fully non-interactive — the
 `install-skills` and `apply-conventions` subcommands, all prompts, and the
 `--no-install` flag were removed; everything is driven by the
 `dna: config:` block
 - BREAKING: `.dna.json` manifest format v3 (adds the `claude` section;
-`--check` reports older manifests as outdated — run `gg_dna sync` once)
+`--check` reports older manifests as outdated — run `helix sync` once)
 
 ## 2.1.1 - 2026-07-24
 
@@ -263,7 +263,7 @@ away in the synced output
 
 ### Changed
 
-- BREAKING: `gg_dna sync` no longer accepts a positional overlay argument —
+- BREAKING: `helix sync` no longer accepts a positional overlay argument —
 configure layers via the `dna:` block in the target pubspec.yaml
 - BREAKING: the overlay stored in `.dna.json` is no longer auto-reused
 - BREAKING: `.dna.json` manifest format v2 (ordered layer list; `--check`

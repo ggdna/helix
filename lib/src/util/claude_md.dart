@@ -7,17 +7,17 @@
 import 'dna_fs.dart';
 
 /// Marker that opens the managed CLAUDE.md block.
-const String claudeMdStartMarker = '<!-- gg_dna:claude_md:start -->';
+const String claudeMdStartMarker = '<!-- helix:claude_md:start -->';
 
 /// Marker that closes the managed CLAUDE.md block.
-const String claudeMdEndMarker = '<!-- gg_dna:claude_md:end -->';
+const String claudeMdEndMarker = '<!-- helix:claude_md:end -->';
 
 /// Start marker of the pre-3.0 conventions block — removed on sight so
-/// migrated repos do not carry two gg_dna blocks.
-const String legacyConventionsStartMarker = '<!-- gg_dna:conventions:start';
+/// migrated repos do not carry two helix blocks.
+const String legacyConventionsStartMarker = '<!-- helix:conventions:start';
 
 /// End marker of the pre-3.0 conventions block.
-const String legacyConventionsEndMarker = '<!-- gg_dna:conventions:end -->';
+const String legacyConventionsEndMarker = '<!-- helix:conventions:end -->';
 
 // .............................................................................
 /// Expands the `claude_md: include:` entries to the files that get one

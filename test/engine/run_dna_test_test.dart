@@ -6,7 +6,7 @@
 
 import 'dart:io';
 
-import 'package:gg_dna/gg_dna.dart';
+import 'package:helix/helix.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -181,7 +181,7 @@ void main() {
 
     test('defaults target root and base DNA when not given', () async {
       // The in-memory host keeps this side-effect free: the defaults
-      // (current directory, resolved gg_dna package root) are exercised,
+      // (current directory, resolved helix package root) are exercised,
       // but nothing is ever read from or written to the real repository.
       final host = MemoryDnaHost();
       await expectLater(
@@ -203,7 +203,7 @@ void main() {
     late Directory tmp;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('gg_dna_run_test_');
+      tmp = Directory.systemTemp.createTempSync('helix_run_test_');
     });
 
     tearDown(() {
@@ -240,11 +240,11 @@ void main() {
     });
   });
 
-  group('ggDnaPackageRoot', () {
-    test('resolves the installed gg_dna package root', () async {
-      final path = await ggDnaPackageRoot();
+  group('helixPackageRoot', () {
+    test('resolves the installed helix package root', () async {
+      final path = await helixPackageRoot();
       expect(path, isNot(contains(r'\')));
-      expect(path.endsWith('gg_dna'), isTrue, reason: path);
+      expect(path.endsWith('helix'), isTrue, reason: path);
     });
   });
 

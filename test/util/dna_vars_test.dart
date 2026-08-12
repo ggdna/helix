@@ -6,7 +6,7 @@
 
 import 'dart:typed_data';
 
-import 'package:gg_dna/src/util/dna_vars.dart';
+import 'package:helix/src/util/dna_vars.dart';
 import 'package:test/test.dart';
 
 void main() {

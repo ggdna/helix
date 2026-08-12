@@ -3,7 +3,7 @@
 Helper scripts shipped by DNA layers. Everything in this folder is
 instantiated to `scripts/` in the project root of every consumer.
 
-The gg_dna base layer ships no scripts of its own — higher DNA layers add
+The helix base layer ships no scripts of its own — higher DNA layers add
 organization- or project-specific helpers here (setup, tooling,
 maintenance, and convenience scripts). Script files are instantiated
 under exactly the name they carry in the DNA layer.

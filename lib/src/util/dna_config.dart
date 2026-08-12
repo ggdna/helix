@@ -72,7 +72,7 @@ class DnaConfig {
 /// config is the only thing that says whether that folder is
 /// hand-authored (`role: dna`) or engine-generated, and defaulting to
 /// `project` would let the engine wipe a hand-written DNA. Run
-/// `gg_dna init` to place the config.
+/// `helix init` to place the config.
 ///
 /// [packageLabel] names the layer package when [targetRoot] is a resolved
 /// layer rather than the target itself — it turns parse errors into
@@ -92,7 +92,7 @@ class DnaConfig {
       throw FormatException(
         '$where is missing, but a $dnaDirname/ folder exists — the config '
         'is what declares whether that folder is hand-authored '
-        '("role": "dna") or generated. Run `gg_dna init` to place it.',
+        '("role": "dna") or generated. Run `helix init` to place it.',
       );
     }
     return (config: const DnaConfig(), warnings: warnings);
@@ -135,7 +135,7 @@ void _requireFormatVersion(Object? value, String where) {
   throw FormatException(
     value == null
         ? '$where: "version" is missing — add "version": $dnaFormatVersion.'
-        : '$where: format version $value is not supported — this gg_dna '
+        : '$where: format version $value is not supported — this helix '
             'reads version $dnaFormatVersion.',
   );
 }

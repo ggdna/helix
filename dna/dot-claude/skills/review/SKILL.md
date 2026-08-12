@@ -125,7 +125,7 @@ update command) or skip with a note in the report.
     proposal as a concrete patch.
   - Have the user confirm individually, then run the tests again until
     green.
-- **DNA test**: projects using `gg_dna` run a placed DNA test (e.g.
+- **DNA test**: projects using `helix` run a placed DNA test (e.g.
   `test/dna/dna_test.dart`) as part of the suite — it instantiates the
   DNA and fails when instances drifted:
   - The generated files are committed automatically as

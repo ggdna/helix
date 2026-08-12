@@ -3,7 +3,7 @@
 Tests are mandatory, not a recommendation. The default bar is 100 %
 coverage with all tests green — pre-commit tooling and CI are expected to
 block anything below it. This document is the generic base shipped with
-`gg_dna`; organization-specific tooling commands live in a higher DNA
+`helix`; organization-specific tooling commands live in a higher DNA
 layer.
 
 ## 1. File Structure

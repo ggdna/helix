@@ -4,7 +4,7 @@
 wählen (Hinweis: die 3.0-Änderungen aus `feat-dna-config-v3` wurden auf pub.dev als
 2.1.1 veröffentlicht — die Major-Semantik diesmal explizit setzen).
 
-Multi-Repo-Ticket: `gg_dna` (Implementierung), `gg_dna_ggsuite` (DNA-Repo),
+Multi-Repo-Ticket: `helix` (Implementierung), `helix_ggsuite` (DNA-Repo),
 `testproject_dna_project` (Referenz-/E2E-Projekt).
 
 ## 1. `<file>.tag.md` → `<file>.overrides.md`
@@ -53,8 +53,8 @@ Neuer Abschnittsinhalt.
 
 **In allen DNA-Quellen liegt die mergebare DNA unter `dna/src`:**
 
-- **gg_dna selbst:** die Basis-DNA wandert von `<gg_dna>/dna/` nach
-  `<gg_dna>/dna/src/`.
+- **helix selbst:** die Basis-DNA wandert von `<helix>/dna/` nach
+  `<helix>/dna/src/`.
 - **git-Layer:** Inhalt kommt aus `<clone>/dna/src`. Fehlt der Ordner →
   Fehler mit Migrationshinweis („verschiebe die DNA nach dna/src").
 - **path-Layer:** Inhalt kommt aus `<pfad>/dna/src`. Fehlt der Ordner →
@@ -103,11 +103,11 @@ Manifest/`--check`: `dna/src` wird wie bisher die `dna_repo`-Schicht gehasht
 
 ## 5. Repos in diesem Ticket umstellen
 
-- **gg_dna:** Implementierung (Sync, Layer-Auflösung, `md_tags` → neue
+- **helix:** Implementierung (Sync, Layer-Auflösung, `md_tags` → neue
   Notation + Umbenennung, implizite src-Schicht, global-Overrides), eigene
   Basis-DNA nach `dna/src`, Sample-Folder der Tests, README, CHANGELOG,
   Install-Skripte prüfen (`install/`, `install.bat`).
-- **gg_dna_ggsuite:** `dna/` → `dna/src/`; vorhandene `.tag.md` →
+- **helix_ggsuite:** `dna/` → `dna/src/`; vorhandene `.tag.md` →
   `.overrides.md`; Notation auf `[@tag]` / `{{@tag:default}}` umstellen.
 - **testproject_dna_project:** Inhalt von `dna/_override` nach `dna/src`
   verschieben, `dna_repo`-Layer aus der `dna.yaml` entfernen, Notation
@@ -128,7 +128,7 @@ Manifest/`--check`: `dna/src` wird wie bisher die `dna_repo`-Schicht gehasht
 
 ## Entscheidungen (mit Göran am 2026-07-24 geklärt)
 
-- `/dna/src` **überall** konsequent (gg_dna-Basis, git- und path-Layer);
+- `/dna/src` **überall** konsequent (helix-Basis, git- und path-Layer);
   Quellen ohne `dna/src` → Fehler mit Migrationshinweis.
 - `.tag.md` → **harter Fehler** mit Umbenennungshinweis.
 - `dna/_override` entfällt; Inhalt wandert nach `/dna/src` (implizite letzte
@@ -136,4 +136,4 @@ Manifest/`--check`: `dna/src` wird wie bisher die `dna_repo`-Schicht gehasht
 - Neue Tag-Notation: `## [@tag] …` und `{{@tag:default}}`.
 - `global.overrides.md` in `/dna/src` ersetzt Zeichenketten-Tags global über
   alle Dateien.
-- Multi-Repo-Ticket mit gg_dna, gg_dna_ggsuite, testproject_dna_project.
+- Multi-Repo-Ticket mit helix, helix_ggsuite, testproject_dna_project.

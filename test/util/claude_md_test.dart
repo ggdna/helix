@@ -4,8 +4,8 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_dna/src/util/claude_md.dart';
-import 'package:gg_dna/src/util/dna_fs.dart';
+import 'package:helix/src/util/claude_md.dart';
+import 'package:helix/src/util/dna_fs.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -115,7 +115,7 @@ $claudeMdEndMarker''');
           '$legacyConventionsEndMarker\n'
           'rest\n';
       final result = upsertClaudeMdBlock(existing, block);
-      expect(result, isNot(contains('gg_dna:conventions')));
+      expect(result, isNot(contains('helix:conventions')));
       expect(result, contains('rest'));
       expect(result, contains(block));
     });
