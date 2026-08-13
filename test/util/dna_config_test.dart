@@ -19,10 +19,7 @@ void main() {
         ? config
         : config.replaceFirst('{', '{"version": $dnaFormatVersion,');
     return MemoryDnaHost(
-      files: {
-        if (withVersion != null) '$root/$dnaConfigPath': withVersion,
-        ...?extra,
-      },
+      files: {'$root/$dnaConfigPath': ?withVersion, ...?extra},
     );
   }
 
@@ -47,10 +44,7 @@ void main() {
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            allOf(
-              contains(dnaConfigPath),
-              contains('helix init'),
-            ),
+            allOf(contains(dnaConfigPath), contains('helix init')),
           ),
         ),
       );
@@ -196,10 +190,7 @@ void main() {
 
     test('rejects vars that do not start with dna', () {
       expect(
-        () => readDnaConfig(
-          hostWith('{"vars": {"projectName": "x"}}'),
-          root,
-        ),
+        () => readDnaConfig(hostWith('{"vars": {"projectName": "x"}}'), root),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,

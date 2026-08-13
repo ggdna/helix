@@ -33,11 +33,11 @@ void main() {
       );
 
   Future<void> run(MemoryDnaHost host) => runDnaTest(
-        targetRoot: root,
-        host: host,
-        baseDnaRoot: '/no-base',
-        log: log.add,
-      );
+    targetRoot: root,
+    host: host,
+    baseDnaRoot: '/no-base',
+    log: log.add,
+  );
 
   group('runDnaTest', () {
     test('first run instantiates, commits and passes', () async {

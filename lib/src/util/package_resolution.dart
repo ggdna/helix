@@ -107,17 +107,13 @@ class _LockEntry {
 /// package managers' own resolution output for the path.
 class PackageResolution {
   PackageResolution._({
-    required DnaHost host,
-    required String targetRoot,
-    required Map<String, _LockEntry> nodeLock,
-    required Map<String, _LockEntry> pubLock,
-    required Map<String, String> pubRoots,
+    required this._host,
+    required this._targetRoot,
+    required this._nodeLock,
+    required this._pubLock,
+    required this._pubRoots,
     required this.warnings,
-  })  : _host = host,
-        _targetRoot = targetRoot,
-        _nodeLock = nodeLock,
-        _pubLock = pubLock,
-        _pubRoots = pubRoots {
+  }) {
     _nodeNames = _byIdentity([..._nodeLock.keys]);
     _pubNames = _byIdentity([..._pubLock.keys, ..._pubRoots.keys]);
   }
@@ -234,7 +230,7 @@ class PackageResolution {
       known.isEmpty
           ? 'lock files:          not declared anywhere'
           : '${known.join('; ')} — declared but not installed. '
-              'Run pnpm install / dart pub get.',
+                'Run pnpm install / dart pub get.',
     );
     return lines.join('\n  ');
   }
@@ -300,15 +296,14 @@ class PackageResolution {
     PackageEcosystem ecosystem,
     String root,
     _LockEntry? lock,
-  ) =>
-      LocatedPackage(
-        identity: identity,
-        packageName: name,
-        ecosystem: ecosystem,
-        root: root,
-        source: lock?.source ?? PackageSource.registry,
-        version: _versionFor(root, ecosystem, lock),
-      );
+  ) => LocatedPackage(
+    identity: identity,
+    packageName: name,
+    ecosystem: ecosystem,
+    root: root,
+    source: lock?.source ?? PackageSource.registry,
+    version: _versionFor(root, ecosystem, lock),
+  );
 
   // ...........................................................................
   // Candidates cover the spelling written in the config, the canonical
@@ -318,10 +313,10 @@ class PackageResolution {
   List<String> _nodeCandidates(String declared, String identity) =>
       _candidates([declared, identity], _nodeNames[identity]);
 
-  List<String> _pubCandidates(String declared, String identity) => _candidates(
-        [declared, identity.replaceAll('-', '_')],
-        _pubNames[identity],
-      );
+  List<String> _pubCandidates(String declared, String identity) => _candidates([
+    declared,
+    identity.replaceAll('-', '_'),
+  ], _pubNames[identity]);
 
   static List<String> _candidates(List<String> first, List<String>? installed) {
     final out = <String>[];
@@ -437,8 +432,9 @@ Map<String, _LockEntry> _readPnpmLock(
   if (packages is Map) {
     for (final key in packages.keys) {
       final text = '$key';
-      final head =
-          text.contains('(') ? text.substring(0, text.indexOf('(')) : text;
+      final head = text.contains('(')
+          ? text.substring(0, text.indexOf('('))
+          : text;
       final at = head.lastIndexOf('@');
       if (at <= 0) continue;
       out.putIfAbsent(head.substring(0, at), () {

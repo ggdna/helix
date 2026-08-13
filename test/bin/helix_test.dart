@@ -18,15 +18,9 @@ void main() {
         await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
 
         final messages = <String>[];
-        await run(
-          args: ['init', '--target', tmp.path],
-          ggLog: messages.add,
-        );
+        await run(args: ['init', '--target', tmp.path], ggLog: messages.add);
 
-        expect(
-          File('${tmp.path}/test/dna/dna_test.dart').existsSync(),
-          isTrue,
-        );
+        expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
         expect(
           messages.any((m) => m.contains('DNA initialized')),
           isTrue,

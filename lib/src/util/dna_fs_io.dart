@@ -13,10 +13,7 @@ import 'dna_fs.dart';
 
 /// Runs a git command in [workingDirectory] and returns its stdout —
 /// injectable for tests.
-typedef GitRunner = String Function(
-  String workingDirectory,
-  List<String> args,
-);
+typedef GitRunner = String Function(String workingDirectory, List<String> args);
 
 /// [DnaHost] backed by `dart:io` and the local `git` binary. This file is
 /// the only place binding the engine to the real platform — the engine

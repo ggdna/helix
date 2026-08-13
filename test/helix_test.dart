@@ -29,10 +29,7 @@ void main() {
       try {
         await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
         await runner.run(['helix', 'init', '--target', tmp.path]);
-        expect(
-          File('${tmp.path}/test/dna/dna_test.dart').existsSync(),
-          isTrue,
-        );
+        expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
         expect(messages.any((m) => m.contains('DNA initialized')), isTrue);
       } finally {
         await tmp.delete(recursive: true);

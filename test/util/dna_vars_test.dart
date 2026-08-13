@@ -122,10 +122,9 @@ void main() {
     });
 
     test('unknown references stay literal', () {
-      expect(
-        expandDnaVarValues({'dnaA': 'x dnaUnknown'}),
-        {'dnaA': 'x dnaUnknown'},
-      );
+      expect(expandDnaVarValues({'dnaA': 'x dnaUnknown'}), {
+        'dnaA': 'x dnaUnknown',
+      });
     });
 
     test('detects a cycle between two variables', () {
@@ -162,13 +161,10 @@ void main() {
 
     test('resolves a chain up to the pass limit', () {
       Map<String, String> chain(int length) => {
-            for (var i = 0; i < length; i++)
-              'dnaV$i': i == length - 1 ? 'end' : 'dnaV${i + 1}',
-          };
-      expect(
-        expandDnaVarValues(chain(maxDnaVarExpansions))['dnaV0'],
-        'end',
-      );
+        for (var i = 0; i < length; i++)
+          'dnaV$i': i == length - 1 ? 'end' : 'dnaV${i + 1}',
+      };
+      expect(expandDnaVarValues(chain(maxDnaVarExpansions))['dnaV0'], 'end');
       expect(
         () => expandDnaVarValues(chain(maxDnaVarExpansions + 3)),
         throwsA(

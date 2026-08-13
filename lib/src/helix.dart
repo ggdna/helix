@@ -25,7 +25,8 @@ class Helix extends Command<dynamic> {
   @override
   final name = 'helix';
   @override
-  final description = 'The DNA engine — resolves the DNA packages declared as '
+  final description =
+      'The DNA engine — resolves the DNA packages declared as '
       'dev-dependencies (dna_base, dna_dart, dna-ts, …) and instantiates '
       'their content into this repo. Run `helix init` once; the placed '
       'test keeps the project in sync.';

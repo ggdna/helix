@@ -77,17 +77,17 @@ void main() {
 
   group('ancestorDirs', () {
     test('lists every ancestor, deepest first', () {
-      expect(ancestorDirs(['doc/guides/a.md']), [
-        'doc/guides',
-        'doc',
-      ]);
+      expect(ancestorDirs(['doc/guides/a.md']), ['doc/guides', 'doc']);
     });
 
     test('deduplicates; deepest first, alphabetical within a depth', () {
-      expect(
-        ancestorDirs(['doc/a.md', 'doc/guides/b.md', 'x/y/z/c.md']),
-        ['x/y/z', 'doc/guides', 'x/y', 'doc', 'x'],
-      );
+      expect(ancestorDirs(['doc/a.md', 'doc/guides/b.md', 'x/y/z/c.md']), [
+        'x/y/z',
+        'doc/guides',
+        'x/y',
+        'doc',
+        'x',
+      ]);
     });
 
     test('root-level files have no ancestors', () {

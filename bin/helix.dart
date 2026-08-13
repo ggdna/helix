@@ -1,4 +1,5 @@
 #!/usr/bin/env dart
+
 // @license
 // Copyright (c) ggsuite
 //
@@ -10,10 +11,7 @@ import 'package:gg_log/gg_log.dart';
 import 'package:helix/helix.dart';
 
 // .............................................................................
-Future<void> run({
-  required List<String> args,
-  required GgLog ggLog,
-}) =>
+Future<void> run({required List<String> args, required GgLog ggLog}) =>
     GgCommandRunner(
       ggLog: ggLog,
       command: Helix(ggLog: ggLog),
@@ -21,8 +19,5 @@ Future<void> run({
 
 // .............................................................................
 Future<void> main(List<String> args) async {
-  await run(
-    args: args,
-    ggLog: print,
-  );
+  await run(args: args, ggLog: print);
 }

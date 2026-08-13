@@ -74,10 +74,7 @@ void main() {
 
     test('fails outside of projects', () async {
       final host = MemoryDnaHost();
-      await expectLater(
-        () => runInit(host),
-        throwsA(isA<UsageException>()),
-      );
+      await expectLater(() => runInit(host), throwsA(isA<UsageException>()));
     });
 
     test('the skeleton parses as a valid empty config', () async {
@@ -93,7 +90,8 @@ void main() {
       final host = MemoryDnaHost(
         files: {
           '$root/pubspec.yaml': 'name: x\ndependencies:\n  dna_base: ^1.0.0\n',
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
+          '$root/.dart_tool/package_config.json':
+              '{"packages": [ '
               '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
           '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
           '/cache/dna_base/$dnaConfigPath':

@@ -68,11 +68,7 @@ void main() {
           include: ['missing'],
         ),
         throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            contains('missing'),
-          ),
+          isA<Exception>().having((e) => '$e', 'message', contains('missing')),
         ),
       );
     });
@@ -93,14 +89,12 @@ $claudeMdEndMarker''');
 
     test('appends to empty and non-empty content', () {
       expect(upsertClaudeMdBlock('', block), '$block\n');
-      expect(
-        upsertClaudeMdBlock('# Title\n', block),
-        '# Title\n\n$block\n',
-      );
+      expect(upsertClaudeMdBlock('# Title\n', block), '# Title\n\n$block\n');
     });
 
     test('replaces an existing block in place', () {
-      const existing = '# T\n\n$claudeMdStartMarker\n@old.md\n'
+      const existing =
+          '# T\n\n$claudeMdStartMarker\n@old.md\n'
           '$claudeMdEndMarker\n\n# After\n';
       expect(
         upsertClaudeMdBlock(existing, block),
@@ -109,7 +103,8 @@ $claudeMdEndMarker''');
     });
 
     test('removes a legacy conventions block', () {
-      const existing = '# T\n\n'
+      const existing =
+          '# T\n\n'
           '$legacyConventionsStartMarker v=2024 -->\n'
           '@x.md\n'
           '$legacyConventionsEndMarker\n'

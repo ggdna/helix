@@ -107,9 +107,7 @@ packages:
     });
 
     test('a broken manifest leaves the version unknown', () {
-      final r = read({
-        '$root/node_modules/a-dna/package.json': '{broken',
-      });
+      final r = read({'$root/node_modules/a-dna/package.json': '{broken'});
       expect(r.locate('a-dna')!.version, isNull);
     });
 
@@ -123,6 +121,22 @@ importers:
       a-dna:
         specifier: ^4.1.0
         version: 4.1.10(vitest@4.1.10)
+''',
+        '$root/node_modules/a-dna/package.json': '{"name": "a-dna"}',
+      });
+      expect(r.locate('a-dna')!.version, '4.1.10');
+    });
+
+    test('a peer-suffixed packages: key is trimmed', () {
+      // pnpm appends the peer context to the key of a transitive package.
+      // The identity index has to strip it, otherwise neither the name nor
+      // the version can be read from it.
+      final r = read({
+        '$root/pnpm-lock.yaml': '''
+lockfileVersion: '9.0'
+packages:
+  'a-dna@4.1.10(vitest@4.1.10)':
+    resolution: {integrity: sha512-z}
 ''',
         '$root/node_modules/a-dna/package.json': '{"name": "a-dna"}',
       });
@@ -159,7 +173,8 @@ importers:
   group('locate — pub', () {
     test('finds the package through a file:// rootUri', () {
       final r = read({
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "file:///abs/dna_base"}]}',
         '/abs/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
         '/abs/dna_base/dna/LICENSE': 'MIT\n',
@@ -169,7 +184,8 @@ importers:
 
     test('finds the package through package_config.json', () {
       final r = read({
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
         '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
       });
@@ -183,7 +199,8 @@ importers:
       // A pub tarball ships both manifests. Reading package.json here
       // reported the npm version — the 1.0.0-instead-of-1.0.1 bug.
       final r = read({
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
         '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
         '/cache/dna_base/package.json':
@@ -194,7 +211,8 @@ importers:
 
     test('a broken pubspec leaves the version unknown', () {
       final r = read({
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
         '/cache/dna_base/pubspec.yaml': '*undefined-anchor',
         '/cache/dna_base/dna/LICENSE': 'MIT\n',
@@ -214,7 +232,8 @@ packages:
     source: hosted
     version: "1.0.1"
 ''',
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
         '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 9.9.9\n',
       });
@@ -237,7 +256,8 @@ packages:
     source: path
     version: "1.0.0"
 ''',
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../dna_base"}]}',
         '/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.1.0\n',
       });
@@ -335,7 +355,8 @@ importers:
 ''',
         '$root/node_modules/@tssuite/dna-base/package.json':
             '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
-        '$root/.dart_tool/package_config.json': '{"packages": [ '
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
             '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
         '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
       });

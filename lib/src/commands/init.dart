@@ -134,11 +134,11 @@ class Init extends Command<dynamic> {
     ggLog(
       layers.isEmpty
           ? 'DNA initialized. Declare the DNA packages you want as '
-              'dependencies, run pnpm install / dart pub get, list them '
-              'in "layers" of $dnaConfigPath, commit, then run your '
-              'tests — the first run instantiates the DNA.'
+                'dependencies, run pnpm install / dart pub get, list them '
+                'in "layers" of $dnaConfigPath, commit, then run your '
+                'tests — the first run instantiates the DNA.'
           : 'DNA initialized with ${layers.join(', ')}. Commit, then run '
-              'your tests — the first run instantiates the DNA.',
+                'your tests — the first run instantiates the DNA.',
     );
   }
 

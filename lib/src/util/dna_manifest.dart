@@ -57,13 +57,13 @@ class DnaManifestLayer {
 
   /// JSON representation.
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'package': package,
-        'ecosystem': ecosystem,
-        'resolvedVersion': resolvedVersion,
-        'via': via,
-        'hash': hash,
-      };
+    'name': name,
+    'package': package,
+    'ecosystem': ecosystem,
+    'resolvedVersion': resolvedVersion,
+    'via': via,
+    'hash': hash,
+  };
 }
 
 // .............................................................................
@@ -148,14 +148,14 @@ class DnaManifest {
 
   /// JSON representation of `dna/_generated.json`.
   Map<String, dynamic> toJson() => {
-        'version': dnaFormatVersion,
-        'layers': layers.map((l) => l.toJson()).toList(),
-        'claude': claude.toJson(),
-        'baseVersion': baseVersion,
-        'baseHash': baseHash,
-        'hash': hash,
-        'instances': instances.map((i) => i.toJson()).toList(),
-      };
+    'version': dnaFormatVersion,
+    'layers': layers.map((l) => l.toJson()).toList(),
+    'claude': claude.toJson(),
+    'baseVersion': baseVersion,
+    'baseHash': baseHash,
+    'hash': hash,
+    'instances': instances.map((i) => i.toJson()).toList(),
+  };
 
   // ...........................................................................
   /// Reads the manifest of [targetRoot]; `null` only when the file is

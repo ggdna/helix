@@ -89,9 +89,8 @@ List<String> ancestorDirs(Iterable<String> paths) {
       parts.removeLast();
     }
   }
-  return dirs.toList()
-    ..sort((a, b) {
-      final byDepth = b.split('/').length.compareTo(a.split('/').length);
-      return byDepth != 0 ? byDepth : a.compareTo(b);
-    });
+  return dirs.toList()..sort((a, b) {
+    final byDepth = b.split('/').length.compareTo(a.split('/').length);
+    return byDepth != 0 ? byDepth : a.compareTo(b);
+  });
 }

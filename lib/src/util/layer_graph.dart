@@ -84,10 +84,8 @@ class ResolvedLayer {
   final resolutions = <String, PackageResolution>{targetRoot: resolution};
   final warnings = <String>[];
 
-  PackageResolution resolutionOf(String root) => resolutions.putIfAbsent(
-        root,
-        () => PackageResolution.read(host, root),
-      );
+  PackageResolution resolutionOf(String root) =>
+      resolutions.putIfAbsent(root, () => PackageResolution.read(host, root));
 
   void expand(
     String rawName,
@@ -160,10 +158,7 @@ class ResolvedLayer {
   }
   return (
     layers: layers,
-    warnings: [
-      for (final r in resolutions.values) ...r.warnings,
-      ...warnings,
-    ],
+    warnings: [for (final r in resolutions.values) ...r.warnings, ...warnings],
   );
 }
 

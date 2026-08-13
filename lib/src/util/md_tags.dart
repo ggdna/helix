@@ -149,9 +149,7 @@ TagFileParseResult parseTagFile(String content) {
       } else if (markers.length == 1 && line.trim() == first.group(0)) {
         commentTag = first.group(1);
       } else {
-        warnings.add(
-          'Ambiguous tag marker line ${i + 1}: "$line" — skipped.',
-        );
+        warnings.add('Ambiguous tag marker line ${i + 1}: "$line" — skipped.');
       }
       continue;
     }
@@ -175,9 +173,7 @@ TagFileParseResult parseTagFile(String content) {
   }
 
   if (commentTag != null) {
-    warnings.add(
-      'Unclosed tag block "<!-- $commentTag -->" — block skipped.',
-    );
+    warnings.add('Unclosed tag block "<!-- $commentTag -->" — block skipped.');
   }
   closeHeadingBlock();
   if (strayLines.isNotEmpty) {
@@ -383,19 +379,22 @@ List<String> detectLegacyMarkers(String content) {
 // Private
 // =============================================================================
 
-final RegExp _taggedHeadingRe =
-    RegExp(r'^(#{1,6})[ \t]+\[@([A-Za-z0-9_-]+)\][ \t]*(.*)$');
+final RegExp _taggedHeadingRe = RegExp(
+  r'^(#{1,6})[ \t]+\[@([A-Za-z0-9_-]+)\][ \t]*(.*)$',
+);
 final RegExp _headingRe = RegExp(r'^(#{1,6})(?:[ \t]+(.*))?$');
 final RegExp _commentMarkerRe = RegExp(r'<!--\s*@([A-Za-z0-9_-]+)\s*-->');
-final RegExp _anyPlaceholderRe =
-    RegExp(r'\{\{@([A-Za-z0-9_-]+)(?::(.*?))?\}\}');
+final RegExp _anyPlaceholderRe = RegExp(
+  r'\{\{@([A-Za-z0-9_-]+)(?::(.*?))?\}\}',
+);
 final RegExp _fenceRe = RegExp(r'^\s{0,3}(`{3,}|~{3,})');
 final RegExp _inlineCodeRe = RegExp(r'`[^`]*`');
 
 /// Pre-4.0 notation, detected for warnings only: `## [tag] …` headings and
 /// `{{tag|…}}` placeholders (without the `@`).
-final RegExp _legacyHeadingRe =
-    RegExp(r'^#{1,6}[ \t]+\[(?!@)[A-Za-z0-9_-]+\][ \t]*');
+final RegExp _legacyHeadingRe = RegExp(
+  r'^#{1,6}[ \t]+\[(?!@)[A-Za-z0-9_-]+\][ \t]*',
+);
 final RegExp _legacyPlaceholderRe = RegExp(r'\{\{(?!@)[A-Za-z0-9_-]+\|');
 
 RegExp _placeholderRe(String tag) =>
@@ -407,8 +406,8 @@ RegExp _placeholderRe(String tag) =>
 /// sources on user machines may be CRLF even though this repo is LF-only.
 class _Doc {
   _Doc(String content)
-      : eol = _dominantEol(content),
-        endsWithNewline = content.endsWith('\n') {
+    : eol = _dominantEol(content),
+      endsWithNewline = content.endsWith('\n') {
     final raw = content.split('\n');
     if (content.endsWith('\n')) raw.removeLast();
     lines.addAll([

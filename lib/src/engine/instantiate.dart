@@ -25,8 +25,8 @@ import '../util/package_resolution.dart';
 /// shown relative to [targetRoot], a registry install by its package name.
 String _displayRootOf(ResolvedLayer layer, String targetRoot) =>
     layer.source == PackageSource.path
-        ? _relativeTo(layer.root, targetRoot)
-        : layer.package;
+    ? _relativeTo(layer.root, targetRoot)
+    : layer.package;
 
 // .............................................................................
 /// [path] relative to [base]; [path] unchanged when the two cannot be
@@ -226,9 +226,7 @@ DnaInstantiationResult instantiateDna({
     if (isPrivatePath(rel)) continue;
     final instancePath = decodeDotSegments(rel);
     if (isForbiddenInstanceTarget(instancePath)) {
-      warnings.add(
-        'Instance target "$instancePath" is forbidden — skipped.',
-      );
+      warnings.add('Instance target "$instancePath" is forbidden — skipped.');
       continue;
     }
     final collision = instancePlan[instancePath];
@@ -266,8 +264,10 @@ DnaInstantiationResult instantiateDna({
   final dnaDeletes = <String>[];
   if (config.role == DnaRole.project) {
     final dnaRoot = '$targetRoot/$dnaDirname';
-    final existing =
-        host.listFilesRecursive(dnaRoot).where(isDnaContent).toSet();
+    final existing = host
+        .listFilesRecursive(dnaRoot)
+        .where(isDnaContent)
+        .toSet();
     for (final entry in merged.entries) {
       final path = '$dnaRoot/${entry.key}';
       if (!host.existsFile(path) ||
@@ -390,16 +390,19 @@ DnaInstantiationResult instantiateDna({
     ],
     claude: DnaManifestClaude(claudeMdInclude: claudeImports),
     baseVersion: baseVersion,
-    baseHash:
-        baseDnaRoot == null ? null : hashTree(host, '$baseDnaRoot/$dnaDirname'),
+    baseHash: baseDnaRoot == null
+        ? null
+        : hashTree(host, '$baseDnaRoot/$dnaDirname'),
     hash: config.role == DnaRole.project ? _hashMerged(merged) : null,
   );
   final generatedJson = encodeJsonPretty(manifest.toJson());
   final generatedPath = '$targetRoot/$dnaGeneratedPath';
-  final generatedChanged = !host.existsFile(generatedPath) ||
+  final generatedChanged =
+      !host.existsFile(generatedPath) ||
       host.readString(generatedPath) != generatedJson;
 
-  final hasChanges = dnaWrites.isNotEmpty ||
+  final hasChanges =
+      dnaWrites.isNotEmpty ||
       dnaDeletes.isNotEmpty ||
       instanceWrites.isNotEmpty ||
       instanceDeletes.isNotEmpty ||
@@ -423,8 +426,9 @@ DnaInstantiationResult instantiateDna({
     if (claudeMdContent != null) 'CLAUDE.md',
     if (generatedChanged) dnaGeneratedPath,
   }..removeAll(backedUp);
-  final existingTouched =
-      touched.where((path) => host.existsFile('$targetRoot/$path')).toSet();
+  final existingTouched = touched
+      .where((path) => host.existsFile('$targetRoot/$path'))
+      .toSet();
   if (existingTouched.isNotEmpty) {
     final uncommitted = host.uncommittedPaths(targetRoot);
     final blocked = existingTouched.intersection(uncommitted).toList()..sort();
@@ -487,9 +491,9 @@ DnaInstantiationResult instantiateDna({
   // git does not track directories, so this is a working-tree cleanup
   // and never part of the commit.
   for (final dir in ancestorDirs(
-    updated.where((u) => u.endsWith(' (removed)')).map(
-          (u) => u.substring(0, u.length - ' (removed)'.length),
-        ),
+    updated
+        .where((u) => u.endsWith(' (removed)'))
+        .map((u) => u.substring(0, u.length - ' (removed)'.length)),
   )) {
     final path = '$targetRoot/$dir';
     if (!host.existsDir(path)) continue;
@@ -527,11 +531,10 @@ DnaInstantiationResult instantiateDna({
 Map<String, String> _sourcesFor(
   List<String> paths,
   Map<String, String> pathSources,
-) =>
-    {
-      for (final path in paths)
-        if (pathSources[path] != null) path: pathSources[path]!,
-    };
+) => {
+  for (final path in paths)
+    if (pathSources[path] != null) path: pathSources[path]!,
+};
 
 // .............................................................................
 Map<String, Object?> _applyLayer({
@@ -667,9 +670,7 @@ Map<String, Object?> _applyLayer({
     final targetRel = '$target.md';
     final targetBytes = merged[targetRel];
     if (targetBytes == null) {
-      messages.add(
-        '$label: "$rel" has no target file "$targetRel" — skipped.',
-      );
+      messages.add('$label: "$rel" has no target file "$targetRel" — skipped.');
       continue;
     }
     final targetText = _decodeText(targetBytes);
@@ -692,9 +693,7 @@ Map<String, Object?> _applyLayer({
     final targetRel = '$target.json';
     final targetBytes = merged[targetRel];
     if (targetBytes == null) {
-      messages.add(
-        '$label: "$rel" has no target file "$targetRel" — skipped.',
-      );
+      messages.add('$label: "$rel" has no target file "$targetRel" — skipped.');
       continue;
     }
     final targetValue = parseJsonc(

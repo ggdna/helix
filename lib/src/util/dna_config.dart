@@ -84,8 +84,9 @@ class DnaConfig {
 }) {
   final warnings = <String>[];
   final path = '$targetRoot/$dnaConfigPath';
-  final where =
-      packageLabel == null ? dnaConfigPath : '$packageLabel: $dnaConfigPath';
+  final where = packageLabel == null
+      ? dnaConfigPath
+      : '$packageLabel: $dnaConfigPath';
 
   if (!host.existsFile(path)) {
     if (host.existsDir('$targetRoot/$dnaDirname')) {
@@ -105,13 +106,7 @@ class DnaConfig {
 
   _requireFormatVersion(decoded['version'], where);
 
-  const knownKeys = {
-    'version',
-    'role',
-    'layers',
-    'vars',
-    'claude',
-  };
+  const knownKeys = {'version', 'role', 'layers', 'vars', 'claude'};
   for (final key in decoded.keys) {
     if (!knownKeys.contains(key)) {
       warnings.add('$where: unknown key "$key" — ignored.');
@@ -136,7 +131,7 @@ void _requireFormatVersion(Object? value, String where) {
     value == null
         ? '$where: "version" is missing — add "version": $dnaFormatVersion.'
         : '$where: format version $value is not supported — this helix '
-            'reads version $dnaFormatVersion.',
+              'reads version $dnaFormatVersion.',
   );
 }
 
