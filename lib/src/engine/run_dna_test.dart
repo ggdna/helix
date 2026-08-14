@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -112,27 +112,27 @@ List<String> invalidDotEscapes(DnaHost host, String root) {
 
 // .............................................................................
 /// Renders one instruction per invalid dot escape: rename it to `dot-`.
-String describeInvalidDotEscapes(List<String> segments) =>
-    segments.map((segment) {
+String describeInvalidDotEscapes(List<String> segments) => segments
+    .map((segment) {
       final fixed = '$dotPrefix${segment.substring(invalidDotPrefix.length)}';
       return '${cAction('Rename')} ${cCmd('$dnaDirname/$segment')} '
           '${cAction('to')} ${cCmd('$dnaDirname/$fixed')}.';
-    }).join('\n');
+    })
+    .join('\n');
 
 // .............................................................................
 /// Renders one instruction per reported path: move the edits from the
 /// generated file to the DNA file it is produced from.
-String describeDnaSources(
-  List<String> paths,
-  Map<String, String> sources,
-) =>
-    paths.map((path) {
-      final source = sources[path];
-      return source == null
-          ? '${cAction('Commit or stash')} ${cCmd(path)}.'
-          : '${cAction('Move edits from')} ${cCmd(path)} '
-              '${cAction('to')} ${cCmd(source)}.';
-    }).join('\n');
+String describeDnaSources(List<String> paths, Map<String, String> sources) =>
+    paths
+        .map((path) {
+          final source = sources[path];
+          return source == null
+              ? '${cAction('Commit or stash')} ${cCmd(path)}.'
+              : '${cAction('Move edits from')} ${cCmd(path)} '
+                    '${cAction('to')} ${cCmd(source)}.';
+        })
+        .join('\n');
 
 // .............................................................................
 /// Resolves the root folder of the installed helix package (its own

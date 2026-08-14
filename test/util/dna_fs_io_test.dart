@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -17,7 +17,7 @@ void main() {
 
     setUp(() {
       tmp = Directory.systemTemp.createTempSync('helix_fs_io_test_');
-      host = IoDnaHost(git: (_, __) => '');
+      host = IoDnaHost(git: (_, _) => '');
     });
 
     tearDown(() {
@@ -92,9 +92,7 @@ void main() {
         expect(dir, isNot(contains(r'\')));
         expect(
           dir,
-          startsWith(
-            Directory.systemTemp.absolute.path.replaceAll(r'\', '/'),
-          ),
+          startsWith(Directory.systemTemp.absolute.path.replaceAll(r'\', '/')),
         );
         // A second call never returns the same folder.
         final other = host.createTempDir(dnaBackupDirPrefix);
@@ -139,7 +137,7 @@ void main() {
     test('does nothing without paths', () {
       var called = false;
       final probe = IoDnaHost(
-        git: (_, __) {
+        git: (_, _) {
           called = true;
           return '';
         },
@@ -153,10 +151,10 @@ void main() {
       try {
         final host = IoDnaHost();
         String git(List<String> args) => Process.runSync(
-              'git',
-              args,
-              workingDirectory: tmp.path,
-            ).stdout.toString();
+          'git',
+          args,
+          workingDirectory: tmp.path,
+        ).stdout.toString();
         git(['init', '-q']);
         git(['config', 'user.email', 't@t']);
         git(['config', 'user.name', 't']);

@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -26,24 +26,26 @@ void main() {
 
   /// Builds a target with dna-base and dna-dart installed via npm and a
   /// pubspec.
-  MemoryDnaHost makeHost({Map<String, String> extra = const {}}) =>
-      MemoryDnaHost(
-        files: {
-          '$root/pubspec.yaml': 'name: consumer\n'
-              'dev_dependencies:\n  dna_dart: ^1.0.0\n',
-          '$root/package.json': '{"devDependencies": '
-              '{"dna-dart": "^1.0.0"}}',
-          '$root/$dnaConfigPath':
-              '{"version": $dnaFormatVersion, "layers": ["dna-dart"]}',
-          // dna-base (installed transitively) ..........................
-          '$root/node_modules/dna-base/package.json':
-              '{"name": "dna-base", "version": "1.0.0"}',
-          '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/dna-base/dna/_vars.json':
-              '{"dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed"}',
-          '$root/node_modules/dna-base/dna/LICENSE':
-              'MIT (c) dnaCopyrightHolder\n',
-          '$root/node_modules/dna-base/dna/doc/develop.md': '''
+  MemoryDnaHost makeHost({
+    Map<String, String> extra = const {},
+  }) => MemoryDnaHost(
+    files: {
+      '$root/pubspec.yaml':
+          'name: consumer\n'
+          'dev_dependencies:\n  dna_dart: ^1.0.0\n',
+      '$root/package.json':
+          '{"devDependencies": '
+          '{"dna-dart": "^1.0.0"}}',
+      '$root/$dnaConfigPath':
+          '{"version": $dnaFormatVersion, "layers": ["dna-dart"]}',
+      // dna-base (installed transitively) ..........................
+      '$root/node_modules/dna-base/package.json':
+          '{"name": "dna-base", "version": "1.0.0"}',
+      '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
+      '$root/node_modules/dna-base/dna/_vars.json':
+          '{"dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed"}',
+      '$root/node_modules/dna-base/dna/LICENSE': 'MIT (c) dnaCopyrightHolder\n',
+      '$root/node_modules/dna-base/dna/doc/develop.md': '''
 # Develop
 
 Package manager: {{@pm:npm}}.
@@ -52,38 +54,36 @@ Package manager: {{@pm:npm}}.
 
 Run {{@pm:npm}} update.
 ''',
-          '$root/node_modules/dna-base/dna/dot-vscode/settings.json': '''
+      '$root/node_modules/dna-base/dna/dot-vscode/settings.json': '''
 {
   // base settings
   "editor.rulers": [80],
   "files.trimTrailingWhitespace": true
 }
 ''',
-          '$root/node_modules/dna-base/dna/dot-vscode/extensions.json':
-              '{"recommendations": ["esbenp.prettier-vscode"]}\n',
-          // dna-dart ...................................................
-          '$root/node_modules/dna-dart/package.json':
-              '{"name": "dna-dart", "version": "1.0.0", '
-                  '"dependencies": {"dna-base": "^1.0.0"}}',
-          '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig([
-            'dna-base',
-          ]),
-          '$root/node_modules/dna-dart/dna/doc/develop.overrides.md': '''
+      '$root/node_modules/dna-base/dna/dot-vscode/extensions.json':
+          '{"recommendations": ["esbenp.prettier-vscode"]}\n',
+      // dna-dart ...................................................
+      '$root/node_modules/dna-dart/package.json':
+          '{"name": "dna-dart", "version": "1.0.0", '
+          '"dependencies": {"dna-base": "^1.0.0"}}',
+      '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig(['dna-base']),
+      '$root/node_modules/dna-dart/dna/doc/develop.overrides.md': '''
 ## [@update] Update dependencies
 
 Run dart pub upgrade.
 
 <!-- @pm --> dart pub <!-- @pm -->
 ''',
-          '$root/node_modules/dna-dart/dna/dot-vscode/settings.overrides.json':
-              '{"dart.showTodos": false}',
-          '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json':
-              '{"recommendations+": ["dart-code.dart-code"]}',
-          '$root/node_modules/dna-dart/dna/test/dna/dna-test.dart':
-              '// dnaProjectName test wrapper\n',
-          ...extra,
-        },
-      );
+      '$root/node_modules/dna-dart/dna/dot-vscode/settings.overrides.json':
+          '{"dart.showTodos": false}',
+      '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json':
+          '{"recommendations+": ["dart-code.dart-code"]}',
+      '$root/node_modules/dna-dart/dna/test/dna/dna-test.dart':
+          '// dnaProjectName test wrapper\n',
+      ...extra,
+    },
+  );
 
   group('instantiateDna on the real file system', () {
     late Directory tmp;
@@ -97,7 +97,7 @@ Run dart pub upgrade.
     });
 
     test('a folder emptied by the DNA is removed as well', () {
-      final host = IoDnaHost(git: (_, __) => '');
+      final host = IoDnaHost(git: (_, _) => '');
       final project = '${tmp.path}/project';
       final layer = '$project/node_modules/a-dna';
       host
@@ -111,11 +111,7 @@ Run dart pub upgrade.
           '{"version": $dnaFormatVersion, "layers": ["a-dna"]}',
         );
 
-      instantiateDna(
-        host: host,
-        targetRoot: project,
-        baseVersion: '4.0.0',
-      );
+      instantiateDna(host: host, targetRoot: project, baseVersion: '4.0.0');
       expect(Directory('$project/doc/guides').existsSync(), isTrue);
 
       // The DNA drops the only file of that folder …
@@ -142,7 +138,7 @@ Run dart pub upgrade.
     });
 
     test('the backup lands in a real system-temp folder', () {
-      final host = IoDnaHost(git: (_, __) => '');
+      final host = IoDnaHost(git: (_, _) => '');
       final project = '${tmp.path}/project';
       final layer = '$project/node_modules/a-dna';
       host
@@ -172,9 +168,7 @@ Run dart pub upgrade.
       expect(r.backupDir, isNot(contains(project)));
       expect(
         r.backupDir,
-        startsWith(
-          Directory.systemTemp.absolute.path.replaceAll(r'\', '/'),
-        ),
+        startsWith(Directory.systemTemp.absolute.path.replaceAll(r'\', '/')),
       );
     });
   });
@@ -183,7 +177,8 @@ Run dart pub upgrade.
     test('merges layers, renders, substitutes, instantiates', () {
       final host = makeHost(
         extra: {
-          '$root/$dnaConfigPath': '{"version": $dnaFormatVersion, '
+          '$root/$dnaConfigPath':
+              '{"version": $dnaFormatVersion, '
               '"layers": ["dna-dart"], '
               '"vars": {"dnaProjectName": "my_project"}}',
         },
@@ -217,10 +212,7 @@ Run dart pub upgrade.
       expect(extensions, contains('dart-code.dart-code'));
 
       // Variables: verbatim value, config var wins.
-      expect(
-        host.readString('$root/LICENSE'),
-        contains('MIT (c) ggsuite'),
-      );
+      expect(host.readString('$root/LICENSE'), contains('MIT (c) ggsuite'));
       expect(host.existsFile('$root/test/dna/dna-test.dart'), isTrue);
       expect(
         host.readString('$root/test/dna/dna-test.dart'),
@@ -240,10 +232,7 @@ Run dart pub upgrade.
         host.existsFile('$root/dna/dot-vscode/settings.overrides.json'),
         isFalse,
       );
-      expect(
-        host.existsFile('$root/.vscode/settings.overrides.json'),
-        isFalse,
-      );
+      expect(host.existsFile('$root/.vscode/settings.overrides.json'), isFalse);
 
       // Manifest v5 with recursive layer info.
       final manifest = DnaManifest.read(host, root)!;
@@ -359,11 +348,13 @@ Run dart pub upgrade.
     test('sources name the package as installed, not the identity', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/pubspec.yaml': 'name: consumer\n'
+          '$root/pubspec.yaml':
+              'name: consumer\n'
               'dev_dependencies:\n  dna_base: ^1.0.0\n',
           '$root/$dnaConfigPath':
               '{"version": $dnaFormatVersion, "layers": ["dna-base"]}',
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
+          '$root/.dart_tool/package_config.json':
+              '{"packages": [ '
               '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
           '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
           '/cache/dna_base/$dnaConfigPath': layerConfig(),
@@ -401,7 +392,8 @@ packages:
     source: path
     version: "1.0.0"
 ''',
-          '$target/.dart_tool/package_config.json': '{"packages": [ '
+          '$target/.dart_tool/package_config.json':
+              '{"packages": [ '
               '{"name": "local_dna", '
               '"rootUri": "../../../ggsuite/local-dna"}]}',
           '/w/ggsuite/local-dna/$dnaConfigPath': layerConfig(),
@@ -424,7 +416,8 @@ packages:
           '$root/pubspec.yaml': 'name: consumer\n',
           '$root/$dnaConfigPath':
               '{"version": $dnaFormatVersion, "layers": ["local_dna"]}',
-          '$root/.dart_tool/package_config.json': '{"packages": [ '
+          '$root/.dart_tool/package_config.json':
+              '{"packages": [ '
               '{"name": "local_dna", "rootUri": "file:///elsewhere/dna"}]}',
           '$root/pubspec.lock': '''
 packages:
@@ -497,10 +490,7 @@ packages:
         host.commits.single.paths.any((p) => p.contains('(removed)')),
         isFalse,
       );
-      expect(
-        r.messages,
-        contains('committed as "$generatedDnaCommitMessage"'),
-      );
+      expect(r.messages, contains('committed as "$generatedDnaCommitMessage"'));
     });
 
     test('keeps the files when committing is impossible', () {
@@ -514,10 +504,7 @@ packages:
       expect(r.upToDate, isFalse);
       expect(r.updated, isNotEmpty);
       expect(host.existsFile('$root/LICENSE'), isTrue);
-      expect(
-        r.warnings.any((w) => w.contains('Could not commit')),
-        isTrue,
-      );
+      expect(r.warnings.any((w) => w.contains('Could not commit')), isTrue);
     });
 
     test('the config is read, the bookkeeping written, side by side', () {
@@ -532,8 +519,9 @@ packages:
       // … and the engine's file sits beside it, carrying the instances
       // but never the variables.
       expect(host.existsFile('$root/$dnaGeneratedPath'), isTrue);
-      final generated = jsonDecode(host.readString('$root/$dnaGeneratedPath'))
-          as Map<String, dynamic>;
+      final generated = jsonDecode(
+        host.readString('$root/$dnaGeneratedPath'),
+      ) as Map<String, dynamic>;
       expect(generated['instances'], isNotEmpty);
       expect(generated.containsKey('vars'), isFalse);
       expect(
@@ -547,7 +535,7 @@ packages:
         extra: {
           '$root/node_modules/dna-dart/$dnaGeneratedPath':
               '{"version": $dnaFormatVersion, "layers": [], '
-                  '"baseVersion": "5.0.0", "instances": []}',
+              '"baseVersion": "5.0.0", "instances": []}',
         },
       );
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
@@ -560,8 +548,9 @@ packages:
       );
       expect(r.upToDate, isTrue, reason: r.updated.join('\n'));
       // The bookkeeping is the consumer's own, not the layer's copy.
-      final generated = jsonDecode(host.readString('$root/$dnaGeneratedPath'))
-          as Map<String, dynamic>;
+      final generated = jsonDecode(
+        host.readString('$root/$dnaGeneratedPath'),
+      ) as Map<String, dynamic>;
       expect(generated['layers'], isNotEmpty);
       expect(generated['instances'], isNotEmpty);
     });
@@ -701,10 +690,7 @@ packages:
         baseVersion: '4.0.0',
       );
       expect(host2.existsFile('$root/.vscode/extensions.json'), isTrue);
-      expect(
-        r2.warnings.any((w) => w.contains('remove manually')),
-        isTrue,
-      );
+      expect(r2.warnings.any((w) => w.contains('remove manually')), isTrue);
     });
 
     test('role dna: own dna/ is synced whatever layers are declared', () {
@@ -713,7 +699,8 @@ packages:
       // conflict and still contributes its exclusive files.
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"name": "leaf-dna", "version": "1.0.0", '
+          '$root/package.json':
+              '{"name": "leaf-dna", "version": "1.0.0", '
               '"dependencies": {"dna-dart": "^1.0.0", "dna-base": "^1.0.0"}}',
           '$root/$dnaConfigPath': layerConfig(['dna-base', 'dna-dart']),
           '$root/node_modules/dna-base/package.json':
@@ -722,19 +709,16 @@ packages:
           '$root/node_modules/dna-base/dna/doc/develop.md': '# Base\n',
           '$root/node_modules/dna-dart/package.json':
               '{"name": "dna-dart", "version": "1.0.0", '
-                  '"dependencies": {"dna-base": "^1.0.0"}}',
-          '$root/node_modules/dna-dart/$dnaConfigPath':
-              layerConfig(['dna-base']),
+              '"dependencies": {"dna-base": "^1.0.0"}}',
+          '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig([
+            'dna-base',
+          ]),
           '$root/node_modules/dna-dart/dna/doc/develop.md': '# Dart\n',
           '$root/dna/doc/develop.md': '# Own version\n',
           '$root/dna/doc/only-here.md': '# Only in the own DNA\n',
         },
       );
-      instantiateDna(
-        host: host,
-        targetRoot: root,
-        baseVersion: '4.0.0',
-      );
+      instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
 
       // Applied last: the own file wins over both layers …
       expect(host.readString('$root/doc/develop.md'), '# Own version\n');
@@ -746,16 +730,18 @@ packages:
 
       // The ordering the win depends on, asserted directly.
       final manifest = DnaManifest.read(host, root)!;
-      expect(
-        manifest.layers.map((l) => l.name),
-        ['dna-base', 'dna-dart', 'self'],
-      );
+      expect(manifest.layers.map((l) => l.name), [
+        'dna-base',
+        'dna-dart',
+        'self',
+      ]);
     });
 
     test('role dna: own dna/ is the last layer and never overwritten', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"name": "dna-dart", "version": "1.0.0", '
+          '$root/package.json':
+              '{"name": "dna-dart", "version": "1.0.0", '
               '"dependencies": {"dna-base": "^1.0.0"}}',
           '$root/$dnaConfigPath': layerConfig(['dna-base']),
           '$root/node_modules/dna-base/package.json':
@@ -807,10 +793,7 @@ packages:
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
 
       // The instance carries the real dotfile name …
-      expect(
-        host.existsFile('$root/.claude/skills/init/SKILL.md'),
-        isTrue,
-      );
+      expect(host.existsFile('$root/.claude/skills/init/SKILL.md'), isTrue);
       // … while the replica keeps the escape, so it survives republishing
       // through pub, which drops every path with a leading dot.
       expect(
@@ -853,11 +836,8 @@ packages:
         },
       );
       expect(
-        () => instantiateDna(
-          host: host,
-          targetRoot: root,
-          baseVersion: '4.0.0',
-        ),
+        () =>
+            instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0'),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -882,16 +862,14 @@ packages:
         },
       );
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
-      expect(
-        host.existsFile('$root/test/dna/my-spec-helper.ts'),
-        isTrue,
-      );
+      expect(host.existsFile('$root/test/dna/my-spec-helper.ts'), isTrue);
     });
 
     test('writes the managed CLAUDE.md block from projected instances', () {
       final host = makeHost(
         extra: {
-          '$root/$dnaConfigPath': '{"version": $dnaFormatVersion, '
+          '$root/$dnaConfigPath':
+              '{"version": $dnaFormatVersion, '
               '"layers": ["dna-dart"], '
               '"claude": {"claudeMdInclude": ["doc"]}}',
           '$root/CLAUDE.md': '# My project\n',
@@ -906,9 +884,7 @@ packages:
 
     test('yaml overrides and legacy .tag.md files are hard errors', () {
       final yamlHost = makeHost(
-        extra: {
-          '$root/node_modules/dna-dart/dna/a.overrides.yaml': 'x: 1',
-        },
+        extra: {'$root/node_modules/dna-dart/dna/a.overrides.yaml': 'x: 1'},
       );
       expect(
         () => instantiateDna(
@@ -956,10 +932,7 @@ packages:
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(
-        r.messages.any((m) => m.contains('has no target file')),
-        isTrue,
-      );
+      expect(r.messages.any((m) => m.contains('has no target file')), isTrue);
     });
 
     test('forbidden instance targets are skipped with a warning', () {
@@ -992,11 +965,8 @@ packages:
         },
       );
       expect(
-        () => instantiateDna(
-          host: host,
-          targetRoot: root,
-          baseVersion: '4.0.0',
-        ),
+        () =>
+            instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0'),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -1024,9 +994,7 @@ packages:
 
       // A foreign file that already equals the DNA output is adopted
       // silently — no write, just a log line.
-      final fresh = makeHost(
-        extra: {'$root/LICENSE': 'MIT (c) ggsuite\n'},
-      );
+      final fresh = makeHost(extra: {'$root/LICENSE': 'MIT (c) ggsuite\n'});
       final adopted = instantiateDna(
         host: fresh,
         targetRoot: root,
@@ -1078,18 +1046,12 @@ Not allowed globally.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(
-        r.warnings.any((w) => w.contains('heading-form block')),
-        isTrue,
-      );
+      expect(r.warnings.any((w) => w.contains('heading-form block')), isTrue);
       expect(
         r.warnings.any((w) => w.contains('"unused" matches nothing')),
         isTrue,
       );
-      expect(
-        r.warnings.any((w) => w.contains('only supported at')),
-        isTrue,
-      );
+      expect(r.warnings.any((w) => w.contains('only supported at')), isTrue);
     });
 
     test('json overrides without a target log a skip message', () {
@@ -1118,14 +1080,8 @@ Not allowed globally.
       final host = makeHost();
       final binary = Uint8List.fromList([0x89, 0x50, 0x00, 0x01, 0xFF]);
       final latin1 = Uint8List.fromList([0xE4, 0xF6, 0xFC]);
-      host.writeBytes(
-        '$root/node_modules/dna-dart/dna/doc/logo.png',
-        binary,
-      );
-      host.writeBytes(
-        '$root/node_modules/dna-dart/dna/doc/legacy.txt',
-        latin1,
-      );
+      host.writeBytes('$root/node_modules/dna-dart/dna/doc/logo.png', binary);
+      host.writeBytes('$root/node_modules/dna-dart/dna/doc/legacy.txt', latin1);
       instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
       expect(host.readBytes('$root/doc/logo.png'), binary);
       expect(host.readBytes('$root/doc/legacy.txt'), latin1);
@@ -1133,9 +1089,7 @@ Not allowed globally.
 
     test('base DNA of helix itself is layer 0', () {
       final host = makeHost(
-        extra: {
-          '/gg/dna/doc/base-doc.md': '# From helix base\n',
-        },
+        extra: {'/gg/dna/doc/base-doc.md': '# From helix base\n'},
       );
       instantiateDna(
         host: host,

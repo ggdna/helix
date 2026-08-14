@@ -9,4 +9,4 @@
 // coverage:ignore-file
 
 /// The version of the `helix` package.
-const String helixVersion = '0.0.4';
+const String helixVersion = '0.1.0';

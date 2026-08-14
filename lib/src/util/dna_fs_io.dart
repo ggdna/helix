@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -13,10 +13,7 @@ import 'dna_fs.dart';
 
 /// Runs a git command in [workingDirectory] and returns its stdout —
 /// injectable for tests.
-typedef GitRunner = String Function(
-  String workingDirectory,
-  List<String> args,
-);
+typedef GitRunner = String Function(String workingDirectory, List<String> args);
 
 /// [DnaHost] backed by `dart:io` and the local `git` binary. This file is
 /// the only place binding the engine to the real platform — the engine

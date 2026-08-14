@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -46,11 +46,7 @@ void main() {
     });
 
     test('null deletes the key', () {
-      final r = jsonMergePatch(
-        {'a': 1, 'b': 2},
-        {'a': null},
-        context: 't',
-      );
+      final r = jsonMergePatch({'a': 1, 'b': 2}, {'a': null}, context: 't');
       expect(r.value, {'b': 2});
     });
 
@@ -135,11 +131,7 @@ void main() {
         {'c': 3, 'a': 4},
         context: 't',
       );
-      expect((r.value! as Map<String, dynamic>).keys.toList(), [
-        'b',
-        'a',
-        'c',
-      ]);
+      expect((r.value! as Map<String, dynamic>).keys.toList(), ['b', 'a', 'c']);
     });
 
     test('is idempotent', () {

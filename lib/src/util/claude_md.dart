@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -39,10 +39,13 @@ List<String> expandClaudeMdIncludes({
       result.add(rel);
       continue;
     }
-    final folderMatches = projectedFiles
-        .where((f) => f.startsWith('$rel/') && f.toLowerCase().endsWith('.md'))
-        .toList()
-      ..sort();
+    final folderMatches =
+        projectedFiles
+            .where(
+              (f) => f.startsWith('$rel/') && f.toLowerCase().endsWith('.md'),
+            )
+            .toList()
+          ..sort();
     if (folderMatches.isNotEmpty) {
       result.addAll(folderMatches);
       continue;
@@ -53,12 +56,13 @@ List<String> expandClaudeMdIncludes({
       continue;
     }
     if (host.existsDir(path)) {
-      final files = host
-          .listFilesRecursive(path)
-          .where((f) => f.toLowerCase().endsWith('.md'))
-          .map((f) => '$rel/$f')
-          .toList()
-        ..sort();
+      final files =
+          host
+              .listFilesRecursive(path)
+              .where((f) => f.toLowerCase().endsWith('.md'))
+              .map((f) => '$rel/$f')
+              .toList()
+            ..sort();
       result.addAll(files);
       continue;
     }
@@ -72,10 +76,10 @@ List<String> expandClaudeMdIncludes({
 /// markers. Claude Code expands each import at session start (relative
 /// paths resolve relative to the CLAUDE.md, max four hops deep).
 String buildClaudeMdBlock(Iterable<String> importPaths) => [
-      claudeMdStartMarker,
-      ...importPaths.map((path) => '@$path'),
-      claudeMdEndMarker,
-    ].join('\n');
+  claudeMdStartMarker,
+  ...importPaths.map((path) => '@$path'),
+  claudeMdEndMarker,
+].join('\n');
 
 // .............................................................................
 /// Replaces the managed block in [content] with [block], or appends it
@@ -113,8 +117,10 @@ String? updatedClaudeMd(
 ) {
   final path = '$targetRoot/CLAUDE.md';
   final existing = host.existsFile(path) ? host.readString(path) : '';
-  final updated =
-      upsertClaudeMdBlock(existing, buildClaudeMdBlock(importPaths));
+  final updated = upsertClaudeMdBlock(
+    existing,
+    buildClaudeMdBlock(importPaths),
+  );
   return existing == updated ? null : updated;
 }
 
@@ -126,8 +132,8 @@ String _removeLegacyBlock(String content) {
   if (endIdx == -1) return content;
   var end = endIdx + legacyConventionsEndMarker.length;
   // Also swallow the newline(s) directly after the removed block.
-  while (
-      end < content.length && (content[end] == '\n' || content[end] == '\r')) {
+  while (end < content.length &&
+      (content[end] == '\n' || content[end] == '\r')) {
     end++;
   }
   return content.substring(0, start) + content.substring(end);

@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -25,7 +25,8 @@ class Helix extends Command<dynamic> {
   @override
   final name = 'helix';
   @override
-  final description = 'The DNA engine — resolves the DNA packages declared as '
+  final description =
+      'The DNA engine — resolves the DNA packages declared as '
       'dev-dependencies (dna_base, dna_dart, dna-ts, …) and instantiates '
       'their content into this repo. Run `helix init` once; the placed '
       'test keeps the project in sync.';

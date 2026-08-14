@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -21,10 +21,12 @@ void main() {
       final result = parseTagFile(_sample('source.overrides.md'));
 
       expect(result.warnings, isEmpty);
-      expect(
-        result.blocks.map((b) => b.tag),
-        ['setup', 'package_manager', 'usage', 'project_name'],
-      );
+      expect(result.blocks.map((b) => b.tag), [
+        'setup',
+        'package_manager',
+        'usage',
+        'project_name',
+      ]);
 
       expect(
         result.blocks[0].content,
@@ -39,10 +41,7 @@ void main() {
       expect(result.blocks[0].isHeadingForm, isTrue);
       expect(result.blocks[1].content, 'pnpm');
       expect(result.blocks[1].isHeadingForm, isFalse);
-      expect(
-        result.blocks[2].content,
-        '## Verwendung\n\nStarte mit `run`.',
-      );
+      expect(result.blocks[2].content, '## Verwendung\n\nStarte mit `run`.');
       expect(result.blocks[3].content, 'Acme-Projekt');
     });
 
@@ -162,11 +161,9 @@ void main() {
     });
 
     test('replaces a section reaching until the end of file', () {
-      final result = applyTagBlocks(
-        '## [@a] Alt\n\nAlter Inhalt.\n',
-        const [TagBlock(tag: 'a', content: '## [@a] Neu\n\nNeuer Inhalt.')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('## [@a] Alt\n\nAlter Inhalt.\n', const [
+        TagBlock(tag: 'a', content: '## [@a] Neu\n\nNeuer Inhalt.'),
+      ], fileLabel: 'x.md');
       expect(result.content, '## [@a] Neu\n\nNeuer Inhalt.\n');
     });
 
@@ -176,18 +173,13 @@ void main() {
         const [TagBlock(tag: 'a', content: '## [@a] Neu\nz')],
         fileLabel: 'x.md',
       );
-      expect(
-        result.content,
-        '## [@a] Neu\nz\n\n## Mitte\n\n## [@a] Neu\nz\n',
-      );
+      expect(result.content, '## [@a] Neu\nz\n\n## Mitte\n\n## [@a] Neu\nz\n');
     });
 
     test('a higher-level heading ends the section', () {
-      final result = applyTagBlocks(
-        '### [@a] Tief\nx\n\n## Höher\ny\n',
-        const [TagBlock(tag: 'a', content: '### [@a] Neu\nz')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('### [@a] Tief\nx\n\n## Höher\ny\n', const [
+        TagBlock(tag: 'a', content: '### [@a] Neu\nz'),
+      ], fileLabel: 'x.md');
       expect(result.content, '### [@a] Neu\nz\n\n## Höher\ny\n');
     });
 
@@ -202,72 +194,55 @@ void main() {
     });
 
     test('replaces a foreign tag in the replacement heading', () {
-      final result = applyTagBlocks(
-        '## [@setup] Alt\nx\n',
-        const [TagBlock(tag: 'setup', content: '## [@greeting] Neu\nz')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('## [@setup] Alt\nx\n', const [
+        TagBlock(tag: 'setup', content: '## [@greeting] Neu\nz'),
+      ], fileLabel: 'x.md');
       expect(result.content, '## [@setup] Neu\nz\n');
 
       // Also for foreign-tagged headings without a title text.
-      final bare = applyTagBlocks(
-        '## [@setup] Alt\nx\n',
-        const [TagBlock(tag: 'setup', content: '## [@greeting]\nz')],
-        fileLabel: 'x.md',
-      );
+      final bare = applyTagBlocks('## [@setup] Alt\nx\n', const [
+        TagBlock(tag: 'setup', content: '## [@greeting]\nz'),
+      ], fileLabel: 'x.md');
       expect(bare.content, '## [@setup]\nz\n');
     });
 
     test('re-attaches the tag when the replacement heading lacks it', () {
-      final result = applyTagBlocks(
-        '## [@a] Alt\nx\n',
-        const [TagBlock(tag: 'a', content: '# Neu\nz')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('## [@a] Alt\nx\n', const [
+        TagBlock(tag: 'a', content: '# Neu\nz'),
+      ], fileLabel: 'x.md');
       expect(result.content, '# [@a] Neu\nz\n');
 
       // Also for headings without a title text.
-      final bare = applyTagBlocks(
-        '## [@a] Alt\nx\n',
-        const [TagBlock(tag: 'a', content: '##\nz')],
-        fileLabel: 'x.md',
-      );
+      final bare = applyTagBlocks('## [@a] Alt\nx\n', const [
+        TagBlock(tag: 'a', content: '##\nz'),
+      ], fileLabel: 'x.md');
       expect(bare.content, '## [@a]\nz\n');
     });
 
     test('warns and skips when the replacement has no heading', () {
       const source = '## [@a] Alt\nx\n';
       for (final content in ['nur Text', '']) {
-        final result = applyTagBlocks(
-          source,
-          [TagBlock(tag: 'a', content: content)],
-          fileLabel: 'x.md',
-        );
+        final result = applyTagBlocks(source, [
+          TagBlock(tag: 'a', content: content),
+        ], fileLabel: 'x.md');
         expect(result.content, source);
-        expect(
-          result.warnings.single,
-          contains('must start with a heading'),
-        );
+        expect(result.warnings.single, contains('must start with a heading'));
       }
     });
 
     test('tagged headings inside fences are no occurrences', () {
       const source = '```\n## [@a] Fenced\n```\n';
-      final result = applyTagBlocks(
-        source,
-        const [TagBlock(tag: 'a', content: '## [@a] Neu')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks(source, const [
+        TagBlock(tag: 'a', content: '## [@a] Neu'),
+      ], fileLabel: 'x.md');
       expect(result.content, source);
       expect(result.warnings.single, contains('not found'));
     });
 
     test('rewrites placeholders with empty defaults', () {
-      final result = applyTagBlocks(
-        'Wert: {{@a}}\n',
-        const [TagBlock(tag: 'a', content: 'neu')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('Wert: {{@a}}\n', const [
+        TagBlock(tag: 'a', content: 'neu'),
+      ], fileLabel: 'x.md');
       expect(result.content, 'Wert: {{@a:neu}}\n');
     });
 
@@ -277,51 +252,41 @@ void main() {
     });
 
     test('old-notation placeholders are not rewritten', () {
-      final result = applyTagBlocks(
-        '{{a|alt}}\n',
-        const [TagBlock(tag: 'a', content: 'neu')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('{{a|alt}}\n', const [
+        TagBlock(tag: 'a', content: 'neu'),
+      ], fileLabel: 'x.md');
       expect(result.content, '{{a|alt}}\n');
       expect(result.warnings.single, contains('not found'));
     });
 
     test('warns when a replacement value contains }}', () {
-      final result = applyTagBlocks(
-        '{{@a:alt}}\n',
-        const [TagBlock(tag: 'a', content: 'kaputt}}')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('{{@a:alt}}\n', const [
+        TagBlock(tag: 'a', content: 'kaputt}}'),
+      ], fileLabel: 'x.md');
       expect(result.warnings.single, contains('"}}"'));
     });
 
     test('collapses multi-line string replacements with a warning', () {
-      final result = applyTagBlocks(
-        '{{@a:alt}}\n',
-        const [TagBlock(tag: 'a', content: 'zeile1\nzeile2')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('{{@a:alt}}\n', const [
+        TagBlock(tag: 'a', content: 'zeile1\nzeile2'),
+      ], fileLabel: 'x.md');
       expect(result.content, '{{@a:zeile1 zeile2}}\n');
       expect(result.warnings.single, contains('multiple'));
     });
 
     test('warns about unknown tags', () {
-      final result = applyTagBlocks(
-        'kein Marker\n',
-        const [TagBlock(tag: 'missing', content: 'x')],
-        fileLabel: 'y.md',
-      );
+      final result = applyTagBlocks('kein Marker\n', const [
+        TagBlock(tag: 'missing', content: 'x'),
+      ], fileLabel: 'y.md');
       expect(result.content, 'kein Marker\n');
       expect(result.warnings.single, contains('"missing"'));
       expect(result.warnings.single, contains('y.md'));
     });
 
     test('preserves CRLF line endings', () {
-      final result = applyTagBlocks(
-        '## [@a] Alt\r\nx\r\n',
-        const [TagBlock(tag: 'a', content: '## [@a] Neu\nz')],
-        fileLabel: 'x.md',
-      );
+      final result = applyTagBlocks('## [@a] Alt\r\nx\r\n', const [
+        TagBlock(tag: 'a', content: '## [@a] Neu\nz'),
+      ], fileLabel: 'x.md');
       expect(result.content, '## [@a] Neu\r\nz\r\n');
     });
   });
@@ -343,22 +308,18 @@ void main() {
 
     test('collapses multi-line values silently', () {
       final foundTags = <String>{};
-      final result = applyGlobalStringBlocks(
-        '{{@a:alt}}\n',
-        const [TagBlock(tag: 'a', content: 'zeile1\nzeile2')],
-        foundTags: foundTags,
-      );
+      final result = applyGlobalStringBlocks('{{@a:alt}}\n', const [
+        TagBlock(tag: 'a', content: 'zeile1\nzeile2'),
+      ], foundTags: foundTags);
       expect(result, '{{@a:zeile1 zeile2}}\n');
     });
 
     test('skips fenced and inline code', () {
       final foundTags = <String>{};
       const source = '```\n{{@a:x}}\n```\n`{{@a:y}}`\n{{@a:z}}\n';
-      final result = applyGlobalStringBlocks(
-        source,
-        const [TagBlock(tag: 'a', content: 'neu')],
-        foundTags: foundTags,
-      );
+      final result = applyGlobalStringBlocks(source, const [
+        TagBlock(tag: 'a', content: 'neu'),
+      ], foundTags: foundTags);
       expect(result, '```\n{{@a:x}}\n```\n`{{@a:y}}`\n{{@a:neu}}\n');
     });
   });
@@ -433,10 +394,7 @@ void main() {
     });
 
     test('preserves CRLF line endings', () {
-      expect(
-        renderMarkers('## [@a] T\r\n{{@b:c}}\r\n'),
-        '## T\r\nc\r\n',
-      );
+      expect(renderMarkers('## [@a] T\r\n{{@b:c}}\r\n'), '## T\r\nc\r\n');
     });
 
     test('normalizes mixed line endings to the dominant one', () {

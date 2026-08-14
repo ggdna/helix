@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -18,15 +18,9 @@ void main() {
         await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
 
         final messages = <String>[];
-        await run(
-          args: ['init', '--target', tmp.path],
-          ggLog: messages.add,
-        );
+        await run(args: ['init', '--target', tmp.path], ggLog: messages.add);
 
-        expect(
-          File('${tmp.path}/test/dna/dna_test.dart').existsSync(),
-          isTrue,
-        );
+        expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
         expect(
           messages.any((m) => m.contains('DNA initialized')),
           isTrue,

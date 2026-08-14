@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -134,11 +134,11 @@ class Init extends Command<dynamic> {
     ggLog(
       layers.isEmpty
           ? 'DNA initialized. Declare the DNA packages you want as '
-              'dependencies, run pnpm install / dart pub get, list them '
-              'in "layers" of $dnaConfigPath, commit, then run your '
-              'tests — the first run instantiates the DNA.'
+                'dependencies, run pnpm install / dart pub get, list them '
+                'in "layers" of $dnaConfigPath, commit, then run your '
+                'tests — the first run instantiates the DNA.'
           : 'DNA initialized with ${layers.join(', ')}. Commit, then run '
-              'your tests — the first run instantiates the DNA.',
+                'your tests — the first run instantiates the DNA.',
     );
   }
 

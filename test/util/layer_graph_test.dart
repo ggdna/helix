@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -25,13 +25,12 @@ void main() {
     String name,
     String version, {
     List<String> layers = const [],
-  }) =>
-      {
-        '$root/node_modules/$name/package.json':
-            '{"name": "$name", "version": "$version"}',
-        '$root/node_modules/$name/$dnaConfigPath': dnaConfig(layers),
-        '$root/node_modules/$name/dna/doc/$name.md': '# $name',
-      };
+  }) => {
+    '$root/node_modules/$name/package.json':
+        '{"name": "$name", "version": "$version"}',
+    '$root/node_modules/$name/$dnaConfigPath': dnaConfig(layers),
+    '$root/node_modules/$name/dna/doc/$name.md': '# $name',
+  };
 
   /// A DNA package installed by pub at [at], plus its package_config entry.
   Map<String, String> pubDna(
@@ -58,13 +57,12 @@ void main() {
   ({List<ResolvedLayer> layers, List<String> warnings}) expand(
     MemoryDnaHost host,
     List<String> layers,
-  ) =>
-      expandLayerGraph(
-        host: host,
-        targetRoot: root,
-        config: DnaConfig(layers: layers),
-        resolution: PackageResolution.read(host, root),
-      );
+  ) => expandLayerGraph(
+    host: host,
+    targetRoot: root,
+    config: DnaConfig(layers: layers),
+    resolution: PackageResolution.read(host, root),
+  );
 
   group('expandLayerGraph', () {
     test('recurses through each layer\'s own dna/_dna.json', () {
@@ -97,7 +95,8 @@ void main() {
     test('a dependency that is not listed is not a layer', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"dependencies": '
+          '$root/package.json':
+              '{"dependencies": '
               '{"a-dna": "1", "b-dna": "1"}}',
           ...npmDna('a-dna', '1.0.0'),
           ...npmDna('b-dna', '1.0.0'),
@@ -111,11 +110,7 @@ void main() {
     test('deduplicates diamonds — first topological position wins', () {
       final host = MemoryDnaHost(
         files: {
-          ...npmDna(
-            'ds-dna-dart',
-            '1.0.0',
-            layers: ['dna-dart', 'ds-dna'],
-          ),
+          ...npmDna('ds-dna-dart', '1.0.0', layers: ['dna-dart', 'ds-dna']),
           ...npmDna('dna-dart', '2.0.0', layers: ['dna-base']),
           ...npmDna('ds-dna', '1.0.0', layers: ['dna-base']),
           ...npmDna('dna-base', '1.0.0'),
@@ -229,10 +224,7 @@ void main() {
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            allOf(
-              contains('is not a DNA package'),
-              contains('"role": "dna"'),
-            ),
+            allOf(contains('is not a DNA package'), contains('"role": "dna"')),
           ),
         ),
       );
@@ -492,7 +484,8 @@ packages:
     test('never suggests a package the engine would reject', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"dependencies": '
+          '$root/package.json':
+              '{"dependencies": '
               '{"plain": "1", "real-dna": "1"}}',
           '$root/node_modules/plain/package.json':
               '{"name": "plain", "version": "1.0.0"}',

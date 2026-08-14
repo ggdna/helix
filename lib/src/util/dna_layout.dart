@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2019 - 2026 Dr. Gabriel Gatzsche. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -89,9 +89,8 @@ List<String> ancestorDirs(Iterable<String> paths) {
       parts.removeLast();
     }
   }
-  return dirs.toList()
-    ..sort((a, b) {
-      final byDepth = b.split('/').length.compareTo(a.split('/').length);
-      return byDepth != 0 ? byDepth : a.compareTo(b);
-    });
+  return dirs.toList()..sort((a, b) {
+    final byDepth = b.split('/').length.compareTo(a.split('/').length);
+    return byDepth != 0 ? byDepth : a.compareTo(b);
+  });
 }
