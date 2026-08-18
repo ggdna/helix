@@ -163,22 +163,29 @@ class ResolvedLayer {
 }
 
 // .............................................................................
-/// Reads the config of a resolved layer, insisting that it actually is a
-/// DNA package.
+/// Whether the package installed at [packageRoot] is a DNA package.
 ///
 /// A `dna/` folder alone does not make one — the package has to say so in
-/// `dna/_dna.json`. Without that rule any dependency that happens to ship
-/// a `dna/` folder would be pulled in as a layer, and a package published
-/// before the config moved into `dna/` would silently contribute no
-/// parents at all.
+/// `dna/_dna.json` with `"role": "dna"`. Without that rule any dependency
+/// that happens to ship a `dna/` folder would be pulled in as a layer, and
+/// a package published before the config moved into `dna/` would silently
+/// contribute no parents at all.
+///
+/// [packageLabel] names the package in the messages of a malformed config,
+/// which is reported rather than answered with `false`.
+bool isDnaPackage(DnaHost host, String packageRoot, {String? packageLabel}) =>
+    host.existsFile('$packageRoot/$dnaConfigPath') &&
+    readDnaConfig(host, packageRoot, packageLabel: packageLabel).config.role ==
+        DnaRole.dna;
+
+// .............................................................................
+/// Reads the config of a resolved layer, insisting that it actually is a
+/// DNA package — see [isDnaPackage] for what that means.
 ({DnaConfig config, List<String> warnings}) _readLayerConfig(
   DnaHost host,
   LocatedPackage located,
 ) {
-  final result = host.existsFile('${located.root}/$dnaConfigPath')
-      ? readDnaConfig(host, located.root, packageLabel: located.packageName)
-      : null;
-  if (result == null || result.config.role != DnaRole.dna) {
+  if (!isDnaPackage(host, located.root, packageLabel: located.packageName)) {
     throw FormatException(
       'Package "${located.packageName}" (${located.root}) is not a DNA '
       'package — $dnaConfigPath is missing or does not declare '
@@ -186,7 +193,7 @@ class ResolvedLayer {
       'layer.',
     );
   }
-  return result;
+  return readDnaConfig(host, located.root, packageLabel: located.packageName);
 }
 
 // .............................................................................

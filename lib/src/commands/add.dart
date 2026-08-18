@@ -12,7 +12,10 @@ import '../util/dna_config.dart';
 import '../util/dna_config_edit.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
+import '../util/dna_layout.dart';
+import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
+import '../util/package_resolution.dart';
 import '../util/process_run.dart';
 import '../util/process_run_io.dart';
 
@@ -49,6 +52,19 @@ class Add extends Command<dynamic> {
   // ...........................................................................
   @override
   Future<void> run() async {
+    // The command runner strips »Exception: « from what it prints, which
+    // turns a FormatException into a message starting with »Format«. The
+    // messages here are written for a person to read, so they arrive as
+    // plain exceptions.
+    try {
+      await _add();
+    } on FormatException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
+  // ...........................................................................
+  Future<void> _add() async {
     final root = _root();
     final target = _target();
 
@@ -64,6 +80,7 @@ class Add extends Command<dynamic> {
     final layers = readDnaConfig(_host, root).config.layers;
 
     final layer = _addDependency(root, target);
+    _requireDnaPackage(root, target, layer);
     _addLayer(root, layer, layers);
   }
 
@@ -185,6 +202,36 @@ class Add extends Command<dynamic> {
       usageException('$command failed:\n${result.failureOutput}');
     }
     ggLog('+ $command');
+  }
+
+  // ...........................................................................
+  /// Insists that what was just installed really is a DNA.
+  ///
+  /// The dependency is in place at this point, so the layer would be
+  /// written next — and a layer that ships no DNA turns every following
+  /// DNA run into an error. Reporting it here keeps the config clean and
+  /// names the package that has to be fixed.
+  void _requireDnaPackage(String root, AddTarget target, String layer) {
+    final resolution = PackageResolution.read(_host, root);
+    final located = resolution.locate(layer);
+    if (located == null) {
+      throw FormatException(
+        '${target.raw} was installed as "$layer", but it cannot be found '
+        'in "$root".\n'
+        '  ${resolution.describeFailure(layer)}\n'
+        '  Nothing was added to $dnaConfigPath.',
+      );
+    }
+    if (!isDnaPackage(_host, located.root, packageLabel: located.packageName)) {
+      throw FormatException(
+        '${target.raw} does not ship a DNA: '
+        '"${located.packageName}" (${located.root}) has no $dnaConfigPath '
+        'declaring "role": "dna" — and a $dnaDirname/ folder alone does not '
+        'make a package a DNA layer.\n'
+        '  Nothing was added to $dnaConfigPath. Remove the dependency '
+        'again if you added it by mistake.',
+      );
+    }
   }
 
   // ...........................................................................

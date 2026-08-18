@@ -4,6 +4,8 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:convert';
+
 import 'package:args/command_runner.dart';
 import 'package:helix/src/commands/add.dart';
 import 'package:helix/src/commands/init.dart';
@@ -52,19 +54,46 @@ void main() {
   }
 
   /// A project with a DNA config, as `helix init` leaves it.
+  ///
+  /// [installed] fakes what the package manager would have left behind: the
+  /// packages are locatable in both ecosystems and carry a `dna/_dna.json`
+  /// with [role] — that is what `helix add` checks after installing.
   MemoryDnaHost project({
     String? pubspec = dartProject,
     String? packageJson,
     String? config,
     String? pnpmLock,
-  }) => MemoryDnaHost(
-    files: {
-      '$root/pubspec.yaml': ?pubspec,
-      '$root/package.json': ?packageJson,
-      '$root/pnpm-lock.yaml': ?pnpmLock,
-      '$root/$dnaConfigPath': config ?? dnaConfigSkeleton([]),
-    },
-  );
+    List<String> installed = const [],
+    String role = 'dna',
+    bool shipsDnaConfig = true,
+  }) {
+    final packageConfig = jsonEncode({
+      'packages': [
+        for (final name in installed)
+          {'name': name, 'rootUri': '../../cache/$name'},
+      ],
+    });
+    return MemoryDnaHost(
+      files: {
+        '$root/pubspec.yaml': ?pubspec,
+        '$root/package.json': ?packageJson,
+        '$root/pnpm-lock.yaml': ?pnpmLock,
+        '$root/$dnaConfigPath': config ?? dnaConfigSkeleton([]),
+        if (installed.isNotEmpty)
+          '$root/.dart_tool/package_config.json': packageConfig,
+        for (final name in installed) ...{
+          // A file below the folder is what makes it exist in memory.
+          '/cache/$name/README.md': '# $name',
+          '$root/node_modules/$name/README.md': '# $name',
+          if (shipsDnaConfig) ...{
+            '/cache/$name/$dnaConfigPath': '{"version": 1, "role": "$role"}',
+            '$root/node_modules/$name/$dnaConfigPath':
+                '{"version": 1, "role": "$role"}',
+          },
+        },
+      },
+    );
+  }
 
   List<String> layersOf(MemoryDnaHost host) =>
       readDnaConfig(host, root).config.layers;
@@ -82,7 +111,7 @@ void main() {
 
     group('pub packages', () {
       test('adds the dev dependency and the layer', () async {
-        final host = project();
+        final host = project(installed: ['dna_dart']);
         await runAdd(host, ['dna_dart']);
         expect(commands, ['dart pub add dev:dna_dart']);
         expect(layersOf(host), ['dna_dart']);
@@ -94,7 +123,10 @@ void main() {
       });
 
       test('appends to the layers that are already there', () async {
-        final host = project(config: dnaConfigSkeleton(['dna_base']));
+        final host = project(
+          config: dnaConfigSkeleton(['dna_base']),
+          installed: ['dna_dart'],
+        );
         await runAdd(host, ['dna_dart']);
         // The last layer wins, so a new one goes to the end.
         expect(layersOf(host), ['dna_base', 'dna_dart']);
@@ -102,6 +134,7 @@ void main() {
 
       test('uses flutter pub in a Flutter project', () async {
         final host = project(
+          installed: ['dna_dart'],
           pubspec: 'name: x\ndependencies:\n  flutter:\n    sdk: flutter\n',
         );
         await runAdd(host, ['dna_dart']);
@@ -110,6 +143,7 @@ void main() {
 
       test('keeps a dependency that is already declared', () async {
         final host = project(
+          installed: ['dna_dart'],
           pubspec: 'name: x\ndev_dependencies:\n  dna_dart: ^1.0.0\n',
         );
         await runAdd(host, ['dna_dart']);
@@ -120,7 +154,10 @@ void main() {
       });
 
       test('keeps a layer that is already listed', () async {
-        final host = project(config: dnaConfigSkeleton(['dna_dart']));
+        final host = project(
+          config: dnaConfigSkeleton(['dna_dart']),
+          installed: ['dna_dart'],
+        );
         await runAdd(host, ['dna_dart']);
         expect(commands, ['dart pub add dev:dna_dart']);
         expect(layersOf(host), ['dna_dart']);
@@ -133,20 +170,25 @@ void main() {
 
     group('npm packages', () {
       test('adds a scoped name with the projects package manager', () async {
-        final host = project(pubspec: null, packageJson: '{}', pnpmLock: '');
+        final host = project(
+          pubspec: null,
+          packageJson: '{}',
+          pnpmLock: '',
+          installed: ['@tssuite/dna-base'],
+        );
         await runAdd(host, ['@tssuite/dna-base']);
         expect(commands, ['pnpm add -D @tssuite/dna-base']);
         expect(layersOf(host), ['@tssuite/dna-base']);
       });
 
       test('a dashed name goes to node even in a hybrid project', () async {
-        final host = project(packageJson: '{}');
+        final host = project(packageJson: '{}', installed: ['dna-ts']);
         await runAdd(host, ['dna-ts']);
         expect(commands, ['npm install -D dna-ts']);
       });
 
       test('a pub-shaped name goes to pub in a hybrid project', () async {
-        final host = project(packageJson: '{}');
+        final host = project(packageJson: '{}', installed: ['dna_dart']);
         await runAdd(host, ['dna_dart']);
         expect(commands, ['dart pub add dev:dna_dart']);
       });
@@ -168,6 +210,7 @@ void main() {
 
       test('keeps a node dependency that is already declared', () async {
         final host = project(
+          installed: ['dna-ts'],
           pubspec: null,
           packageJson: '{"devDependencies": {"dna-ts": "^1.0.0"}}',
         );
@@ -179,14 +222,18 @@ void main() {
 
     group('git targets', () {
       test('adds a pub git dependency under the repository name', () async {
-        final host = project();
+        final host = project(installed: ['dna_base']);
         await runAdd(host, [gitUrl]);
         expect(commands, ['dart pub add dev:dna_base@{git: $gitUrl}']);
         expect(layersOf(host), ['dna_base']);
       });
 
       test('adds a node git dependency with a git+ protocol', () async {
-        final host = project(pubspec: null, packageJson: '{}');
+        final host = project(
+          pubspec: null,
+          packageJson: '{}',
+          installed: ['dna_base'],
+        );
         await runAdd(host, ['git@github.com:ggsuite/dna_base.git']);
         expect(commands, [
           'npm install -D git+ssh://git@github.com/ggsuite/dna_base.git',
@@ -198,7 +245,11 @@ void main() {
         // npm writes the name from the repository's own package.json —
         // `dna_base.git` lands as `@tssuite/dna-base`, and that is the
         // name the engine resolves a layer by.
-        final host = project(pubspec: null, packageJson: '{}');
+        final host = project(
+          pubspec: null,
+          packageJson: '{}',
+          installed: ['@tssuite/dna-base'],
+        );
         await runAdd(
           host,
           [gitUrl],
@@ -219,6 +270,7 @@ void main() {
         // The declared name may point somewhere else — a git target always
         // runs, and the package manager decides what to do with it.
         final host = project(
+          installed: ['dna_base'],
           pubspec: null,
           packageJson: '{"devDependencies": {"dna_base": "^1.0.0"}}',
         );
@@ -303,7 +355,7 @@ void main() {
       });
 
       test('does not touch the config when the install fails', () async {
-        final host = project();
+        final host = project(installed: ['dna_dart']);
         await expectLater(
           () => runAdd(host, [
             'dna_dart',
@@ -322,11 +374,98 @@ void main() {
         expect(layersOf(host), isEmpty);
       });
 
+      test('complains when the package ships no DNA', () async {
+        final host = project(installed: ['dna_dart'], shipsDnaConfig: false);
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              allOf(
+                contains('dna_dart does not ship a DNA'),
+                contains('role": "dna"'),
+                contains('Nothing was added to $dnaConfigPath'),
+              ),
+            ),
+          ),
+        );
+        // The dependency was installed, the config stays untouched.
+        expect(commands, ['dart pub add dev:dna_dart']);
+        expect(layersOf(host), isEmpty);
+      });
+
+      test('complains when the package does not declare role dna', () async {
+        // A dna/ folder alone does not make a package a DNA layer.
+        final host = project(installed: ['dna_dart'], role: 'project');
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              contains('does not ship a DNA'),
+            ),
+          ),
+        );
+        expect(layersOf(host), isEmpty);
+      });
+
+      test('complains when a git repo ships no DNA, naming the url', () async {
+        final host = project(
+          pubspec: null,
+          packageJson: '{}',
+          installed: ['dna_base'],
+          shipsDnaConfig: false,
+        );
+        await expectLater(
+          () => runAdd(host, [gitUrl]),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              contains('$gitUrl does not ship a DNA'),
+            ),
+          ),
+        );
+        expect(layersOf(host), isEmpty);
+      });
+
+      test('complains when the installed package is not found', () async {
+        // Nothing was installed — the fake package manager only reported
+        // success.
+        final host = project();
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              allOf(
+                contains('cannot be found'),
+                contains('Nothing was added to $dnaConfigPath'),
+              ),
+            ),
+          ),
+        );
+        expect(layersOf(host), isEmpty);
+      });
+
       test('reports a broken config before installing anything', () async {
         final host = project(config: '{"version": 99}');
         await expectLater(
           () => runAdd(host, ['dna_dart']),
-          throwsA(isA<FormatException>()),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              allOf(
+                contains('format version 99 is not supported'),
+                // Readable: no mangled »Format« prefix from the runner.
+                isNot(startsWith('FormatException')),
+              ),
+            ),
+          ),
         );
         expect(commands, isEmpty);
       });
