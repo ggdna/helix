@@ -5,6 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'package:args/command_runner.dart';
+import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
 
 import '../engine/run_dna_test.dart';
@@ -233,14 +234,18 @@ class Init extends Command<dynamic> {
     }
 
     if (layers.isNotEmpty) {
-      ggLog(cDetail('✓ DNA initialized with ${layers.join(', ')}'));
+      ggLog(cDetail('✓ Layers: ${layers.join(', ')}'));
     }
     ggLog('');
+    ggLog(cH2('✓ Initialized.'));
+    ggLog('');
+    // Concatenated, never nested: a cCmd inside a cAction resets the
+    // yellow and the rest of the sentence loses it.
     ggLog(
-      '${cAction('Add and build dna repos:')}\n\n'
-      '  ${cCmd('gg dna add <dnaPackage>')}\n'
-      '  ${cCmd('gg dna build')}',
+      '${cAction('Add dna by running ')}'
+      '${cCmd('gg dna add <dnaPackage>')}${cAction('.')}',
     );
+    ggLog('');
   }
 
   // ...........................................................................

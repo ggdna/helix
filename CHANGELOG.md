@@ -13,6 +13,7 @@
 - Rename »gg dna test« into »gg dna build«
 - Complain about adding non dna repos
 - Improve error messages
+- Improve messages
 
 ## 0.1.0 - 2026-08-14
 

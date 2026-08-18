@@ -7,7 +7,7 @@
 import 'dart:convert';
 
 import 'package:args/command_runner.dart';
-import 'package:helix/helix.dart' show cDetail;
+import 'package:helix/helix.dart' show cAction, cCmd, cDetail, cError;
 import 'package:helix/src/commands/add.dart';
 import 'package:helix/src/commands/init.dart';
 import 'package:helix/src/util/dna_config.dart';
@@ -23,9 +23,13 @@ void main() {
   final messages = <String>[];
   final commands = <String>[];
 
+  /// The builds `add` triggered: one entry per call, with its target.
+  final builds = <String?>[];
+
   setUp(() {
     messages.clear();
     commands.clear();
+    builds.clear();
   });
 
   ProcessRun fakeRun({int exitCode = 0, String stderr = ''}) =>
@@ -42,6 +46,7 @@ void main() {
     MemoryDnaHost host,
     List<String> args, {
     ProcessRun? processRun,
+    Object? buildThrows,
   }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
       ..addCommand(
@@ -49,6 +54,17 @@ void main() {
           ggLog: messages.add,
           host: host,
           processRun: processRun ?? fakeRun(),
+          dnaTest:
+              ({
+                String? targetRoot,
+                DnaHost? host,
+                String? baseDnaRoot,
+                void Function(String message)? log,
+              }) async {
+                builds.add(targetRoot);
+                log?.call('+ instantiated LICENSE');
+                if (buildThrows != null) throw buildThrows;
+              },
         ),
       );
     await runner.run(['add', ...args, '--target', root]);
@@ -108,6 +124,84 @@ void main() {
         'Adds a DNA layer — a package name or a git URL',
       );
       expect(command.argParser.options, contains('target'));
+    });
+
+    group('the build at the end', () {
+      test('builds the DNA that was just added', () async {
+        final host = project(installed: ['dna_dart']);
+        await runAdd(host, ['dna_dart']);
+        expect(builds, [root]);
+        // The engine report reaches the user.
+        expect(messages.last, '+ instantiated LICENSE');
+      });
+
+      test('builds the current folder when no target is given', () async {
+        // Seeded at the working folder instead of below /p, because that is
+        // what `--target` defaults to.
+        final host = MemoryDnaHost(
+          files: {
+            'pubspec.yaml': dartProject,
+            dnaConfigPath: dnaConfigSkeleton([]),
+            '.dart_tool/package_config.json':
+                '{"packages": [{"name": "dna_dart", '
+                '"rootUri": "file:///cache/dna_dart"}]}',
+            '/cache/dna_dart/README.md': '# dna_dart',
+            '/cache/dna_dart/$dnaConfigPath': '{"version": 1, "role": "dna"}',
+          },
+        );
+        final runner = CommandRunner<dynamic>('test', 'test')
+          ..addCommand(
+            Add(
+              ggLog: messages.add,
+              host: host,
+              processRun: fakeRun(),
+              dnaTest: ({
+                String? targetRoot,
+                DnaHost? host,
+                String? baseDnaRoot,
+                void Function(String message)? log,
+              }) async => builds.add(targetRoot),
+            ),
+          );
+        await runner.run(['add', 'dna_dart']);
+        // `null` means »the current folder«, as the placed test passes it.
+        expect(builds, [null]);
+      });
+
+      test('builds even when nothing changed', () async {
+        final host = project(
+          pubspec: 'name: x\ndev_dependencies:\n  dna_dart: ^1.0.0\n',
+          config: dnaConfigSkeleton(['dna_dart']),
+          installed: ['dna_dart'],
+        );
+        await runAdd(host, ['dna_dart']);
+        expect(commands, isEmpty);
+        expect(builds, [root]);
+      });
+
+      test('reports a failing build', () async {
+        final host = project(installed: ['dna_dart']);
+        await expectLater(
+          () => runAdd(host, [
+            'dna_dart',
+          ], buildThrows: Exception('LICENSE is missing')),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              contains('LICENSE is missing'),
+            ),
+          ),
+        );
+        // The layer was added before the build ran.
+        expect(layersOf(host), ['dna_dart']);
+      });
+
+      test('does not build when the add was refused', () async {
+        final host = project(installed: ['dna_dart'], shipsDnaConfig: false);
+        await expectLater(() => runAdd(host, ['dna_dart']), throwsA(anything));
+        expect(builds, isEmpty);
+      });
     });
 
     group('pub packages', () {
@@ -294,18 +388,22 @@ void main() {
         await expectLater(
           () => runAdd(host, ['dna_dart']),
           throwsA(
-            isA<UsageException>().having(
-              (e) => e.message,
-              'message',
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
               allOf(
-                contains('No $dnaConfigPath'),
-                contains('helix init'),
-                contains('gg dna init'),
+                contains(cError('Not initialized.')),
+                contains(cAction('Run')),
+                contains(cCmd('gg dna init')),
+                contains(cAction('first.')),
+                // A state to fix, not a usage error: no usage block.
+                isNot(contains('Usage:')),
               ),
             ),
           ),
         );
         expect(commands, isEmpty);
+        expect(builds, isEmpty);
       });
 
       test('requires a manifest', () async {
@@ -315,10 +413,14 @@ void main() {
         await expectLater(
           () => runAdd(host, ['dna_dart']),
           throwsA(
-            isA<UsageException>().having(
-              (e) => e.message,
-              'message',
-              contains('No pubspec.yaml and no package.json'),
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
+              allOf(
+                contains(cError('No pubspec.yaml and no package.json.')),
+                contains(cCmd('gg dna init')),
+                isNot(contains('Usage:')),
+              ),
             ),
           ),
         );
@@ -370,12 +472,14 @@ void main() {
             'dna_dart',
           ], processRun: fakeRun(exitCode: 66, stderr: 'no such package')),
           throwsA(
-            isA<UsageException>().having(
-              (e) => e.message,
-              'message',
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'toString',
               allOf(
                 contains('dart pub add dev:dna_dart failed'),
                 contains('no such package'),
+                // The package manager already said everything.
+                isNot(contains('Usage:')),
               ),
             ),
           ),

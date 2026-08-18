@@ -24,11 +24,16 @@ import '../util/process_run_io.dart';
 /// dev dependency, and its name becomes the last entry of `layers` in
 /// `dna/_dna.json`.
 class Add extends Command<dynamic> {
-  /// Constructor. [host] and [processRun] are the injectable seams to the
-  /// file system and to the package managers.
-  Add({required this.ggLog, DnaHost? host, ProcessRun? processRun})
-    : _host = host ?? IoDnaHost(),
-      _processRun = processRun ?? ioProcessRun {
+  /// Constructor. [host], [processRun] and [dnaTest] are the injectable
+  /// seams to the file system, to the package managers and to the engine.
+  Add({
+    required this.ggLog,
+    DnaHost? host,
+    ProcessRun? processRun,
+    DnaTestRunner? dnaTest,
+  }) : _host = host ?? IoDnaHost(),
+       _processRun = processRun ?? ioProcessRun,
+       _dnaTest = dnaTest ?? runDnaTest {
     argParser.addOption(
       'target',
       abbr: 't',
@@ -43,6 +48,8 @@ class Add extends Command<dynamic> {
   final DnaHost _host;
 
   final ProcessRun _processRun;
+
+  final DnaTestRunner _dnaTest;
 
   @override
   final name = 'add';
@@ -73,9 +80,12 @@ class Add extends Command<dynamic> {
     // place for the layer, and `helix init` is what creates it. A broken
     // config reports itself here rather than after a download.
     if (!_host.existsFile('$root/$dnaConfigPath')) {
-      usageException(
-        'No $dnaConfigPath in "$root" — run `helix init` '
-        '(`gg dna init`) first.',
+      // Not a usage error but a state to fix, so it is reported without
+      // the usage block. Colors are concatenated, never nested: a cCmd
+      // inside a cAction resets the yellow and the rest loses it.
+      throw Exception(
+        '${cError('Not initialized.')} ${cAction('Run')} '
+        '${cCmd('gg dna init')} ${cAction('first.')}',
       );
     }
     final layers = readDnaConfig(_host, root).config.layers;
@@ -83,6 +93,11 @@ class Add extends Command<dynamic> {
     final layer = _addDependency(root, target);
     _requireDnaPackage(root, target, layer);
     _addLayer(root, layer, layers);
+
+    // A layer is added to be applied, so the build follows right away —
+    // the same run `helix build` performs. `null` is what the placed test
+    // passes for »the current folder«.
+    await _dnaTest(targetRoot: root == '.' ? null : root, log: ggLog);
   }
 
   // ...........................................................................
@@ -123,9 +138,9 @@ class Add extends Command<dynamic> {
       );
     }
     if (!hasPubspec && !hasPackageJson) {
-      usageException(
-        'No pubspec.yaml and no package.json in "$root" — run '
-        '`helix init` (`gg dna init`) first.',
+      throw Exception(
+        '${cError('No pubspec.yaml and no package.json.')} '
+        '${cAction('Run')} ${cCmd('gg dna init')} ${cAction('first.')}',
       );
     }
 
@@ -200,7 +215,9 @@ class Add extends Command<dynamic> {
     final command = '$executable ${args.join(' ')}';
     final result = _processRun(executable, args, workingDirectory: root);
     if (!result.isSuccess) {
-      usageException('$command failed:\n${result.failureOutput}');
+      // What the package manager said is the message; the usage of `add`
+      // adds nothing to it.
+      throw Exception('${cError('$command failed:')}\n${result.failureOutput}');
     }
     ggLog(cDetail('✓ $command'));
   }

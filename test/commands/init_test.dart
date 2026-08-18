@@ -7,7 +7,8 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
-import 'package:helix/helix.dart' show cDetail;
+import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
+import 'package:helix/helix.dart' show cAction, cCmd, cDetail;
 import 'package:helix/src/commands/init.dart';
 import 'package:helix/src/engine/instantiate.dart';
 import 'package:helix/src/util/dna_config.dart';
@@ -282,7 +283,10 @@ void main() {
           // A project without a test framework is a shape, not a problem:
           // `helix build` runs the instantiation there.
           expect(messages.any((m) => m.contains('No test framework')), isFalse);
-          expect(messages.last, contains('gg dna build'));
+          expect(
+            messages.any((m) => m.contains('gg dna add <dnaPackage>')),
+            isTrue,
+          );
         },
       );
 
@@ -307,18 +311,17 @@ void main() {
     });
 
     group('the closing message', () {
-      test('names the commands that come next', () async {
+      test('is a headline and the command that comes next', () async {
         final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
         await runInit(host);
-        expect(messages.last, contains('Add and build dna repos:'));
-        expect(messages.last, contains('gg dna add <dnaPackage>'));
-        expect(messages.last, contains('gg dna build'));
-      });
-
-      test('is separated from the steps by an empty line', () async {
-        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
-        await runInit(host);
-        expect(messages[messages.length - 2], isEmpty);
+        expect(messages.sublist(messages.length - 5), [
+          '',
+          cH2('✓ Initialized.'),
+          '',
+          '${cAction('Add dna by running ')}'
+              '${cCmd('gg dna add <dnaPackage>')}${cAction('.')}',
+          '',
+        ]);
       });
 
       test('the steps above are checked off in the detail color', () async {
@@ -353,8 +356,11 @@ void main() {
           },
         );
         await runInit(host);
-        expect(messages, contains(cDetail('✓ DNA initialized with dna_base')));
-        expect(messages.last, contains('gg dna build'));
+        expect(messages, contains(cDetail('✓ Layers: dna_base')));
+        expect(
+          messages.any((m) => m.contains('gg dna add <dnaPackage>')),
+          isTrue,
+        );
       });
     });
 

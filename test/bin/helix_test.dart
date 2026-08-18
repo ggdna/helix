@@ -31,7 +31,7 @@ dev_dependencies:
         expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
         expect(File('${tmp.path}/$helloWorldDnaPath').existsSync(), isTrue);
         expect(
-          messages.any((m) => m.contains('gg dna build')),
+          messages.any((m) => m.contains('gg dna add')),
           isTrue,
           reason: 'messages: $messages',
         );

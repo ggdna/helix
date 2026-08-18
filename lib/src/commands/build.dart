@@ -8,18 +8,7 @@ import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
 import '../engine/run_dna_test.dart';
-import '../util/dna_fs.dart';
 
-/// Signature of [runDnaTest] — the seam that lets [Build] be tested
-/// without a project on disk.
-typedef DnaTestRunner = Future<void> Function({
-  String? targetRoot,
-  DnaHost? host,
-  String? baseDnaRoot,
-  void Function(String message)? log,
-});
-
-// .............................................................................
 /// Builds the DNA of a project: one instantiation plus the verification of
 /// the instances — exactly what the placed test does in a project that has
 /// a test framework, and the way to run the DNA cycle in one that has none.

@@ -84,6 +84,16 @@ Future<void> runDnaTest({
 }
 
 // .............................................................................
+/// Signature of [runDnaTest] — the seam that lets the commands calling it
+/// be tested without a project on disk.
+typedef DnaTestRunner = Future<void> Function({
+  String? targetRoot,
+  DnaHost? host,
+  String? baseDnaRoot,
+  void Function(String message)? log,
+});
+
+// .............................................................................
 /// Colors of the DNA report — the problem in [cError], files in [cCmd],
 /// what to do in [cAction], what happened in [cDetail].
 String cError(Object message) => red(message);

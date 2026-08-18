@@ -6,6 +6,7 @@
 
 import 'package:args/command_runner.dart';
 import 'package:helix/src/commands/build.dart';
+import 'package:helix/src/engine/run_dna_test.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:test/test.dart';
 

@@ -37,7 +37,7 @@ dev_dependencies:
 ''');
         await runner.run(['helix', 'init', '--target', tmp.path]);
         expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
-        expect(messages.any((m) => m.contains('gg dna build')), isTrue);
+        expect(messages.any((m) => m.contains('gg dna add')), isTrue);
       } finally {
         await tmp.delete(recursive: true);
       }

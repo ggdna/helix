@@ -46,15 +46,20 @@ every test run that they always match the generated originals.
    helix add git@github.com:ggsuite/dna_base.git       # git, ssh
    ```
 
-   Each `helix add` installs the DNA as a dev-dependency and appends its
+   Each `helix add` installs the DNA as a dev-dependency, appends its
    package name to `layers` in `dna/_dna.json` — at the end, because the
-   last layer wins. The ecosystem follows the name: a scope or a `-` marks
-   an npm name (a pub name may contain neither), anything else goes to pub
-   when the project has a `pubspec.yaml`. For a git target the repository
-   name is the package name — which is how DNA repositories are named.
+   last layer wins — and then builds: the same run `helix build` performs,
+   so the project is in sync when the command returns.
+
+   The ecosystem follows the name: a scope or a `-` marks an npm name (a
+   pub name may contain neither), anything else goes to pub when the
+   project has a `pubspec.yaml`. For a git target the repository name is
+   the package name — which is how DNA repositories are named. A package
+   that ships no DNA (no `dna/_dna.json` with `"role": "dna"`) is refused,
+   and nothing is written to `layers`.
 
    Declaring the dependency by hand and listing it under `layers`
-   yourself does the same thing.
+   yourself does the same thing — followed by `helix build`.
 
 3. Run your tests — or `helix build`, which performs exactly the same run
    for a project without a test framework. The first run instantiates the
