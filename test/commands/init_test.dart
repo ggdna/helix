@@ -276,9 +276,9 @@ void main() {
           await runInit(host);
           expect(host.existsDir('$root/test'), isFalse);
           // A project without a test framework is a shape, not a problem:
-          // `helix test` runs the instantiation there.
+          // `helix build` runs the instantiation there.
           expect(messages.any((m) => m.contains('No test framework')), isFalse);
-          expect(messages.last, contains('helix test'));
+          expect(messages.last, contains('helix build'));
         },
       );
 

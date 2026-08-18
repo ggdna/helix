@@ -9,6 +9,7 @@
 ### Changed
 
 - Improve help of gg dna
+- Rename »gg dna test« into »gg dna build«
 
 ## 0.1.0 - 2026-08-14
 

@@ -5,7 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'package:args/command_runner.dart';
-import 'package:helix/src/commands/test.dart';
+import 'package:helix/src/commands/build.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:test/test.dart';
 
@@ -30,10 +30,10 @@ void main() {
         if (thrown != null) throw thrown!;
       };
 
-  Future<void> runTestCommand(List<String> args) async {
+  Future<void> runBuild(List<String> args) async {
     final runner = CommandRunner<dynamic>('test', 'test')
-      ..addCommand(Test(ggLog: messages.add, runner: recordingRunner()));
-    await runner.run(['test', ...args]);
+      ..addCommand(Build(ggLog: messages.add, runner: recordingRunner()));
+    await runner.run(['build', ...args]);
   }
 
   setUp(() {
@@ -41,10 +41,10 @@ void main() {
     thrown = null;
   });
 
-  group('Test', () {
+  group('Build', () {
     test('has the expected name and description', () {
-      final command = Test(ggLog: messages.add);
-      expect(command.name, 'test');
+      final command = Build(ggLog: messages.add);
+      expect(command.name, 'build');
       expect(
         command.description,
         'Instantiates the DNA and verifies the instances',
@@ -52,23 +52,23 @@ void main() {
     });
 
     test('instantiates the current folder by default', () async {
-      await runTestCommand([]);
+      await runBuild([]);
       // null means »the current folder«, the same the placed test passes.
       expect(calls.single.targetRoot, isNull);
     });
 
     test('instantiates an explicit target', () async {
-      await runTestCommand(['--target', '/p']);
+      await runBuild(['--target', '/p']);
       expect(calls.single.targetRoot, '/p');
     });
 
     test('normalizes windows separators of the target', () async {
-      await runTestCommand([r'--target', r'C:\proj\a']);
+      await runBuild([r'--target', r'C:\proj\a']);
       expect(calls.single.targetRoot, 'C:/proj/a');
     });
 
     test('routes the DNA report to ggLog', () async {
-      await runTestCommand([]);
+      await runBuild([]);
       expect(calls.single.hasLog, isTrue);
       expect(messages, ['dna is up to date']);
     });
@@ -76,7 +76,7 @@ void main() {
     test('lets a failed DNA run through — the runner reports it', () async {
       thrown = Exception('LICENSE is missing');
       await expectLater(
-        () => runTestCommand([]),
+        () => runBuild([]),
         throwsA(
           isA<Exception>().having(
             (e) => e.toString(),
@@ -89,7 +89,7 @@ void main() {
 
     test('runs the real engine when no runner is injected', () {
       // The default is `runDnaTest` itself; constructing must not run it.
-      expect(Test(ggLog: messages.add).argParser.options, contains('target'));
+      expect(Build(ggLog: messages.add).argParser.options, contains('target'));
     });
   });
 }

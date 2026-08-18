@@ -99,7 +99,7 @@ and verifies that the instances still match it:
 
 ```bash
 dart test        # or: pnpm test
-helix test       # the same run, without a test framework
+helix build      # the same run, without a test framework
 ```
 
 The first run writes `dna/`, the instances and `dna/_generated.json`, and
@@ -220,7 +220,7 @@ class Init extends Command<dynamic> {
     _place('$root/$helloWorldDnaPath', helloWorldDoc);
 
     // Without a test framework no wrapper is placed — that is a project
-    // shape, not a problem: `helix test` runs the same instantiation.
+    // shape, not a problem: `helix build` runs the same instantiation.
     if (isDart && declaresPubDependency(_host, root, dartTestPackage)) {
       _place('$root/test/dna/dna_test.dart', dartWrapperTest);
     }
@@ -232,11 +232,11 @@ class Init extends Command<dynamic> {
       layers.isEmpty
           ? 'DNA initialized. Declare the DNA packages you want as '
                 'dependencies, list them in "layers" of $dnaConfigPath, '
-                'commit, then run your tests or `helix test` — the first '
+                'commit, then run your tests or `helix build` — the first '
                 'run instantiates the DNA. $helloWorldDnaPath explains '
                 'the steps.'
           : 'DNA initialized with ${layers.join(', ')}. Commit, then run '
-                'your tests or `helix test` — the first run instantiates '
+                'your tests or `helix build` — the first run instantiates '
                 'the DNA. $helloWorldDnaPath explains the steps.',
     );
   }

@@ -34,7 +34,7 @@ every test run that they always match the generated originals.
      content, so the engine instantiates it to `doc/hello_world.md`,
    - places the wrapper test: `test/dna/dna_test.dart` when the project
      declares `test`, `test/dna/dna.spec.ts` when it declares `vitest`.
-     Without a test framework nothing is placed — `helix test` runs the
+     Without a test framework nothing is placed — `helix build` runs the
      same instantiation from the command line.
 
 2. Declare the DNA packages you want as dev-dependencies and list them
@@ -53,7 +53,7 @@ every test run that they always match the generated originals.
 
    Install them (`pnpm install` / `dart pub get`) and commit.
 
-3. Run your tests — or `helix test`, which performs exactly the same run
+3. Run your tests — or `helix build`, which performs exactly the same run
    for a project without a test framework. The first run instantiates the
    DNA and commits what it generated as `#gg: generated DNA`. From now on
    every test run keeps the project in sync.

@@ -10,7 +10,7 @@ import 'package:gg_log/gg_log.dart';
 import '../engine/run_dna_test.dart';
 import '../util/dna_fs.dart';
 
-/// Signature of [runDnaTest] — the seam that lets [Test] be tested
+/// Signature of [runDnaTest] — the seam that lets [Build] be tested
 /// without a project on disk.
 typedef DnaTestRunner = Future<void> Function({
   String? targetRoot,
@@ -20,17 +20,17 @@ typedef DnaTestRunner = Future<void> Function({
 });
 
 // .............................................................................
-/// Runs one DNA instantiation and verification from the command line —
-/// exactly what the placed test does in a project that has a test
-/// framework, and the way to run the DNA cycle in a project that has none.
-class Test extends Command<dynamic> {
+/// Builds the DNA of a project: one instantiation plus the verification of
+/// the instances — exactly what the placed test does in a project that has
+/// a test framework, and the way to run the DNA cycle in one that has none.
+class Build extends Command<dynamic> {
   /// Constructor. [runner] is injectable for tests.
-  Test({required this.ggLog, DnaTestRunner? runner})
+  Build({required this.ggLog, DnaTestRunner? runner})
     : _runner = runner ?? runDnaTest {
     argParser.addOption(
       'target',
       abbr: 't',
-      help: 'The project folder to instantiate.',
+      help: 'The project folder to build.',
       defaultsTo: '.',
     );
   }
@@ -41,7 +41,7 @@ class Test extends Command<dynamic> {
   final DnaTestRunner _runner;
 
   @override
-  final name = 'test';
+  final name = 'build';
 
   @override
   final description = 'Instantiates the DNA and verifies the instances';

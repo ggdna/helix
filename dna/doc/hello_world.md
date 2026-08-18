@@ -31,7 +31,7 @@ and verifies that the instances still match it:
 
 ```bash
 dart test        # or: pnpm test
-helix test       # the same run, without a test framework
+helix build      # the same run, without a test framework
 ```
 
 The first run writes `dna/`, the instances and `dna/_generated.json`, and
