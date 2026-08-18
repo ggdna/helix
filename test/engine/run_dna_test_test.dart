@@ -310,4 +310,21 @@ void main() {
       );
     });
   });
+
+  group('colors', () {
+    test('are four distinct roles', () {
+      const message = 'x';
+      final colored = {
+        cError(message),
+        cCmd(message),
+        cAction(message),
+        cDetail(message),
+      };
+      expect(colored, hasLength(4));
+      for (final text in colored) {
+        expect(text, contains(message));
+        expect(text, isNot(message), reason: 'nothing was colored');
+      }
+    });
+  });
 }

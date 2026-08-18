@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 - 2026-08-18
+
+### Added
+
+- Add »gg dna init« and »gg dna test«
+- Add a »helix add« command.
+
+### Changed
+
+- Improve help of gg dna
+- Rename »gg dna test« into »gg dna build«
+- Complain about adding non dna repos
+- Improve error messages
+- Improve messages
+
 ## 0.1.0 - 2026-08-14
 
 ### Changed

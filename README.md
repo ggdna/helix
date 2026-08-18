@@ -13,33 +13,58 @@ every test run that they always match the generated originals.
 
 ## Quick start
 
-1. Declare DNA packages as dev-dependencies:
-
-   ```jsonc
-   // package.json (TypeScript projects)
-   { "devDependencies": { "dna-ts": "^1.0.0" } }
-   ```
-
-   ```yaml
-   # pubspec.yaml (Dart projects)
-   dev_dependencies:
-     dna_dart: ^1.0.0
-     helix: ^1.0.0
-   ```
-
-2. Install (`pnpm install` / `dart pub get`) and run once:
+1. Run `helix init` in your project:
 
    ```bash
    helix init
    ```
 
-   This places the DNA wrapper test (`test/dna/dna_test.dart` and/or
-   `test/dna/dna.spec.ts`) and a `dna/_dna.json` skeleton with `layers`
-   pre-filled from the DNA packages you have installed. Commit.
+   It runs in a Dart project (`pubspec.yaml`), in a TypeScript project
+   (`package.json`) and in an empty folder — there it bootstraps a
+   `package.json` with `npm init` first. It then
 
-3. Run your tests. The first run instantiates the DNA and commits what
-   it generated as `#gg: generated DNA`. From now on every test run
-   keeps the project in sync.
+   - adds the engine as a dev-dependency: `helix` through `dart pub add`
+     (`flutter pub add` in a Flutter project) and `@tssuite/helix-js`
+     through the package manager the project uses — the `packageManager`
+     field of `package.json` decides, otherwise the lock file that is
+     there (pnpm, yarn, npm),
+   - places `dna/_dna.json`, with `layers` pre-filled from the DNA
+     packages you already have installed,
+   - places `dna/doc/hello_world.md` — the getting-started doc, itself DNA
+     content, so the engine instantiates it to `doc/hello_world.md`,
+   - places the wrapper test: `test/dna/dna_test.dart` when the project
+     declares `test`, `test/dna/dna.spec.ts` when it declares `vitest`.
+     Without a test framework nothing is placed — `helix build` runs the
+     same instantiation from the command line.
+
+2. Add the DNA packages you want:
+
+   ```bash
+   helix add dna_dart                                  # pub package
+   helix add @tssuite/dna-base                         # npm package
+   helix add https://github.com/ggsuite/dna_base.git   # git repository
+   helix add git@github.com:ggsuite/dna_base.git       # git, ssh
+   ```
+
+   Each `helix add` installs the DNA as a dev-dependency, appends its
+   package name to `layers` in `dna/_dna.json` — at the end, because the
+   last layer wins — and then builds: the same run `helix build` performs,
+   so the project is in sync when the command returns.
+
+   The ecosystem follows the name: a scope or a `-` marks an npm name (a
+   pub name may contain neither), anything else goes to pub when the
+   project has a `pubspec.yaml`. For a git target the repository name is
+   the package name — which is how DNA repositories are named. A package
+   that ships no DNA (no `dna/_dna.json` with `"role": "dna"`) is refused,
+   and nothing is written to `layers`.
+
+   Declaring the dependency by hand and listing it under `layers`
+   yourself does the same thing — followed by `helix build`.
+
+3. Run your tests — or `helix build`, which performs exactly the same run
+   for a project without a test framework. The first run instantiates the
+   DNA and commits what it generated as `#gg: generated DNA`. From now on
+   every test run keeps the project in sync.
 
 ## Distribution: dev-dependencies + inheritance tree
 

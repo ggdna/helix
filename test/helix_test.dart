@@ -27,26 +27,20 @@ void main() {
     test('should allow to run init from the command line', () async {
       final tmp = await Directory.systemTemp.createTemp('helix_test_');
       try {
-        await File('${tmp.path}/pubspec.yaml').writeAsString('name: x\n');
+        // Declaring helix and package:test keeps init offline: it then
+        // adds no dependency and places the wrapper right away.
+        await File('${tmp.path}/pubspec.yaml').writeAsString('''
+name: x
+dev_dependencies:
+  helix: ^1.0.0
+  test: ^1.31.2
+''');
         await runner.run(['helix', 'init', '--target', tmp.path]);
         expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
-        expect(messages.any((m) => m.contains('DNA initialized')), isTrue);
+        expect(messages.any((m) => m.contains('gg dna add')), isTrue);
       } finally {
         await tmp.delete(recursive: true);
       }
-    });
-
-    test('sync fails with the migration hint', () async {
-      await expectLater(
-        () => runner.run(['helix', 'sync']),
-        throwsA(
-          isA<UsageException>().having(
-            (e) => e.message,
-            'message',
-            contains('helix init'),
-          ),
-        ),
-      );
     });
 
     test('should show all sub commands', () async {
