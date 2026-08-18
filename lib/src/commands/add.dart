@@ -13,7 +13,6 @@ import '../util/dna_config.dart';
 import '../util/dna_config_edit.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
-import '../util/dna_layout.dart';
 import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
@@ -243,10 +242,8 @@ class Add extends Command<dynamic> {
     if (!isDnaPackage(_host, located.root, packageLabel: located.packageName)) {
       throw FormatException(
         '${target.raw} does not ship a DNA: '
-        '"${located.packageName}" (${located.root}) has no $dnaConfigPath '
-        'declaring "role": "dna" — and a $dnaDirname/ folder alone does not '
-        'make a package a DNA layer.\n'
-        '  Nothing was added to $dnaConfigPath. Remove the dependency '
+        '"${located.packageName}" (${located.root}) has no $dnaConfigPath.'
+        '\n  Nothing was added to $dnaConfigPath. Remove the dependency '
         'again if you added it by mistake.',
       );
     }

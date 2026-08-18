@@ -209,8 +209,8 @@ void main() {
     });
   });
 
-  group('DNA packages must say so', () {
-    test('a dna/ folder alone does not make a layer', () {
+  group('any package with a config can be a layer', () {
+    test('a dna/ folder without a config is not one', () {
       final host = MemoryDnaHost(
         files: {
           '$root/node_modules/plain/package.json':
@@ -224,13 +224,28 @@ void main() {
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            allOf(contains('is not a DNA package'), contains('"role": "dna"')),
+            allOf(contains('ships no DNA'), contains(dnaConfigPath)),
           ),
         ),
       );
     });
 
-    test('role: project is rejected just the same', () {
+    test('no flag is needed — a config is enough', () {
+      final host = MemoryDnaHost(
+        files: {
+          '$root/node_modules/consumer/package.json':
+              '{"name": "consumer", "version": "1.0.0"}',
+          '$root/node_modules/consumer/$dnaConfigPath':
+              '{"version": $dnaFormatVersion}',
+          '$root/node_modules/consumer/dna/doc/x.md': '# x',
+        },
+      );
+      final r = expand(host, ['consumer']);
+      expect(r.layers.single.name, 'consumer');
+      expect(r.warnings, isEmpty);
+    });
+
+    test('a retired role is ignored without warning in a layer', () {
       final host = MemoryDnaHost(
         files: {
           '$root/node_modules/consumer/package.json':
@@ -240,16 +255,9 @@ void main() {
           '$root/node_modules/consumer/dna/doc/x.md': '# x',
         },
       );
-      expect(
-        () => expand(host, ['consumer']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('is not a DNA package'),
-          ),
-        ),
-      );
+      final r = expand(host, ['consumer']);
+      expect(r.layers.single.name, 'consumer');
+      expect(r.warnings, isEmpty);
     });
   });
 

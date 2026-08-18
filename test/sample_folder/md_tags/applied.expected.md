@@ -1,8 +1,8 @@
 # Guide
 
-Intro mit {{@project_name:Acme-Projekt}}.
+Intro mit Projekt.
 
-## [@setup] Setup (überschrieben)
+## @setup Setup (überschrieben)
 
 Nutze die Firmen-Toolchain.
 
@@ -10,17 +10,16 @@ Nutze die Firmen-Toolchain.
 
 Auch Teil der Ersetzung.
 
-## [@usage] Verwendung
+## @usage Verwendung
 
 Starte mit `run`.
 
 ## Schluss
 
-Deps via {{@package_manager:pnpm}}.
+Deps via npm.
 
 ```markdown
-## [@setup] Beispiel im Fence
-{{@package_manager:bleibt}}
+## @setup Beispiel im Fence
 ```
 
-Ende {{@project_name:Acme-Projekt}}.
+Ende.

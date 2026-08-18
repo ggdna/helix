@@ -497,7 +497,7 @@ void main() {
               'toString',
               allOf(
                 contains('dna_dart does not ship a DNA'),
-                contains('role": "dna"'),
+                contains('has no $dnaConfigPath'),
                 contains('Nothing was added to $dnaConfigPath'),
               ),
             ),
@@ -508,20 +508,11 @@ void main() {
         expect(layersOf(host), isEmpty);
       });
 
-      test('complains when the package does not declare role dna', () async {
-        // A dna/ folder alone does not make a package a DNA layer.
+      test('a retired role does not stop the add', () async {
+        // "role" is gone: a config is all it takes to be a layer.
         final host = project(installed: ['dna_dart'], role: 'project');
-        await expectLater(
-          () => runAdd(host, ['dna_dart']),
-          throwsA(
-            isA<Exception>().having(
-              (e) => e.toString(),
-              'toString',
-              contains('does not ship a DNA'),
-            ),
-          ),
-        );
-        expect(layersOf(host), isEmpty);
+        await runAdd(host, ['dna_dart']);
+        expect(layersOf(host), ['dna_dart']);
       });
 
       test('complains when a git repo ships no DNA, naming the url', () async {

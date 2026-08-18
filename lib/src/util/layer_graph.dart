@@ -163,20 +163,17 @@ class ResolvedLayer {
 }
 
 // .............................................................................
-/// Whether the package installed at [packageRoot] is a DNA package.
+/// Whether the package installed at [packageRoot] can be used as a layer.
 ///
-/// A `dna/` folder alone does not make one — the package has to say so in
-/// `dna/_dna.json` with `"role": "dna"`. Without that rule any dependency
-/// that happens to ship a `dna/` folder would be pulled in as a layer, and
-/// a package published before the config moved into `dna/` would silently
-/// contribute no parents at all.
+/// Every package that carries a readable `dna/_dna.json` qualifies — there
+/// is no flag a package has to set to permit it. Nothing is pulled in by
+/// accident either way: a dependency becomes a layer only by being named
+/// in the consumer's `layers`.
 ///
 /// [packageLabel] names the package in the messages of a malformed config,
 /// which is reported rather than answered with `false`.
 bool isDnaPackage(DnaHost host, String packageRoot, {String? packageLabel}) =>
-    host.existsFile('$packageRoot/$dnaConfigPath') &&
-    readDnaConfig(host, packageRoot, packageLabel: packageLabel).config.role ==
-        DnaRole.dna;
+    host.existsFile('$packageRoot/$dnaConfigPath');
 
 // .............................................................................
 /// Reads the config of a resolved layer, insisting that it actually is a
@@ -187,10 +184,8 @@ bool isDnaPackage(DnaHost host, String packageRoot, {String? packageLabel}) =>
 ) {
   if (!isDnaPackage(host, located.root, packageLabel: located.packageName)) {
     throw FormatException(
-      'Package "${located.packageName}" (${located.root}) is not a DNA '
-      'package — $dnaConfigPath is missing or does not declare '
-      '"role": "dna". A dna/ folder alone does not make a package a DNA '
-      'layer.',
+      'Package "${located.packageName}" (${located.root}) ships no DNA — '
+      '$dnaConfigPath is missing.',
     );
   }
   return readDnaConfig(host, located.root, packageLabel: located.packageName);

@@ -125,7 +125,6 @@ class DnaManifest {
     this.claude = const DnaManifestClaude(),
     required this.baseVersion,
     this.baseHash,
-    this.hash,
   });
 
   /// The resolved layers in application order.
@@ -143,9 +142,6 @@ class DnaManifest {
   /// Hash of helix's own base DNA at instantiation time.
   final String? baseHash;
 
-  /// Hash of the generated `dna/` tree (`null` for role: dna).
-  final String? hash;
-
   /// JSON representation of `dna/_generated.json`.
   Map<String, dynamic> toJson() => {
     'version': dnaFormatVersion,
@@ -153,7 +149,6 @@ class DnaManifest {
     'claude': claude.toJson(),
     'baseVersion': baseVersion,
     'baseHash': baseHash,
-    'hash': hash,
     'instances': instances.map((i) => i.toJson()).toList(),
   };
 
@@ -205,7 +200,6 @@ class DnaManifest {
           : const DnaManifestClaude(),
       baseVersion: decoded['baseVersion'] as String? ?? 'unknown',
       baseHash: decoded['baseHash'] as String?,
-      hash: decoded['hash'] as String?,
     );
   }
 

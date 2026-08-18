@@ -165,15 +165,14 @@ DnaInstantiationResult instantiateDna({
       ),
     // The repository's own `dna/` is applied unconditionally and always
     // last — however many layers `_dna.json` declares, and whether or not
-    // one of them happens to be another copy of this same package. It is
-    // hand-authored, so it is the one layer that must never lose a
-    // conflict, and it must be instantiated even when a declared layer
-    // ships nothing at all.
-    if (config.role == DnaRole.dna)
-      (label: 'self', root: targetRoot, display: dnaDirname),
+    // one of them happens to be another copy of this same package. Every
+    // `dna/` is hand-authored source, so it is the one layer that must
+    // never lose a conflict, and it must be instantiated even when a
+    // declared layer ships nothing at all.
+    (label: 'self', root: targetRoot, display: dnaDirname),
   ];
   assert(
-    config.role != DnaRole.dna || sources.last.label == 'self',
+    sources.last.label == 'self',
     'the own dna/ must stay the last source',
   );
 
@@ -259,26 +258,6 @@ DnaInstantiationResult instantiateDna({
     for (final i in previous?.instances ?? const <DnaManifestInstance>[])
       i.path: i.hash,
   };
-
-  final dnaWrites = <String>[];
-  final dnaDeletes = <String>[];
-  if (config.role == DnaRole.project) {
-    final dnaRoot = '$targetRoot/$dnaDirname';
-    final existing = host
-        .listFilesRecursive(dnaRoot)
-        .where(isDnaContent)
-        .toSet();
-    for (final entry in merged.entries) {
-      final path = '$dnaRoot/${entry.key}';
-      if (!host.existsFile(path) ||
-          !_bytesEqual(host.readBytes(path), entry.value)) {
-        dnaWrites.add(entry.key);
-      }
-    }
-    for (final rel in existing) {
-      if (!merged.containsKey(rel)) dnaDeletes.add(rel);
-    }
-  }
 
   final instanceWrites = <String>[];
   // Instances that carry local changes: the DNA content wins, the local
@@ -375,11 +354,10 @@ DnaInstantiationResult instantiateDna({
           via: layer.via,
           hash: hashTree(host, '${layer.root}/$dnaDirname'),
         ),
-      if (config.role == DnaRole.dna)
-        DnaManifestLayer(
-          name: 'self',
-          hash: hashTree(host, '$targetRoot/$dnaDirname'),
-        ),
+      DnaManifestLayer(
+        name: 'self',
+        hash: hashTree(host, '$targetRoot/$dnaDirname'),
+      ),
     ],
     instances: [
       for (final path in instanceBytes.keys.toList()..sort())
@@ -393,7 +371,6 @@ DnaInstantiationResult instantiateDna({
     baseHash: baseDnaRoot == null
         ? null
         : hashTree(host, '$baseDnaRoot/$dnaDirname'),
-    hash: config.role == DnaRole.project ? _hashMerged(merged) : null,
   );
   final generatedJson = encodeJsonPretty(manifest.toJson());
   final generatedPath = '$targetRoot/$dnaGeneratedPath';
@@ -402,8 +379,6 @@ DnaInstantiationResult instantiateDna({
       host.readString(generatedPath) != generatedJson;
 
   final hasChanges =
-      dnaWrites.isNotEmpty ||
-      dnaDeletes.isNotEmpty ||
       instanceWrites.isNotEmpty ||
       instanceDeletes.isNotEmpty ||
       claudeMdContent != null ||
@@ -419,8 +394,6 @@ DnaInstantiationResult instantiateDna({
   // backup folder, which is the recoverability the guard asks
   // for — and blocking them is what used to make a hand edit a dead end.
   final touched = <String>{
-    for (final rel in dnaWrites) '$dnaDirname/$rel',
-    for (final rel in dnaDeletes) '$dnaDirname/$rel',
     ...instanceWrites,
     ...instanceDeletes,
     if (claudeMdContent != null) 'CLAUDE.md',
@@ -452,14 +425,6 @@ DnaInstantiationResult instantiateDna({
     touchedPaths.add(path);
   }
 
-  for (final rel in dnaWrites) {
-    host.writeBytes('$targetRoot/$dnaDirname/$rel', merged[rel]!);
-    note('$dnaDirname/$rel');
-  }
-  for (final rel in dnaDeletes) {
-    host.deleteFile('$targetRoot/$dnaDirname/$rel');
-    note('$dnaDirname/$rel', removed: true);
-  }
   // The local content first, so nothing is lost if a write fails. It
   // goes to a fresh system-temp folder — inside the project it would
   // become part of the repository and of the next DNA run.
@@ -554,7 +519,6 @@ Map<String, Object?> _applyLayer({
 
   final mdOverrides = <String>[];
   final jsonOverrides = <String>[];
-  String? globalOverrides;
 
   final literalDotfiles = <String>[];
 
@@ -582,17 +546,6 @@ Map<String, Object?> _applyLayer({
       );
       warnings.addAll(parsed.warnings);
       chain = mergeDnaVarEntries(chain, parsed.entries);
-      continue;
-    }
-    if (rel == globalOverridesFilename) {
-      globalOverrides = host.readString('$dnaRoot/$rel');
-      continue;
-    }
-    if (name == globalOverridesFilename) {
-      warnings.add(
-        '"$rel" ($label): $globalOverridesFilename is only supported at '
-        'the dna/ root — ignored.',
-      );
       continue;
     }
     if (name.endsWith(overridesFileSuffix)) {
@@ -628,42 +581,7 @@ Map<String, Object?> _applyLayer({
     );
   }
 
-  // Global string overrides of this layer first …
-  if (globalOverrides != null) {
-    final parsed = parseTagFile(globalOverrides);
-    warnings.addAll(
-      parsed.warnings.map((w) => '$label:$globalOverridesFilename: $w'),
-    );
-    final stringBlocks = <TagBlock>[];
-    for (final block in parsed.blocks) {
-      if (block.isHeadingForm) {
-        warnings.add(
-          '$label:$globalOverridesFilename: heading-form block '
-          '"[@${block.tag}]" is not allowed globally — skipped.',
-        );
-      } else {
-        stringBlocks.add(block);
-      }
-    }
-    final foundTags = <String>{};
-    for (final rel in merged.keys.toList()) {
-      if (!rel.toLowerCase().endsWith('.md')) continue;
-      final text = _decodeText(merged[rel]!);
-      if (text == null) continue;
-      merged[rel] = _encodeText(
-        applyGlobalStringBlocks(text, stringBlocks, foundTags: foundTags),
-      );
-    }
-    for (final block in stringBlocks) {
-      if (!foundTags.contains(block.tag)) {
-        warnings.add(
-          '$label:$globalOverridesFilename: tag "${block.tag}" matches '
-          'nothing — skipped.',
-        );
-      }
-    }
-  }
-
+  // File-specific markdown overrides …
   // … then file-specific markdown overrides …
   for (final rel in mdOverrides..sort()) {
     final target = rel.substring(0, rel.length - overridesFileSuffix.length);
@@ -735,11 +653,4 @@ bool _bytesEqual(Uint8List a, Uint8List b) {
     if (a[i] != b[i]) return false;
   }
   return true;
-}
-
-// .............................................................................
-String _hashMerged(Map<String, Uint8List> merged) {
-  final host = MemoryDnaHost();
-  merged.forEach((rel, bytes) => host.writeBytes('/m/$rel', bytes));
-  return hashTree(host, '/m')!;
 }

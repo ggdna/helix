@@ -154,9 +154,6 @@ String dnaConfigSkeleton(List<String> layers) {
   // output. Comments and trailing commas are tolerated.
   "version": $dnaFormatVersion,
 
-  // "dna" for DNA packages, "project" (the default) for consumers.
-  "role": "project",
-
   // The DNA layers, in application order — later layers win. Package
   // names as declared in pubspec.yaml / package.json, never paths.
   // Transitive parents come from each layer's own dna/_dna.json.

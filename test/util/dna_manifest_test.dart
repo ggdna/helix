@@ -33,7 +33,6 @@ void main() {
     claude: DnaManifestClaude(claudeMdInclude: ['doc/conventions']),
     baseVersion: '4.0.0',
     baseHash: '0x5',
-    hash: '0x6',
   );
 
   MemoryDnaHost hostWithGenerated(String content) =>
@@ -58,7 +57,6 @@ void main() {
       expect(read.claude.claudeMdInclude, ['doc/conventions']);
       expect(read.baseVersion, '4.0.0');
       expect(read.baseHash, '0x5');
-      expect(read.hash, '0x6');
     });
 
     test('layers and instances share one file, vars stay out', () {
