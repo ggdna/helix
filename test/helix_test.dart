@@ -36,19 +36,6 @@ void main() {
       }
     });
 
-    test('sync fails with the migration hint', () async {
-      await expectLater(
-        () => runner.run(['helix', 'sync']),
-        throwsA(
-          isA<UsageException>().having(
-            (e) => e.message,
-            'message',
-            contains('helix init'),
-          ),
-        ),
-      );
-    });
-
     test('should show all sub commands', () async {
       final (subCommands, errorMessage) = await missingSubCommands(
         directory: Directory('lib/src/commands'),

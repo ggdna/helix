@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Improve help of gg dna
+
 ## 0.1.0 - 2026-08-14
 
 ### Changed

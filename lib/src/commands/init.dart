@@ -99,9 +99,7 @@ class Init extends Command<dynamic> {
   final name = 'init';
 
   @override
-  final description =
-      'Places the DNA test into the project — the test instantiates the '
-      'DNAs declared as dev-dependencies on every test run.';
+  final description = 'Places the DNA test that instantiates the project DNA';
 
   // ...........................................................................
   @override
