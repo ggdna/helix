@@ -7,6 +7,7 @@
 import 'dart:convert';
 
 import 'package:args/command_runner.dart';
+import 'package:helix/helix.dart' show cDetail;
 import 'package:helix/src/commands/add.dart';
 import 'package:helix/src/commands/init.dart';
 import 'package:helix/src/util/dna_config.dart';
@@ -115,10 +116,10 @@ void main() {
         await runAdd(host, ['dna_dart']);
         expect(commands, ['dart pub add dev:dna_dart']);
         expect(layersOf(host), ['dna_dart']);
-        expect(messages, contains('+ dart pub add dev:dna_dart'));
+        expect(messages, contains(cDetail('✓ dart pub add dev:dna_dart')));
         expect(
           messages,
-          contains('+ added layer "dna_dart" to $dnaConfigPath'),
+          contains(cDetail('✓ Added layer "dna_dart" to $dnaConfigPath')),
         );
       });
 
@@ -148,7 +149,10 @@ void main() {
         );
         await runAdd(host, ['dna_dart']);
         expect(commands, isEmpty);
-        expect(messages, contains('kept existing dev dependency dna_dart'));
+        expect(
+          messages,
+          contains(cDetail('✓ Kept existing dev dependency dna_dart')),
+        );
         // The layer is still added — that is the point of the command.
         expect(layersOf(host), ['dna_dart']);
       });
@@ -163,7 +167,9 @@ void main() {
         expect(layersOf(host), ['dna_dart']);
         expect(
           messages,
-          contains('kept existing layer "dna_dart" in $dnaConfigPath'),
+          contains(
+            cDetail('✓ Kept existing layer "dna_dart" in $dnaConfigPath'),
+          ),
         );
       });
     });
@@ -263,7 +269,10 @@ void main() {
           },
         );
         expect(layersOf(host), ['@tssuite/dna-base']);
-        expect(messages, contains('$gitUrl is declared as @tssuite/dna-base'));
+        expect(
+          messages,
+          contains(cDetail('$gitUrl is declared as @tssuite/dna-base')),
+        );
       });
 
       test('adds the git dependency even when the name is declared', () async {

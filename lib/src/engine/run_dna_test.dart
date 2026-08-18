@@ -85,7 +85,7 @@ Future<void> runDnaTest({
 
 // .............................................................................
 /// Colors of the DNA report — the problem in [cError], files in [cCmd],
-/// what to do in [cAction].
+/// what to do in [cAction], what happened in [cDetail].
 String cError(Object message) => red(message);
 
 /// Color of a file path or command in the DNA report.
@@ -93,6 +93,10 @@ String cCmd(Object message) => blue(message);
 
 /// Color of an instruction in the DNA report.
 String cAction(Object message) => yellow(message);
+
+/// Color of a step that was carried out — the details a reader skims past
+/// on the way to the instruction.
+String cDetail(Object message) => darkGray(message);
 
 // .............................................................................
 /// The paths below `<root>/dna/` that escape a leading dot with `dot_`

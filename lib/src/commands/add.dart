@@ -7,6 +7,7 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
+import '../engine/run_dna_test.dart';
 import '../util/add_target.dart';
 import '../util/dna_config.dart';
 import '../util/dna_config_edit.dart';
@@ -139,7 +140,7 @@ class Add extends Command<dynamic> {
   /// repository's pubspec does not carry — so the name is authoritative.
   String _addPubDependency(String root, AddTarget target) {
     if (declaresPubDependency(_host, root, target.name)) {
-      ggLog('kept existing dev dependency ${target.name}');
+      ggLog(cDetail('✓ Kept existing dev dependency ${target.name}'));
       return target.name;
     }
     final args = target.kind == AddTargetKind.git
@@ -161,7 +162,7 @@ class Add extends Command<dynamic> {
   String _addNodeDependency(String root, AddTarget target) {
     if (target.kind == AddTargetKind.package &&
         declaresNodeDependency(_host, root, target.name)) {
-      ggLog('kept existing dev dependency ${target.name}');
+      ggLog(cDetail('✓ Kept existing dev dependency ${target.name}'));
       return target.name;
     }
     final before = _nodeDependencyNames(root);
@@ -174,7 +175,7 @@ class Add extends Command<dynamic> {
     final added = _nodeDependencyNames(root).difference(before);
     if (added.length != 1) return target.name;
     if (added.single != target.name) {
-      ggLog('${target.raw} is declared as ${added.single}');
+      ggLog(cDetail('${target.raw} is declared as ${added.single}'));
     }
     return added.single;
   }
@@ -201,7 +202,7 @@ class Add extends Command<dynamic> {
     if (!result.isSuccess) {
       usageException('$command failed:\n${result.failureOutput}');
     }
-    ggLog('+ $command');
+    ggLog(cDetail('✓ $command'));
   }
 
   // ...........................................................................
@@ -240,11 +241,11 @@ class Add extends Command<dynamic> {
   /// before the dependency was installed.
   void _addLayer(String root, String layer, List<String> layers) {
     if (layers.contains(layer)) {
-      ggLog('kept existing layer "$layer" in $dnaConfigPath');
+      ggLog(cDetail('✓ Kept existing layer "$layer" in $dnaConfigPath'));
       return;
     }
     final path = '$root/$dnaConfigPath';
     _host.writeString(path, addDnaLayer(_host.readString(path), layer));
-    ggLog('+ added layer "$layer" to $dnaConfigPath');
+    ggLog(cDetail('✓ Added layer "$layer" to $dnaConfigPath'));
   }
 }

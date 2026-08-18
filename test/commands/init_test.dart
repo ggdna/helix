@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:helix/helix.dart' show cDetail;
 import 'package:helix/src/commands/init.dart';
 import 'package:helix/src/engine/instantiate.dart';
 import 'package:helix/src/util/dna_config.dart';
@@ -83,7 +84,7 @@ void main() {
         );
         expect(commands.first, 'npm ${npmInitArgs.join(' ')}');
         expect(host.existsFile('$root/package.json'), isTrue);
-        expect(messages, contains('+ created package.json'));
+        expect(messages, contains(cDetail('✓ Created package.json')));
       });
 
       test('adds the engine after bootstrapping the package.json', () async {
@@ -131,7 +132,10 @@ void main() {
         final host = MemoryDnaHost(files: {'$root/package.json': '{}'});
         await runInit(host);
         expect(commands, ['npm install -D @tssuite/helix-js']);
-        expect(messages, contains('+ npm install -D @tssuite/helix-js'));
+        expect(
+          messages,
+          contains(cDetail('✓ npm install -D @tssuite/helix-js')),
+        );
       });
 
       test('uses pnpm when a pnpm lock file is there', () async {
@@ -204,7 +208,7 @@ void main() {
         await runInit(host);
         expect(commands, isEmpty);
         expect(
-          messages.where((m) => m.startsWith('kept existing dev dependency')),
+          messages.where((m) => m.contains('✓ Kept existing dev dependency')),
           hasLength(2),
         );
       });
@@ -278,7 +282,7 @@ void main() {
           // A project without a test framework is a shape, not a problem:
           // `helix build` runs the instantiation there.
           expect(messages.any((m) => m.contains('No test framework')), isFalse);
-          expect(messages.last, contains('helix build'));
+          expect(messages.last, contains('gg dna build'));
         },
       );
 
@@ -296,9 +300,61 @@ void main() {
         expect(host.readString('$root/$dnaConfigPath'), '// custom config');
         expect(host.readString('$root/$helloWorldDnaPath'), '# custom doc');
         expect(
-          messages.where((m) => m.contains('kept existing')),
+          messages.where((m) => m.contains('✓ Kept existing')),
           hasLength(3),
         );
+      });
+    });
+
+    group('the closing message', () {
+      test('names the commands that come next', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await runInit(host);
+        expect(messages.last, contains('Add and build dna repos:'));
+        expect(messages.last, contains('gg dna add <dnaPackage>'));
+        expect(messages.last, contains('gg dna build'));
+      });
+
+      test('is separated from the steps by an empty line', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await runInit(host);
+        expect(messages[messages.length - 2], isEmpty);
+      });
+
+      test('the steps above are checked off in the detail color', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await runInit(host);
+        final steps = messages.takeWhile((m) => m.isNotEmpty);
+        expect(steps, isNotEmpty);
+        for (final step in steps) {
+          final plain = step.replaceAll(RegExp(r'\x1B\[[0-9;]*m'), '');
+          expect(step, cDetail(plain), reason: 'not in the detail color');
+          expect(plain, isNot(startsWith('+ ')));
+          expect(plain, startsWith('✓ '));
+        }
+        expect(
+          steps.where((m) => m.contains('✓ Placed ')),
+          hasLength(3), // config, hello world doc, wrapper test
+        );
+      });
+
+      test('reports the layers it pre-filled before them', () async {
+        final host = MemoryDnaHost(
+          files: {
+            '$root/pubspec.yaml':
+                'name: x\ndependencies:\n  dna_base: ^1.0.0\n',
+            '$root/.dart_tool/package_config.json':
+                '{"packages": [ '
+                '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
+            '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
+            '/cache/dna_base/$dnaConfigPath':
+                '{"version": $dnaFormatVersion, "role": "dna"}',
+            '/cache/dna_base/dna/LICENSE': 'MIT\n',
+          },
+        );
+        await runInit(host);
+        expect(messages, contains(cDetail('✓ DNA initialized with dna_base')));
+        expect(messages.last, contains('gg dna build'));
       });
     });
 

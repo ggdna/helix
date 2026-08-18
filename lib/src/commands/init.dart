@@ -7,6 +7,7 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
+import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
@@ -231,16 +232,14 @@ class Init extends Command<dynamic> {
       _place('$root/test/dna/dna.spec.ts', tsWrapperTest);
     }
 
+    if (layers.isNotEmpty) {
+      ggLog(cDetail('✓ DNA initialized with ${layers.join(', ')}'));
+    }
+    ggLog('');
     ggLog(
-      layers.isEmpty
-          ? 'DNA initialized. Declare the DNA packages you want as '
-                'dependencies, list them in "layers" of $dnaConfigPath, '
-                'commit, then run your tests or `helix build` — the first '
-                'run instantiates the DNA. $helloWorldDnaPath explains '
-                'the steps.'
-          : 'DNA initialized with ${layers.join(', ')}. Commit, then run '
-                'your tests or `helix build` — the first run instantiates '
-                'the DNA. $helloWorldDnaPath explains the steps.',
+      '${cAction('Add and build dna repos:')}\n\n'
+      '  ${cCmd('gg dna add <dnaPackage>')}\n'
+      '  ${cCmd('gg dna build')}',
     );
   }
 
@@ -261,7 +260,7 @@ class Init extends Command<dynamic> {
         '${result.failureOutput}',
       );
     }
-    ggLog('+ created package.json');
+    ggLog(cDetail('✓ Created package.json'));
   }
 
   // ...........................................................................
@@ -269,7 +268,7 @@ class Init extends Command<dynamic> {
   /// manager this project uses.
   void _addNodeDevDependency(String root) {
     if (declaresNodeDependency(_host, root, helixNodePackage)) {
-      ggLog('kept existing dev dependency $helixNodePackage');
+      ggLog(cDetail('✓ Kept existing dev dependency $helixNodePackage'));
       return;
     }
     final manager = detectNodePackageManager(_host, root);
@@ -284,7 +283,7 @@ class Init extends Command<dynamic> {
   /// Adds the DNA engine to the pub dev dependencies.
   void _addPubDevDependency(String root) {
     if (declaresPubDependency(_host, root, helixPubPackage)) {
-      ggLog('kept existing dev dependency $helixPubPackage');
+      ggLog(cDetail('✓ Kept existing dev dependency $helixPubPackage'));
       return;
     }
     _addDevDependency(
@@ -302,7 +301,7 @@ class Init extends Command<dynamic> {
     final command = '$executable ${args.join(' ')}';
     final result = _processRun(executable, args, workingDirectory: root);
     if (result.isSuccess) {
-      ggLog('+ $command');
+      ggLog(cDetail('✓ $command'));
       return;
     }
     ggLog('! $command failed — run it manually:\n${result.failureOutput}');
@@ -311,10 +310,10 @@ class Init extends Command<dynamic> {
   // ...........................................................................
   void _place(String path, String content) {
     if (_host.existsFile(path)) {
-      ggLog('kept existing $path');
+      ggLog(cDetail('✓ Kept existing $path'));
       return;
     }
     _host.writeString(path, content);
-    ggLog('+ placed $path');
+    ggLog(cDetail('✓ Placed $path'));
   }
 }
