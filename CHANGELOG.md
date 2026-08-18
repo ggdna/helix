@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Add »gg dna init« and »gg dna test«
+
 ### Changed
 
 - Improve help of gg dna

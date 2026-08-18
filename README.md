@@ -13,7 +13,32 @@ every test run that they always match the generated originals.
 
 ## Quick start
 
-1. Declare DNA packages as dev-dependencies:
+1. Run `helix init` in your project:
+
+   ```bash
+   helix init
+   ```
+
+   It runs in a Dart project (`pubspec.yaml`), in a TypeScript project
+   (`package.json`) and in an empty folder — there it bootstraps a
+   `package.json` with `npm init` first. It then
+
+   - adds the engine as a dev-dependency: `helix` through `dart pub add`
+     (`flutter pub add` in a Flutter project) and `@tssuite/helix-js`
+     through the package manager the project uses — the `packageManager`
+     field of `package.json` decides, otherwise the lock file that is
+     there (pnpm, yarn, npm),
+   - places `dna/_dna.json`, with `layers` pre-filled from the DNA
+     packages you already have installed,
+   - places `dna/doc/hello_world.md` — the getting-started doc, itself DNA
+     content, so the engine instantiates it to `doc/hello_world.md`,
+   - places the wrapper test: `test/dna/dna_test.dart` when the project
+     declares `test`, `test/dna/dna.spec.ts` when it declares `vitest`.
+     Without a test framework nothing is placed — `helix test` runs the
+     same instantiation from the command line.
+
+2. Declare the DNA packages you want as dev-dependencies and list them
+   under `layers` of `dna/_dna.json`:
 
    ```jsonc
    // package.json (TypeScript projects)
@@ -24,22 +49,14 @@ every test run that they always match the generated originals.
    # pubspec.yaml (Dart projects)
    dev_dependencies:
      dna_dart: ^1.0.0
-     helix: ^1.0.0
    ```
 
-2. Install (`pnpm install` / `dart pub get`) and run once:
+   Install them (`pnpm install` / `dart pub get`) and commit.
 
-   ```bash
-   helix init
-   ```
-
-   This places the DNA wrapper test (`test/dna/dna_test.dart` and/or
-   `test/dna/dna.spec.ts`) and a `dna/_dna.json` skeleton with `layers`
-   pre-filled from the DNA packages you have installed. Commit.
-
-3. Run your tests. The first run instantiates the DNA and commits what
-   it generated as `#gg: generated DNA`. From now on every test run
-   keeps the project in sync.
+3. Run your tests — or `helix test`, which performs exactly the same run
+   for a project without a test framework. The first run instantiates the
+   DNA and commits what it generated as `#gg: generated DNA`. From now on
+   every test run keeps the project in sync.
 
 ## Distribution: dev-dependencies + inheritance tree
 

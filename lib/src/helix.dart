@@ -8,12 +8,14 @@ import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
 import 'commands/init.dart';
+import 'commands/test.dart';
 
 /// The command line interface for Helix
 class Helix extends Command<dynamic> {
   /// Constructor
   Helix({required this.ggLog}) {
     addSubcommand(Init(ggLog: ggLog));
+    addSubcommand(Test(ggLog: ggLog));
   }
 
   /// The log function
@@ -26,6 +28,6 @@ class Helix extends Command<dynamic> {
   final description =
       'The DNA engine — resolves the DNA packages declared as '
       'dev-dependencies (dna_base, dna_dart, dna-ts, …) and instantiates '
-      'their content into this repo. Run `helix init` once; the placed '
-      'test keeps the project in sync.';
+      'their content into this repo. Run `helix init` once; from then on '
+      'the placed test — or `helix test` — keeps the project in sync.';
 }
