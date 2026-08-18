@@ -1,0 +1,335 @@
+// @license
+// Copyright (c) ggsuite
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+import 'package:args/command_runner.dart';
+import 'package:helix/src/commands/add.dart';
+import 'package:helix/src/commands/init.dart';
+import 'package:helix/src/util/dna_config.dart';
+import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/process_run.dart';
+import 'package:test/test.dart';
+
+void main() {
+  const root = '/p';
+  const dartProject = 'name: x\ndev_dependencies:\n  test: ^1.31.2\n';
+  const gitUrl = 'https://github.com/ggsuite/dna_base.git';
+
+  final messages = <String>[];
+  final commands = <String>[];
+
+  setUp(() {
+    messages.clear();
+    commands.clear();
+  });
+
+  ProcessRun fakeRun({int exitCode = 0, String stderr = ''}) =>
+      (
+        String executable,
+        List<String> args, {
+        required String workingDirectory,
+      }) {
+        commands.add('$executable ${args.join(' ')}');
+        return ProcessRunResult(exitCode: exitCode, stderr: stderr);
+      };
+
+  Future<void> runAdd(
+    MemoryDnaHost host,
+    List<String> args, {
+    ProcessRun? processRun,
+  }) async {
+    final runner = CommandRunner<dynamic>('test', 'test')
+      ..addCommand(
+        Add(
+          ggLog: messages.add,
+          host: host,
+          processRun: processRun ?? fakeRun(),
+        ),
+      );
+    await runner.run(['add', ...args, '--target', root]);
+  }
+
+  /// A project with a DNA config, as `helix init` leaves it.
+  MemoryDnaHost project({
+    String? pubspec = dartProject,
+    String? packageJson,
+    String? config,
+    String? pnpmLock,
+  }) => MemoryDnaHost(
+    files: {
+      '$root/pubspec.yaml': ?pubspec,
+      '$root/package.json': ?packageJson,
+      '$root/pnpm-lock.yaml': ?pnpmLock,
+      '$root/$dnaConfigPath': config ?? dnaConfigSkeleton([]),
+    },
+  );
+
+  List<String> layersOf(MemoryDnaHost host) =>
+      readDnaConfig(host, root).config.layers;
+
+  group('Add', () {
+    test('defaults to the real file system and package managers', () {
+      final command = Add(ggLog: messages.add);
+      expect(command.name, 'add');
+      expect(
+        command.description,
+        'Adds a DNA layer — a package name or a git URL',
+      );
+      expect(command.argParser.options, contains('target'));
+    });
+
+    group('pub packages', () {
+      test('adds the dev dependency and the layer', () async {
+        final host = project();
+        await runAdd(host, ['dna_dart']);
+        expect(commands, ['dart pub add dev:dna_dart']);
+        expect(layersOf(host), ['dna_dart']);
+        expect(messages, contains('+ dart pub add dev:dna_dart'));
+        expect(
+          messages,
+          contains('+ added layer "dna_dart" to $dnaConfigPath'),
+        );
+      });
+
+      test('appends to the layers that are already there', () async {
+        final host = project(config: dnaConfigSkeleton(['dna_base']));
+        await runAdd(host, ['dna_dart']);
+        // The last layer wins, so a new one goes to the end.
+        expect(layersOf(host), ['dna_base', 'dna_dart']);
+      });
+
+      test('uses flutter pub in a Flutter project', () async {
+        final host = project(
+          pubspec: 'name: x\ndependencies:\n  flutter:\n    sdk: flutter\n',
+        );
+        await runAdd(host, ['dna_dart']);
+        expect(commands, ['flutter pub add dev:dna_dart']);
+      });
+
+      test('keeps a dependency that is already declared', () async {
+        final host = project(
+          pubspec: 'name: x\ndev_dependencies:\n  dna_dart: ^1.0.0\n',
+        );
+        await runAdd(host, ['dna_dart']);
+        expect(commands, isEmpty);
+        expect(messages, contains('kept existing dev dependency dna_dart'));
+        // The layer is still added — that is the point of the command.
+        expect(layersOf(host), ['dna_dart']);
+      });
+
+      test('keeps a layer that is already listed', () async {
+        final host = project(config: dnaConfigSkeleton(['dna_dart']));
+        await runAdd(host, ['dna_dart']);
+        expect(commands, ['dart pub add dev:dna_dart']);
+        expect(layersOf(host), ['dna_dart']);
+        expect(
+          messages,
+          contains('kept existing layer "dna_dart" in $dnaConfigPath'),
+        );
+      });
+    });
+
+    group('npm packages', () {
+      test('adds a scoped name with the projects package manager', () async {
+        final host = project(pubspec: null, packageJson: '{}', pnpmLock: '');
+        await runAdd(host, ['@tssuite/dna-base']);
+        expect(commands, ['pnpm add -D @tssuite/dna-base']);
+        expect(layersOf(host), ['@tssuite/dna-base']);
+      });
+
+      test('a dashed name goes to node even in a hybrid project', () async {
+        final host = project(packageJson: '{}');
+        await runAdd(host, ['dna-ts']);
+        expect(commands, ['npm install -D dna-ts']);
+      });
+
+      test('a pub-shaped name goes to pub in a hybrid project', () async {
+        final host = project(packageJson: '{}');
+        await runAdd(host, ['dna_dart']);
+        expect(commands, ['dart pub add dev:dna_dart']);
+      });
+
+      test('rejects an npm name without a package.json', () async {
+        final host = project();
+        await expectLater(
+          () => runAdd(host, ['@tssuite/dna-base']),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              allOf(contains('npm package name'), contains('package.json')),
+            ),
+          ),
+        );
+        expect(commands, isEmpty);
+      });
+
+      test('keeps a node dependency that is already declared', () async {
+        final host = project(
+          pubspec: null,
+          packageJson: '{"devDependencies": {"dna-ts": "^1.0.0"}}',
+        );
+        await runAdd(host, ['dna-ts']);
+        expect(commands, isEmpty);
+        expect(layersOf(host), ['dna-ts']);
+      });
+    });
+
+    group('git targets', () {
+      test('adds a pub git dependency under the repository name', () async {
+        final host = project();
+        await runAdd(host, [gitUrl]);
+        expect(commands, ['dart pub add dev:dna_base@{git: $gitUrl}']);
+        expect(layersOf(host), ['dna_base']);
+      });
+
+      test('adds a node git dependency with a git+ protocol', () async {
+        final host = project(pubspec: null, packageJson: '{}');
+        await runAdd(host, ['git@github.com:ggsuite/dna_base.git']);
+        expect(commands, [
+          'npm install -D git+ssh://git@github.com/ggsuite/dna_base.git',
+        ]);
+        expect(layersOf(host), ['dna_base']);
+      });
+
+      test('uses the name the package manager declared', () async {
+        // npm writes the name from the repository's own package.json —
+        // `dna_base.git` lands as `@tssuite/dna-base`, and that is the
+        // name the engine resolves a layer by.
+        final host = project(pubspec: null, packageJson: '{}');
+        await runAdd(
+          host,
+          [gitUrl],
+          processRun: (executable, args, {required workingDirectory}) {
+            commands.add('$executable ${args.join(' ')}');
+            host.writeString(
+              '$root/package.json',
+              '{"devDependencies": {"@tssuite/dna-base": "github:o/r"}}',
+            );
+            return const ProcessRunResult(exitCode: 0);
+          },
+        );
+        expect(layersOf(host), ['@tssuite/dna-base']);
+        expect(messages, contains('$gitUrl is declared as @tssuite/dna-base'));
+      });
+
+      test('adds the git dependency even when the name is declared', () async {
+        // The declared name may point somewhere else — a git target always
+        // runs, and the package manager decides what to do with it.
+        final host = project(
+          pubspec: null,
+          packageJson: '{"devDependencies": {"dna_base": "^1.0.0"}}',
+        );
+        await runAdd(host, [gitUrl]);
+        expect(commands, ['npm install -D git+$gitUrl']);
+      });
+    });
+
+    group('failures', () {
+      test('requires a dna config and names how to get one', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('No $dnaConfigPath'),
+                contains('helix init'),
+                contains('gg dna init'),
+              ),
+            ),
+          ),
+        );
+        expect(commands, isEmpty);
+      });
+
+      test('requires a manifest', () async {
+        final host = MemoryDnaHost(
+          files: {'$root/$dnaConfigPath': dnaConfigSkeleton([])},
+        );
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              contains('No pubspec.yaml and no package.json'),
+            ),
+          ),
+        );
+      });
+
+      test('requires a target to add', () async {
+        await expectLater(
+          () => runAdd(project(), []),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              contains('Pass the DNA to add'),
+            ),
+          ),
+        );
+      });
+
+      test('adds one DNA at a time', () async {
+        await expectLater(
+          () => runAdd(project(), ['dna_base', 'dna_dart']),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              contains('one DNA at a time'),
+            ),
+          ),
+        );
+      });
+
+      test('reports an empty target', () async {
+        await expectLater(
+          () => runAdd(project(), ['  ']),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              contains('Nothing to add'),
+            ),
+          ),
+        );
+      });
+
+      test('does not touch the config when the install fails', () async {
+        final host = project();
+        await expectLater(
+          () => runAdd(host, [
+            'dna_dart',
+          ], processRun: fakeRun(exitCode: 66, stderr: 'no such package')),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('dart pub add dev:dna_dart failed'),
+                contains('no such package'),
+              ),
+            ),
+          ),
+        );
+        expect(layersOf(host), isEmpty);
+      });
+
+      test('reports a broken config before installing anything', () async {
+        final host = project(config: '{"version": 99}');
+        await expectLater(
+          () => runAdd(host, ['dna_dart']),
+          throwsA(isA<FormatException>()),
+        );
+        expect(commands, isEmpty);
+      });
+    });
+  });
+}

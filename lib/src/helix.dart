@@ -7,13 +7,15 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
-import 'commands/init.dart';
+import 'commands/add.dart';
 import 'commands/build.dart';
+import 'commands/init.dart';
 
 /// The command line interface for Helix
 class Helix extends Command<dynamic> {
   /// Constructor
   Helix({required this.ggLog}) {
+    addSubcommand(Add(ggLog: ggLog));
     addSubcommand(Init(ggLog: ggLog));
     addSubcommand(Build(ggLog: ggLog));
   }

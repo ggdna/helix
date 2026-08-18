@@ -5,6 +5,7 @@
 ### Added
 
 - Add »gg dna init« and »gg dna test«
+- Add a »helix add« command.
 
 ### Changed
 

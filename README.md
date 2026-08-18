@@ -37,21 +37,24 @@ every test run that they always match the generated originals.
      Without a test framework nothing is placed — `helix build` runs the
      same instantiation from the command line.
 
-2. Declare the DNA packages you want as dev-dependencies and list them
-   under `layers` of `dna/_dna.json`:
+2. Add the DNA packages you want:
 
-   ```jsonc
-   // package.json (TypeScript projects)
-   { "devDependencies": { "dna-ts": "^1.0.0" } }
+   ```bash
+   helix add dna_dart                                  # pub package
+   helix add @tssuite/dna-base                         # npm package
+   helix add https://github.com/ggsuite/dna_base.git   # git repository
+   helix add git@github.com:ggsuite/dna_base.git       # git, ssh
    ```
 
-   ```yaml
-   # pubspec.yaml (Dart projects)
-   dev_dependencies:
-     dna_dart: ^1.0.0
-   ```
+   Each `helix add` installs the DNA as a dev-dependency and appends its
+   package name to `layers` in `dna/_dna.json` — at the end, because the
+   last layer wins. The ecosystem follows the name: a scope or a `-` marks
+   an npm name (a pub name may contain neither), anything else goes to pub
+   when the project has a `pubspec.yaml`. For a git target the repository
+   name is the package name — which is how DNA repositories are named.
 
-   Install them (`pnpm install` / `dart pub get`) and commit.
+   Declaring the dependency by hand and listing it under `layers`
+   yourself does the same thing.
 
 3. Run your tests — or `helix build`, which performs exactly the same run
    for a project without a test framework. The first run instantiates the
