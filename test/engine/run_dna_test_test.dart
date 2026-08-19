@@ -6,6 +6,7 @@
 
 import 'dart:io';
 
+import 'package:gg_console_colors/gg_console_colors.dart' show ggColorsEnabled;
 import 'package:helix/helix.dart';
 import 'package:helix/src/util/dna_layout.dart';
 import 'package:test/test.dart';
@@ -259,8 +260,13 @@ void main() {
   group('helixPackageRoot', () {
     test('resolves the installed helix package root', () async {
       final path = await helixPackageRoot();
+      // Posix separators, so the path joins the same way everywhere.
       expect(path, isNot(contains(r'\')));
-      expect(path.endsWith('helix'), isTrue, reason: path);
+      // The folder name is not part of the contract — a checkout may
+      // sit in a folder of any name. What counts is that the package
+      // really is there.
+      expect(File('$path/lib/helix.dart').existsSync(), isTrue, reason: path);
+      expect(File('$path/pubspec.yaml').existsSync(), isTrue, reason: path);
     });
   });
 
@@ -312,6 +318,12 @@ void main() {
   });
 
   group('colors', () {
+    // The color library silences itself when the environment asks for it
+    // (NO_COLOR, TERM=dumb) — a test runner is such an environment. Force
+    // the colors on, so the four roles can be told apart here.
+    setUp(() => ggColorsEnabled = true);
+    tearDown(() => ggColorsEnabled = null);
+
     test('are four distinct roles', () {
       const message = 'x';
       final colored = {
