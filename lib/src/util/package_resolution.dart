@@ -336,6 +336,10 @@ class PackageResolution {
 }
 
 // .............................................................................
+/// A posix path that starts with a Windows drive letter, e.g. `/C:/Users`.
+final RegExp _windowsDrivePrefixRe = RegExp(r'^/[A-Za-z]:(/|$)');
+
+// .............................................................................
 /// Collapses `.` and `..` segments of the posix path [path].
 String normalizePosix(String path) {
   final parts = <String>[];
@@ -355,7 +359,13 @@ String normalizePosix(String path) {
 /// Relative URIs are relative to the `.dart_tool` folder.
 String resolveRootUri(String rootUri, String targetRoot) {
   if (rootUri.startsWith('file://')) {
-    return Uri.parse(rootUri).toFilePath(windows: false);
+    // Posix semantics on purpose: the whole engine joins paths with `/`,
+    // and Windows accepts forward slashes just as well. It only decodes a
+    // Windows path to a leading slash before the drive letter — `/C:/…` —
+    // and that form is rejected by dart:io. Drop the slash; everything
+    // else is already a valid posix path.
+    final path = Uri.parse(rootUri).toFilePath(windows: false);
+    return _windowsDrivePrefixRe.hasMatch(path) ? path.substring(1) : path;
   }
   final base = Uri.parse('$targetRoot/.dart_tool/');
   final resolved = base.resolve(rootUri).path;
