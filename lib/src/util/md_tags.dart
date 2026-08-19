@@ -183,9 +183,9 @@ TagFileParseResult parseTagFile(String content) {
 }
 
 // .............................................................................
-/// Applies [blocks] to [target] — an `@tag` heading there means section
-/// replacement, a `{{@tag:…}}` placeholder means string rewrite (both stay
-/// re-overridable for later layers), anything else warns via [fileLabel].
+/// Applies [blocks] to [target] — an `@tag` heading there marks the
+/// section a block replaces; the marker stays re-overridable for later
+/// layers. A tag that matches nothing warns via [fileLabel].
 TagApplyResult applyTagBlocks(
   String target,
   List<TagBlock> blocks, {
@@ -242,9 +242,9 @@ TagApplyResult applyTagBlocks(
 }
 
 // .............................................................................
-/// Strips all markers for the synced output (`### @tag T` -> `### T`,
-/// `{{@tag:wert}}` -> `wert`); fenced and inline code stay untouched so
-/// documentation can show the syntax literally. Idempotent.
+/// Strips all markers for the synced output (`### @tag T` -> `### T`);
+/// fenced and inline code stay untouched so documentation can show the
+/// syntax literally. Idempotent.
 String renderMarkers(String content) {
   final doc = _Doc(content);
   final lines = doc.lines;

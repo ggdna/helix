@@ -129,34 +129,31 @@ Higher layers can patch files of lower layers instead of replacing them.
 
 ### Markdown: `X.overrides.md`
 
-A sidecar `guide.overrides.md` patches `guide.md`. The target file offers
-two kinds of anchors:
-
-- **Tagged sections** — a heading like `## [@setup] Setup` marks the whole
-  section (up to the next heading of the same or higher level) as
-  replaceable.
-- **Tagged strings** — a placeholder like `{{@packageManager:npm}}` marks
-  an inline value; `npm` is the default.
+A sidecar `guide.overrides.md` patches `guide.md`. The target file marks
+what is replaceable with a **tagged section** — a heading like
+`## @setup Setup`, replaceable up to the next heading of the same or
+higher level.
 
 The overrides file contains only replacement blocks:
 
 ```markdown
-## [@setup] Setup (company edition)
+## @setup Setup (company edition)
 
 Use the company toolchain.
-
-<!-- @packageManager --> pnpm <!-- @packageManager -->
 ```
 
-A heading-form block replaces the whole tagged section. A
-comment-delimited block (`<!-- @tag --> … <!-- @tag -->`, multi-line or
-single-line) rewrites a string tag. Markers survive from layer to layer —
-so even higher layers can override again — and are stripped from the final
-instances. Fenced and inline code are never touched, so documentation can
-show the syntax literally.
+A block can also be written comment-delimited
+(`<!-- @tag --> … <!-- @tag -->`, multi-line or single-line), which is
+useful when the replacement heading should differ from the tag. Either
+way the whole tagged section is replaced — there is no appending, so a
+higher layer repeats the part of the section it wants to keep.
 
-A `global.overrides.md` at a layer's `dna/` root rewrites string tags
-across **all** files of lower layers (string form only).
+Markers survive from layer to layer — so even higher layers can override
+again — and are stripped from the final instances. Fenced and inline code
+are never touched, so documentation can show the syntax literally.
+
+There are no string placeholders. A single value that differs per project
+is a variable in `dna/_vars.json`, not a marker.
 
 ### JSON: `X.overrides.json`
 
