@@ -369,7 +369,6 @@ void main() {
         final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
         await runInit(host);
         final r = readDnaConfig(host, root);
-        expect(r.config.role, DnaRole.project);
         expect(r.config.layers, isEmpty);
         expect(r.warnings, isEmpty);
       });

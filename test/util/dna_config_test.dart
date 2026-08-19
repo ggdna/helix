@@ -26,7 +26,6 @@ void main() {
   group('readDnaConfig', () {
     test('missing file yields defaults', () {
       final r = readDnaConfig(hostWith(null), root);
-      expect(r.config.role, DnaRole.project);
       expect(r.config.layers, isEmpty);
       expect(r.config.vars, isEmpty);
       expect(r.config.claude.claudeMdInclude, isNull);
@@ -62,11 +61,11 @@ void main() {
 }'''),
         root,
       );
-      expect(r.config.role, DnaRole.dna);
       expect(r.config.layers, ['dna_base', '@tssuite/dna-dart']);
       expect(r.config.vars, {'dnaProjectName': 'my_project'});
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
-      expect(r.warnings, isEmpty);
+      expect(r.warnings, hasLength(1));
+      expect(r.warnings.single, contains('"role" is no longer used'));
     });
 
     test('requires the format version', () {
@@ -97,7 +96,7 @@ void main() {
     test('names the package when a layer config is broken', () {
       expect(
         () => readDnaConfig(
-          hostWith('{"role": "x"}'),
+          hostWith('{"layers": "x"}'),
           root,
           packageLabel: '@tssuite/dna-base',
         ),
@@ -111,9 +110,8 @@ void main() {
       );
     });
 
-    test('rejects invalid role, layers and vars', () {
+    test('rejects invalid layers and vars', () {
       for (final config in [
-        '{"role": "x"}',
         '{"layers": "x"}',
         '{"layers": ["a", "a"]}',
         '{"layers": [""]}',
@@ -206,7 +204,6 @@ void main() {
         hostWith(null, extra: {'$root/.gg/dna.json': '{"role": "dna"}'}),
         root,
       );
-      expect(r.config.role, DnaRole.project);
       expect(r.warnings, isEmpty);
     });
   });

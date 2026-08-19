@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.0.0 - 2026-08-19
+
+### Changed
+
+- Section tags lose their brackets: `## @tag Heading` instead of
+`## [@tag] Heading`. The bracketed form is still detected and reported.
+- Make the helix tests platform proof
+
+### Removed
+
+- The `role` key in `dna/_dna.json`. Every `dna/` folder is hand-authored
+source now, and a package becomes a layer by being listed in the
+consumer's `layers` — no flag permits it. A leftover `role` is ignored,
+with a hint for your own config.
+- The generated `dna/` mode that came with `role: "project"`. Helix never
+writes into `dna/`; the merged result is instantiated into the project
+root only. `dna/_generated.json` loses its now meaningless `hash` field.
+- Markdown string placeholders `{{@tag:default}}`, the string form of
+`X.overrides.md` blocks, and `global.overrides.md`. Per-value
+substitution is what the `dna` variables in `dna/_vars.json` are for.
+The retired notation is still detected and reported.
+
 ## 0.2.0 - 2026-08-18
 
 ### Added

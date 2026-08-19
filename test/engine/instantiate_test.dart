@@ -48,11 +48,11 @@ void main() {
       '$root/node_modules/dna-base/dna/doc/develop.md': '''
 # Develop
 
-Package manager: {{@pm:npm}}.
+Package manager: npm.
 
-## [@update] Update dependencies
+## @update Update dependencies
 
-Run {{@pm:npm}} update.
+Run npm update.
 ''',
       '$root/node_modules/dna-base/dna/dot-vscode/settings.json': '''
 {
@@ -69,11 +69,9 @@ Run {{@pm:npm}} update.
           '"dependencies": {"dna-base": "^1.0.0"}}',
       '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig(['dna-base']),
       '$root/node_modules/dna-dart/dna/doc/develop.overrides.md': '''
-## [@update] Update dependencies
+## @update Update dependencies
 
 Run dart pub upgrade.
-
-<!-- @pm --> dart pub <!-- @pm -->
 ''',
       '$root/node_modules/dna-dart/dna/dot-vscode/settings.overrides.json':
           '{"dart.showTodos": false}',
@@ -193,15 +191,15 @@ Run dart pub upgrade.
       expect(r.blocked, isFalse);
       expect(r.updated, isNotEmpty);
 
-      // dna/ is generated: markers rendered, overrides applied.
-      final develop = host.readString('$root/dna/doc/develop.md');
-      expect(develop, contains('Run dart pub upgrade.'));
-      expect(develop, contains('Package manager: dart pub.'));
-      expect(develop, isNot(contains('[@update]')));
-      expect(develop, isNot(contains('{{@pm')));
+      // dna/ stays untouched — the merged result only lands in the root.
+      expect(host.existsFile('$root/dna/doc/develop.md'), isFalse);
 
-      // Instance: doc/develop.md (public).
+      // Instance: doc/develop.md (public), markers rendered.
       expect(host.existsFile('$root/doc/develop.md'), isTrue);
+      final develop = host.readString('$root/doc/develop.md');
+      expect(develop, contains('Run dart pub upgrade.'));
+      expect(develop, isNot(contains('@update')));
+      expect(develop, contains('Update dependencies'));
 
       // JSON deep merge + array join.
       final settings = host.readString('$root/.vscode/settings.json');
@@ -219,13 +217,9 @@ Run dart pub upgrade.
         contains('myProject test wrapper'),
       );
 
-      // Private files stay in dna/.
+      // Private files never become instances, and dna/ is not written to.
       expect(host.existsFile('$root/_vars.json'), isFalse);
-      expect(host.existsFile('$root/dna/_vars.json'), isTrue);
-      expect(
-        host.readString('$root/dna/_vars.json'),
-        contains('"dnaProjectName": "my_project"'),
-      );
+      expect(host.existsFile('$root/dna/_vars.json'), isFalse);
 
       // Sidecars are consumed.
       expect(
@@ -236,16 +230,17 @@ Run dart pub upgrade.
 
       // Manifest v5 with recursive layer info.
       final manifest = DnaManifest.read(host, root)!;
+      // The repo's own dna/ is always the last layer now.
       expect(manifest.layers.map((l) => l.name).toList(), [
         'dna-base',
         'dna-dart',
+        'self',
       ]);
       expect(manifest.layers.first.via, 'dna-dart');
       expect(
         manifest.instances.map((i) => i.path),
         contains('.vscode/settings.json'),
       );
-      expect(manifest.hash, isNotNull);
 
       // Second run is a no-op.
       final second = instantiateDna(
@@ -524,10 +519,6 @@ packages:
       ) as Map<String, dynamic>;
       expect(generated['instances'], isNotEmpty);
       expect(generated.containsKey('vars'), isFalse);
-      expect(
-        host.readString('$root/dna/_vars.json'),
-        contains('dnaCopyrightHolder'),
-      );
     });
 
     test('a layer does not leak its own manifests into the consumer', () {
@@ -767,7 +758,6 @@ packages:
       expect(host.existsFile('$root/LICENSE'), isTrue);
 
       final manifest = DnaManifest.read(host, root)!;
-      expect(manifest.hash, isNull);
       expect(manifest.layers.map((l) => l.name), contains('self'));
 
       final second = instantiateDna(
@@ -794,11 +784,10 @@ packages:
 
       // The instance carries the real dotfile name …
       expect(host.existsFile('$root/.claude/skills/init/SKILL.md'), isTrue);
-      // … while the replica keeps the escape, so it survives republishing
-      // through pub, which drops every path with a leading dot.
+      // … while nothing is written back into dna/ at all.
       expect(
         host.existsFile('$root/dna/dot-claude/skills/init/SKILL.md'),
-        isTrue,
+        isFalse,
       );
       expect(
         host.existsFile('$root/dna/.claude/skills/init/SKILL.md'),
@@ -1008,52 +997,6 @@ packages:
       );
     });
 
-    test('global.overrides.md rewrites string tags across all files', () {
-      final host = makeHost(
-        extra: {
-          '$root/node_modules/dna-base/dna/doc/other.md':
-              'Manager: {{@pm:npm}}\n',
-          '$root/node_modules/dna-dart/dna/global.overrides.md':
-              '<!-- @pm --> dart pub <!-- @pm -->\n',
-        },
-      );
-      final r = instantiateDna(
-        host: host,
-        targetRoot: root,
-        baseVersion: '4.0.0',
-      );
-      expect(host.readString('$root/doc/other.md'), 'Manager: dart pub\n');
-      expect(r.warnings.where((w) => w.contains('global')), isEmpty);
-    });
-
-    test('global overrides warn about heading blocks and dead tags', () {
-      final host = makeHost(
-        extra: {
-          '$root/node_modules/dna-dart/dna/global.overrides.md': '''
-## [@section] A heading block
-
-Not allowed globally.
-
-<!-- @unused --> nothing matches <!-- @unused -->
-''',
-          // A nested global override file is ignored with a warning.
-          '$root/node_modules/dna-dart/dna/doc/global.overrides.md':
-              '<!-- @x --> y <!-- @x -->\n',
-        },
-      );
-      final r = instantiateDna(
-        host: host,
-        targetRoot: root,
-        baseVersion: '4.0.0',
-      );
-      expect(r.warnings.any((w) => w.contains('heading-form block')), isTrue);
-      expect(
-        r.warnings.any((w) => w.contains('"unused" matches nothing')),
-        isTrue,
-      );
-      expect(r.warnings.any((w) => w.contains('only supported at')), isTrue);
-    });
-
     test('json overrides without a target log a skip message', () {
       final host = makeHost(
         extra: {
@@ -1097,7 +1040,7 @@ Not allowed globally.
         baseDnaRoot: '/gg',
         baseVersion: '4.0.0',
       );
-      expect(host.existsFile('$root/dna/doc/base-doc.md'), isTrue);
+      expect(host.existsFile('$root/dna/doc/base-doc.md'), isFalse);
       expect(host.existsFile('$root/doc/base-doc.md'), isTrue);
       // The engine's built-in base DNA points at the repo's dna/ folder,
       // never at a helix package path.

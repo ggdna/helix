@@ -34,6 +34,31 @@ void main() {
       final result = ioProcessRun('helix_no_such_executable_5a3f', const [
         '--version',
       ], workingDirectory: Directory.current.path);
+
+      // Either way the caller gets a failure it can report, never a throw.
+      expect(result.isSuccess, isFalse);
+      expect(result.failureOutput, isNotEmpty);
+
+      if (Platform.isWindows) {
+        // Windows runs through a shell, because npm and friends are .cmd
+        // shims there. The shell — not dart:io — reports the missing
+        // command, so the exit code is the shell's, not ours.
+        expect(result.exitCode, isNot(0));
+      } else {
+        // Elsewhere dart:io throws and the run maps it to our own code.
+        expect(result.exitCode, missingExecutableExitCode);
+        expect(result.failureOutput, contains('could not be started'));
+      }
+    });
+
+    test('maps a process that cannot start at all to our own exit code', () {
+      // A working directory that does not exist makes dart:io throw on
+      // every platform — including Windows, where a missing command alone
+      // is swallowed by the shell.
+      final result = ioProcessRun(Platform.resolvedExecutable, const [
+        '--version',
+      ], workingDirectory: 'helix_no_such_directory_5a3f');
+      expect(result.isSuccess, isFalse);
       expect(result.exitCode, missingExecutableExitCode);
       expect(result.failureOutput, contains('could not be started'));
     });

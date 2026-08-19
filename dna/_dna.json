@@ -1,0 +1,8 @@
+{
+  // The base DNA the engine carries itself: it is applied to every project
+  // as layer 0, below whatever that project declares.
+  "version": 1,
+
+  // No parents — this is the bottom of every tree.
+  "layers": []
+}
