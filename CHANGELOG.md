@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Release dna_gg on top of the published layers
+
+## 1.0.1 - 2026-08-19
+
+### Fixed
+
+- Resolve hosted layers on Windows. `pub` records an absolute `file://`
+URI for every hosted package; decoding it yields `/C:/…`, and the
+leading slash before the drive letter makes the path invalid for
+`dart:io`. Every layer coming from the pub cache failed with
+`FileSystemException: Exists failed` — which only surfaced once layers
+were consumed from the registry instead of by path.
+
 ## 1.0.0 - 2026-08-19
 
 ### Changed

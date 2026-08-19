@@ -160,6 +160,21 @@ packages:
       expect(resolveRootUri('../../cache/dna_base', '/t'), '/cache/dna_base');
       expect(resolveRootUri('../../cache/dna_base/', '/t'), '/cache/dna_base');
     });
+
+    test('drops the leading slash a windows drive decodes to', () {
+      // pub writes an absolute file:// URI for every hosted package. On
+      // Windows it decodes to "/C:/…", and that leading slash makes the
+      // path invalid for dart:io — every hosted layer failed to resolve.
+      expect(
+        resolveRootUri('file:///C:/Users/x/Pub/Cache/dna_base-0.3.1', '/t'),
+        'C:/Users/x/Pub/Cache/dna_base-0.3.1',
+      );
+      expect(resolveRootUri('file:///d:/x', '/t'), 'd:/x');
+      // A posix path keeps its leading slash, and a folder that merely
+      // looks like a drive letter is left alone.
+      expect(resolveRootUri('file:///abs/dna_base', '/t'), '/abs/dna_base');
+      expect(resolveRootUri('file:///CC:/x', '/t'), '/CC:/x');
+    });
   });
 
   group('normalizePosix', () {
