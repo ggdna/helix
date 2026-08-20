@@ -4,7 +4,19 @@
 
 ### Changed
 
-- Release dna_gg on top of the published layers
+- Route process runs through gg_process for wasm compatibility
+
+## 1.0.2 - 2026-08-20
+
+### Fixed
+
+- `helix init` and `helix add` crashed under `gg dna init`/`gg dna add`
+when `gg` runs compiled to WebAssembly (e.g. via `@tssuite/ggwsm`):
+`Unsupported operation: Platform._operatingSystem`. Process execution
+now routes through `package:gg_process`'s `GgProcessDelegate` and
+`GgPlatformDelegate` — the same seam `gg` itself uses for wasm support
+— instead of calling `dart:io`'s `Process.runSync` and
+`Platform.isWindows` directly.
 
 ## 1.0.1 - 2026-08-19
 

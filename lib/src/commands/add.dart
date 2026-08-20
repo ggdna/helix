@@ -89,7 +89,7 @@ class Add extends Command<dynamic> {
     }
     final layers = readDnaConfig(_host, root).config.layers;
 
-    final layer = _addDependency(root, target);
+    final layer = await _addDependency(root, target);
     _requireDnaPackage(root, target, layer);
     _addLayer(root, layer, layers);
 
@@ -126,7 +126,7 @@ class Add extends Command<dynamic> {
   /// an npm-only name goes to node, everything else to pub when the project
   /// has a `pubspec.yaml` and to node otherwise. Returns the name the
   /// dependency ended up declared under — the name the layers array needs.
-  String _addDependency(String root, AddTarget target) {
+  Future<String> _addDependency(String root, AddTarget target) async {
     final hasPubspec = _host.existsFile('$root/pubspec.yaml');
     final hasPackageJson = _host.existsFile('$root/package.json');
 
@@ -144,15 +144,15 @@ class Add extends Command<dynamic> {
     }
 
     return hasPubspec && !target.isNodeOnlyName
-        ? _addPubDependency(root, target)
-        : _addNodeDependency(root, target);
+        ? await _addPubDependency(root, target)
+        : await _addNodeDependency(root, target);
   }
 
   // ...........................................................................
   /// Adds [target] to `dev_dependencies`. `dart pub add` is told the
   /// package name even for a git target — and rejects a name the
   /// repository's pubspec does not carry — so the name is authoritative.
-  String _addPubDependency(String root, AddTarget target) {
+  Future<String> _addPubDependency(String root, AddTarget target) async {
     if (declaresPubDependency(_host, root, target.name)) {
       ggLog(cDetail('✓ Kept existing dev dependency ${target.name}'));
       return target.name;
@@ -160,7 +160,7 @@ class Add extends Command<dynamic> {
     final args = target.kind == AddTargetKind.git
         ? ['pub', 'add', target.pubGitDescriptor]
         : pubAddDevArgs(target.name);
-    _run(root, pubExecutable(_host, root), args);
+    await _run(root, pubExecutable(_host, root), args);
     return target.name;
   }
 
@@ -173,7 +173,7 @@ class Add extends Command<dynamic> {
   /// `@tssuite/dna-base`. The layers array needs that name — the engine
   /// looks a layer up under the name a manifest declares, and only a
   /// pnpm lock file would let it fold the two spellings into one identity.
-  String _addNodeDependency(String root, AddTarget target) {
+  Future<String> _addNodeDependency(String root, AddTarget target) async {
     if (target.kind == AddTargetKind.package &&
         declaresNodeDependency(_host, root, target.name)) {
       ggLog(cDetail('✓ Kept existing dev dependency ${target.name}'));
@@ -184,7 +184,7 @@ class Add extends Command<dynamic> {
     final spec = target.kind == AddTargetKind.git
         ? target.nodeGitSpec
         : target.name;
-    _run(root, manager.executable, manager.addDevArgs(spec));
+    await _run(root, manager.executable, manager.addDevArgs(spec));
 
     final added = _nodeDependencyNames(root).difference(before);
     if (added.length != 1) return target.name;
@@ -210,9 +210,9 @@ class Add extends Command<dynamic> {
   /// Runs one dependency command. A failure aborts: adding the layer to a
   /// config while the package is not installed would only produce a
   /// failing DNA run later on.
-  void _run(String root, String executable, List<String> args) {
+  Future<void> _run(String root, String executable, List<String> args) async {
     final command = '$executable ${args.join(' ')}';
-    final result = _processRun(executable, args, workingDirectory: root);
+    final result = await _processRun(executable, args, workingDirectory: root);
     if (!result.isSuccess) {
       // What the package manager said is the message; the usage of `add`
       // adds nothing to it.

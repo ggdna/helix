@@ -42,7 +42,7 @@ void main() {
         String executable,
         List<String> args, {
         required String workingDirectory,
-      }) {
+      }) async {
         commands.add('$executable ${args.join(' ')}');
         onRun?.call(executable, args);
         return ProcessRunResult(exitCode: exitCode, stderr: stderr);

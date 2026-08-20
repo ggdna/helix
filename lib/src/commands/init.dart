@@ -206,12 +206,12 @@ class Init extends Command<dynamic> {
     final isDart = _host.existsFile('$root/pubspec.yaml');
     var isNode = _host.existsFile('$root/package.json');
     if (!isDart && !isNode) {
-      _npmInit(root);
+      await _npmInit(root);
       isNode = true;
     }
 
-    if (isNode) _addNodeDevDependency(root);
-    if (isDart) _addPubDevDependency(root);
+    if (isNode) await _addNodeDevDependency(root);
+    if (isDart) await _addPubDevDependency(root);
 
     final layers = suggestDnaLayers(
       _host,
@@ -248,8 +248,8 @@ class Init extends Command<dynamic> {
   // ...........................................................................
   /// Bootstraps a `package.json` with npm's defaults — the way on from a
   /// folder that is neither a Dart nor a node project.
-  void _npmInit(String root) {
-    final result = _processRun(
+  Future<void> _npmInit(String root) async {
+    final result = await _processRun(
       NodePackageManager.npm.executable,
       npmInitArgs,
       workingDirectory: root,
@@ -268,13 +268,13 @@ class Init extends Command<dynamic> {
   // ...........................................................................
   /// Adds the DNA engine to the node dev dependencies, with the package
   /// manager this project uses.
-  void _addNodeDevDependency(String root) {
+  Future<void> _addNodeDevDependency(String root) async {
     if (declaresNodeDependency(_host, root, helixNodePackage)) {
       ggLog(cDetail('✓ Kept existing dev dependency $helixNodePackage'));
       return;
     }
     final manager = detectNodePackageManager(_host, root);
-    _addDevDependency(
+    await _addDevDependency(
       root,
       manager.executable,
       manager.addDevArgs(helixNodePackage),
@@ -283,12 +283,12 @@ class Init extends Command<dynamic> {
 
   // ...........................................................................
   /// Adds the DNA engine to the pub dev dependencies.
-  void _addPubDevDependency(String root) {
+  Future<void> _addPubDevDependency(String root) async {
     if (declaresPubDependency(_host, root, helixPubPackage)) {
       ggLog(cDetail('✓ Kept existing dev dependency $helixPubPackage'));
       return;
     }
-    _addDevDependency(
+    await _addDevDependency(
       root,
       pubExecutable(_host, root),
       pubAddDevArgs(helixPubPackage),
@@ -299,9 +299,13 @@ class Init extends Command<dynamic> {
   /// Runs one dependency-adding command. A failure is reported with the
   /// command to repeat by hand instead of aborting: the configuration and
   /// the doc are worth placing either way.
-  void _addDevDependency(String root, String executable, List<String> args) {
+  Future<void> _addDevDependency(
+    String root,
+    String executable,
+    List<String> args,
+  ) async {
     final command = '$executable ${args.join(' ')}';
-    final result = _processRun(executable, args, workingDirectory: root);
+    final result = await _processRun(executable, args, workingDirectory: root);
     if (result.isSuccess) {
       ggLog(cDetail('✓ $command'));
       return;

@@ -1,6 +1,6 @@
 name: helix
 description: The DNA engine - resolves DNA packages declared as dev-dependencies, merges their dna folders and instantiates configs, docs, scripts and agent skills into the target repo.
-version: 1.0.1
+version: 1.0.2
 repository: https://github.com/ggsuite/helix.git
 
 environment:
@@ -12,6 +12,7 @@ dependencies:
   gg_console_colors: ^2.4.0
   gg_hash: ^1.2.0
   gg_log: ^1.1.0
+  gg_process: ^1.2.0
   path: ^1.9.1
   yaml: ^3.1.3
 

@@ -12,8 +12,8 @@ import 'package:test/test.dart';
 
 void main() {
   group('ioProcessRun', () {
-    test('runs a process and reports its output', () {
-      final result = ioProcessRun(Platform.resolvedExecutable, [
+    test('runs a process and reports its output', () async {
+      final result = await ioProcessRun(Platform.resolvedExecutable, [
         '--version',
       ], workingDirectory: Directory.current.path);
       expect(result.isSuccess, isTrue);
@@ -21,8 +21,8 @@ void main() {
       expect('${result.stdout}${result.stderr}', contains('Dart'));
     });
 
-    test('reports a non-zero exit code', () {
-      final result = ioProcessRun(Platform.resolvedExecutable, [
+    test('reports a non-zero exit code', () async {
+      final result = await ioProcessRun(Platform.resolvedExecutable, [
         'run',
         'no_such_file_5a3f.dart',
       ], workingDirectory: Directory.current.path);
@@ -30,8 +30,8 @@ void main() {
       expect(result.failureOutput, isNotEmpty);
     });
 
-    test('reports a missing executable instead of throwing', () {
-      final result = ioProcessRun('helix_no_such_executable_5a3f', const [
+    test('reports a missing executable instead of throwing', () async {
+      final result = await ioProcessRun('helix_no_such_executable_5a3f', const [
         '--version',
       ], workingDirectory: Directory.current.path);
 
@@ -51,16 +51,19 @@ void main() {
       }
     });
 
-    test('maps a process that cannot start at all to our own exit code', () {
-      // A working directory that does not exist makes dart:io throw on
-      // every platform — including Windows, where a missing command alone
-      // is swallowed by the shell.
-      final result = ioProcessRun(Platform.resolvedExecutable, const [
-        '--version',
-      ], workingDirectory: 'helix_no_such_directory_5a3f');
-      expect(result.isSuccess, isFalse);
-      expect(result.exitCode, missingExecutableExitCode);
-      expect(result.failureOutput, contains('could not be started'));
-    });
+    test(
+      'maps a process that cannot start at all to our own exit code',
+      () async {
+        // A working directory that does not exist makes dart:io throw on
+        // every platform — including Windows, where a missing command
+        // alone is swallowed by the shell.
+        final result = await ioProcessRun(Platform.resolvedExecutable, const [
+          '--version',
+        ], workingDirectory: 'helix_no_such_directory_5a3f');
+        expect(result.isSuccess, isFalse);
+        expect(result.exitCode, missingExecutableExitCode);
+        expect(result.failureOutput, contains('could not be started'));
+      },
+    );
   });
 }
