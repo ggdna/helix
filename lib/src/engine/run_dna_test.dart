@@ -5,7 +5,6 @@
 // found in the LICENSE file in the root of this package.
 
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:gg_console_colors/gg_console_colors.dart';
 
@@ -13,6 +12,7 @@ import '../helix_version.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
 import '../util/dna_layout.dart';
+import 'base_dna.dart';
 import 'instantiate.dart';
 
 /// Entry point for the placed DNA test (`test/dna/dna_test.dart` imports
@@ -38,8 +38,27 @@ Future<void> runDnaTest({
 }) async {
   final effectiveHost = host ?? IoDnaHost();
   final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
-  final base = baseDnaRoot ?? await helixPackageRoot();
+  // A caller-supplied base wins; otherwise the engine writes the base DNA
+  // it carries and cleans it up again below.
+  final base = baseDnaRoot ?? materializeBaseDna(effectiveHost);
   final emit = log ?? print; // coverage:ignore-line
+
+  try {
+    await _runDnaTest(host: effectiveHost, root: root, base: base, emit: emit);
+  } finally {
+    if (baseDnaRoot == null) effectiveHost.deleteDir(base);
+  }
+}
+
+// .............................................................................
+/// The body of [runDnaTest], with the base DNA already in place.
+Future<void> _runDnaTest({
+  required DnaHost host,
+  required String root,
+  required String base,
+  required void Function(String message) emit,
+}) async {
+  final effectiveHost = host;
 
   final invalidEscapes = invalidDotEscapes(effectiveHost, root);
   if (invalidEscapes.isNotEmpty) {
@@ -49,7 +68,7 @@ Future<void> runDnaTest({
     );
   }
 
-  final result = instantiateDna(
+  final result = await instantiateDna(
     host: effectiveHost,
     targetRoot: root,
     baseDnaRoot: base,
@@ -147,21 +166,3 @@ String describeDnaSources(List<String> paths, Map<String, String> sources) =>
                     '${cAction('to')} ${cCmd(source)}.';
         })
         .join('\n');
-
-// .............................................................................
-/// Resolves the root folder of the installed helix package (its own
-/// `dna/` folder is the implicit base layer).
-Future<String> helixPackageRoot() async {
-  final uri = await Isolate.resolvePackageUri(
-    Uri.parse('package:helix/helix.dart'),
-  );
-  if (uri == null) {
-    // coverage:ignore-start
-    throw Exception(
-      'Cannot resolve the helix package root — pass baseDnaRoot '
-      'explicitly.',
-    );
-    // coverage:ignore-end
-  }
-  return File(uri.toFilePath()).parent.parent.path.replaceAll(r'\', '/');
-}

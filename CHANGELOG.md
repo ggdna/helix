@@ -4,7 +4,28 @@
 
 ### Changed
 
-- Route process runs through gg_process for wasm compatibility
+- Carry the base DNA in the engine and run git through gg_process
+
+## 1.1.0 - 2026-08-20
+
+### Changed
+
+- `DnaHost.uncommittedPaths` and `DnaHost.commitPaths` are asynchronous,
+and `instantiateDna` returns a `Future`. Running `git` through the
+embedder can only be answered with a future. `runDnaTest` — what the
+placed DNA test calls — is unchanged.
+
+### Fixed
+
+- `gg dna build` and `gg dna add` crashed under a WebAssembly build of
+`gg` (e.g. via `@tssuite/ggwsm`), where 1.0.2 had only got `gg dna init` through. Two more `dart:io` operations that `dart compile wasm`
+does not support were on the path:
+- `Isolate.resolvePackageUri`, used to locate the engine's own package
+folder and read the base DNA from it. The base DNA is now carried in
+the engine as source and written out through the host, so it needs no
+package folder at all — and no embedder has to bundle one.
+- `Process.runSync`, used to run `git`. It now goes through
+`package:gg_process`, the same seam `gg` itself uses.
 
 ## 1.0.2 - 2026-08-20
 

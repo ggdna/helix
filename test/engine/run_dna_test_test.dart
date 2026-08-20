@@ -196,8 +196,9 @@ void main() {
 
     test('defaults target root and base DNA when not given', () async {
       // The in-memory host keeps this side-effect free: the defaults
-      // (current directory, resolved helix package root) are exercised,
-      // but nothing is ever read from or written to the real repository.
+      // (current directory, the base DNA the engine carries) are
+      // exercised, but nothing is ever read from or written to the real
+      // repository.
       final host = MemoryDnaHost();
       await expectLater(
         () => runDnaTest(host: host, log: log.add),
@@ -209,8 +210,17 @@ void main() {
           ),
         ),
       );
-      // Only the in-memory host was touched, never the real repository.
-      expect(host.files.keys.every((p) => p.contains('/dna/')), isTrue);
+      // The carried base DNA really was applied — its doc is instantiated.
+      expect(
+        host.files.keys.any((p) => p.endsWith('/doc/hello_world.md')),
+        isTrue,
+      );
+      // …and the temp folder it was written to is cleaned up again, even
+      // though the run ended in a throw.
+      expect(
+        host.files.keys.any((p) => p.contains('helix_base_dna_')),
+        isFalse,
+      );
     });
   });
 
@@ -254,19 +264,6 @@ void main() {
       );
       expect(log.any((m) => m.contains('Could not commit')), isTrue);
       expect(File('$target/dna/_generated.json').existsSync(), isTrue);
-    });
-  });
-
-  group('helixPackageRoot', () {
-    test('resolves the installed helix package root', () async {
-      final path = await helixPackageRoot();
-      // Posix separators, so the path joins the same way everywhere.
-      expect(path, isNot(contains(r'\')));
-      // The folder name is not part of the contract — a checkout may
-      // sit in a folder of any name. What counts is that the package
-      // really is there.
-      expect(File('$path/lib/helix.dart').existsSync(), isTrue, reason: path);
-      expect(File('$path/pubspec.yaml').existsSync(), isTrue, reason: path);
     });
   });
 
