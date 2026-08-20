@@ -4,8 +4,6 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:helix/helix.dart' show cAction, cCmd, cDetail;
@@ -406,7 +404,7 @@ void main() {
         );
         await runInit(host);
 
-        final result = instantiateDna(
+        final result = await instantiateDna(
           host: host,
           targetRoot: root,
           baseDnaRoot: '/base',
@@ -420,17 +418,8 @@ void main() {
         expect(result.updated, isNot(contains('$helloWorldDnaPath (removed)')));
       });
 
-      test('matches the copy in the base DNA of helix', () {
-        // GENERATED, like test/helix_version_test.dart: drift is repaired
-        // here rather than reported — the constant is the source, the DNA
-        // file is what consumers get.
-        final file = File(helloWorldDnaPath);
-        if (!file.existsSync() || file.readAsStringSync() != helloWorldDoc) {
-          file.parent.createSync(recursive: true);
-          file.writeAsStringSync(helloWorldDoc);
-        }
-        expect(file.readAsStringSync(), helloWorldDoc);
-      });
+      // The copy below `dna/` is kept in sync by
+      // test/engine/base_dna_test.dart, the single owner of those files.
     });
   });
 }

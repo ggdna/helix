@@ -7,17 +7,25 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:gg_process/gg_process.dart';
 import 'package:path/path.dart' as p;
 
 import 'dna_fs.dart';
 
 /// Runs a git command in [workingDirectory] and returns its stdout —
 /// injectable for tests.
-typedef GitRunner = String Function(String workingDirectory, List<String> args);
+typedef GitRunner = Future<String> Function(
+  String workingDirectory,
+  List<String> args,
+);
 
 /// [DnaHost] backed by `dart:io` and the local `git` binary. This file is
 /// the only place binding the engine to the real platform — the engine
 /// core itself must not import `dart:io`.
+///
+/// The file operations go through `dart:io` directly: they are covered by
+/// `IOOverrides`, which a WebAssembly embedder installs. Starting `git` is
+/// not, so it goes through `package:gg_process` instead.
 class IoDnaHost extends DnaHost {
   /// Creates the host; [git] can be stubbed in tests.
   IoDnaHost({GitRunner? git}) : _git = git ?? _defaultGit;
@@ -25,8 +33,11 @@ class IoDnaHost extends DnaHost {
   final GitRunner _git;
 
   // coverage:ignore-start
-  static String _defaultGit(String workingDirectory, List<String> args) {
-    final result = Process.runSync(
+  static Future<String> _defaultGit(
+    String workingDirectory,
+    List<String> args,
+  ) async {
+    final result = await ggRunProcess(
       'git',
       args,
       workingDirectory: workingDirectory,
@@ -104,13 +115,16 @@ class IoDnaHost extends DnaHost {
   }
 
   @override
-  Set<String> uncommittedPaths(String repoRoot) {
+  Future<Set<String>> uncommittedPaths(String repoRoot) async {
     // `git status` prints repo-root-relative paths — strip the prefix of
     // [repoRoot] inside the repository so the result is relative to it.
-    final prefix = _git(repoRoot, ['rev-parse', '--show-prefix']).trim();
+    final prefix = (await _git(repoRoot, [
+      'rev-parse',
+      '--show-prefix',
+    ])).trim();
     // `-uall` lists untracked files individually (git would otherwise
     // collapse whole untracked folders into one `dir/` entry).
-    final status = _git(repoRoot, [
+    final status = await _git(repoRoot, [
       '-c',
       'core.quotepath=false',
       'status',
@@ -121,16 +135,20 @@ class IoDnaHost extends DnaHost {
   }
 
   @override
-  void commitPaths(String repoRoot, List<String> paths, String message) {
+  Future<void> commitPaths(
+    String repoRoot,
+    List<String> paths,
+    String message,
+  ) async {
     if (paths.isEmpty) return;
     // `-A --` stages content, additions and deletions of exactly these
     // paths; the path-limited commit leaves everything else untouched,
     // including whatever else is already staged.
-    _git(repoRoot, ['add', '-A', '--', ...paths]);
+    await _git(repoRoot, ['add', '-A', '--', ...paths]);
     // Restoring a locally changed instance can put back exactly what HEAD
     // has — then there is nothing to commit and `git commit` would exit
     // non-zero. That is a success, not a failure to report.
-    final staged = _git(repoRoot, [
+    final staged = await _git(repoRoot, [
       'diff',
       '--cached',
       '--name-only',
@@ -138,7 +156,7 @@ class IoDnaHost extends DnaHost {
       ...paths,
     ]);
     if (staged.trim().isEmpty) return;
-    _git(repoRoot, ['commit', '-m', message, '--', ...paths]);
+    await _git(repoRoot, ['commit', '-m', message, '--', ...paths]);
   }
 }
 

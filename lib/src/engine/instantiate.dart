@@ -124,12 +124,12 @@ class DnaInstantiationResult {
 /// generated state with the project — honoring instance ownership from the
 /// manifest and the per-file guard (no existing file with uncommitted work
 /// is ever overwritten).
-DnaInstantiationResult instantiateDna({
+Future<DnaInstantiationResult> instantiateDna({
   required DnaHost host,
   required String targetRoot,
   String? baseDnaRoot,
   required String baseVersion,
-}) {
+}) async {
   final messages = <String>[];
   final warnings = <String>[];
 
@@ -403,7 +403,7 @@ DnaInstantiationResult instantiateDna({
       .where((path) => host.existsFile('$targetRoot/$path'))
       .toSet();
   if (existingTouched.isNotEmpty) {
-    final uncommitted = host.uncommittedPaths(targetRoot);
+    final uncommitted = await host.uncommittedPaths(targetRoot);
     final blocked = existingTouched.intersection(uncommitted).toList()..sort();
     if (blocked.isNotEmpty) {
       // Nothing was written — the planning messages would only mislead.
@@ -472,7 +472,7 @@ DnaInstantiationResult instantiateDna({
   // without an identity keeps the files for a manual commit.
   var committed = false;
   try {
-    host.commitPaths(targetRoot, touchedPaths, generatedDnaCommitMessage);
+    await host.commitPaths(targetRoot, touchedPaths, generatedDnaCommitMessage);
     committed = true;
     messages.add('committed as "$generatedDnaCommitMessage"');
   } on Object catch (e) {

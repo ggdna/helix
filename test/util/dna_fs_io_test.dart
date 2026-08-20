@@ -17,7 +17,7 @@ void main() {
 
     setUp(() {
       tmp = Directory.systemTemp.createTempSync('helix_fs_io_test_');
-      host = IoDnaHost(git: (_, _) => '');
+      host = IoDnaHost(git: (_, _) async => '');
     });
 
     tearDown(() {
@@ -58,27 +58,30 @@ void main() {
       expect(host.existsDir(path('x/y/z')), isTrue);
     });
 
-    test('uncommittedPaths asks git for prefix and porcelain status', () {
+    test('uncommittedPaths asks git for prefix and porcelain status', () async {
       final calls = <List<String>>[];
       final probe = IoDnaHost(
-        git: (dir, args) {
+        git: (dir, args) async {
           calls.add(args);
           if (args.first == 'rev-parse') return '\n';
           return ' M lib/a.dart\n?? doc/new.md\n';
         },
       );
-      expect(probe.uncommittedPaths('/repo'), {'lib/a.dart', 'doc/new.md'});
+      expect(await probe.uncommittedPaths('/repo'), {
+        'lib/a.dart',
+        'doc/new.md',
+      });
       expect(calls.first, ['rev-parse', '--show-prefix']);
       expect(calls.last, contains('-uall'));
     });
 
-    test('uncommittedPaths strips the subdirectory prefix', () {
+    test('uncommittedPaths strips the subdirectory prefix', () async {
       final probe = IoDnaHost(
-        git: (dir, args) => args.first == 'rev-parse'
+        git: (dir, args) async => args.first == 'rev-parse'
             ? 'pkg/app/\n'
             : ' M pkg/app/LICENSE\n M other/x.txt\n',
       );
-      expect(probe.uncommittedPaths('/repo/pkg/app'), {'LICENSE'});
+      expect(await probe.uncommittedPaths('/repo/pkg/app'), {'LICENSE'});
     });
   });
 
@@ -105,15 +108,18 @@ void main() {
   });
 
   group('IoDnaHost.commitPaths', () {
-    test('stages and commits exactly the given paths', () {
+    test('stages and commits exactly the given paths', () async {
       final calls = <List<String>>[];
       final probe = IoDnaHost(
-        git: (dir, args) {
+        git: (dir, args) async {
           calls.add(args);
           return args.first == 'diff' ? 'a.txt\n' : '';
         },
       );
-      probe.commitPaths('/repo', ['a.txt', 'dna/b.md'], '#gg: generated DNA');
+      await probe.commitPaths('/repo', [
+        'a.txt',
+        'dna/b.md',
+      ], '#gg: generated DNA');
       expect(calls, [
         ['add', '-A', '--', 'a.txt', 'dna/b.md'],
         ['diff', '--cached', '--name-only', '--', 'a.txt', 'dna/b.md'],
@@ -121,32 +127,32 @@ void main() {
       ]);
     });
 
-    test('skips the commit when the paths are identical to HEAD', () {
+    test('skips the commit when the paths are identical to HEAD', () async {
       final calls = <List<String>>[];
       final probe = IoDnaHost(
-        git: (dir, args) {
+        git: (dir, args) async {
           calls.add(args);
           // Nothing staged — `git commit` would exit non-zero here.
           return args.first == 'diff' ? '\n' : '';
         },
       );
-      probe.commitPaths('/repo', ['a.txt'], '#gg: generated DNA');
+      await probe.commitPaths('/repo', ['a.txt'], '#gg: generated DNA');
       expect(calls.map((c) => c.first), ['add', 'diff']);
     });
 
-    test('does nothing without paths', () {
+    test('does nothing without paths', () async {
       var called = false;
       final probe = IoDnaHost(
-        git: (_, _) {
+        git: (_, _) async {
           called = true;
           return '';
         },
       );
-      probe.commitPaths('/repo', const [], 'msg');
+      await probe.commitPaths('/repo', const [], 'msg');
       expect(called, isFalse);
     });
 
-    test('really commits in a git repository', () {
+    test('really commits in a git repository', () async {
       final tmp = Directory.systemTemp.createTempSync('helix_commit_test_');
       try {
         final host = IoDnaHost();
@@ -161,16 +167,20 @@ void main() {
         host.writeString('${tmp.path}/generated.md', '# generated\n');
         host.writeString('${tmp.path}/mine.md', '# mine\n');
 
-        host.commitPaths(tmp.path, ['generated.md'], '#gg: generated DNA');
+        await host.commitPaths(tmp.path, [
+          'generated.md',
+        ], '#gg: generated DNA');
 
         expect(git(['log', '-1', '--pretty=%s']).trim(), '#gg: generated DNA');
 
         // Committing the same content again is a no-op, not a failure —
         // restoring a locally changed instance ends up exactly here.
-        host.commitPaths(tmp.path, ['generated.md'], '#gg: generated DNA');
+        await host.commitPaths(tmp.path, [
+          'generated.md',
+        ], '#gg: generated DNA');
         expect(git(['log', '--pretty=%s']).trim().split('\n'), hasLength(1));
         // The unrelated file stayed in the working tree.
-        expect(host.uncommittedPaths(tmp.path), {'mine.md'});
+        expect(await host.uncommittedPaths(tmp.path), {'mine.md'});
       } finally {
         tmp.deleteSync(recursive: true);
       }

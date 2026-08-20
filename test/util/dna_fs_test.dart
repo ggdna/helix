@@ -65,17 +65,17 @@ void main() {
       expect(() => host.readBytes('/repo/nope'), throwsArgumentError);
     });
 
-    test('commitPaths records the commit and clears the paths', () {
+    test('commitPaths records the commit and clears the paths', () async {
       final dirty = MemoryDnaHost(uncommitted: {'a.md', 'b.md'});
-      dirty.commitPaths('/repo', ['a.md'], '#gg: generated DNA');
+      await dirty.commitPaths('/repo', ['a.md'], '#gg: generated DNA');
       expect(dirty.commits.single.paths, ['a.md']);
       expect(dirty.commits.single.message, '#gg: generated DNA');
-      expect(dirty.uncommittedPaths('/repo'), {'b.md'});
+      expect(await dirty.uncommittedPaths('/repo'), {'b.md'});
     });
 
-    test('commitPaths throws when commitError is set', () {
+    test('commitPaths throws when commitError is set', () async {
       final failing = MemoryDnaHost()..commitError = 'no git identity';
-      expect(
+      await expectLater(
         () => failing.commitPaths('/repo', ['a.md'], 'msg'),
         throwsA(
           isA<Exception>().having(
@@ -99,10 +99,10 @@ void main() {
       expect(host.readString('$first/a.md'), '# a\n');
     });
 
-    test('uncommittedPaths reflects the seeded set', () {
-      expect(host.uncommittedPaths('/repo'), isEmpty);
+    test('uncommittedPaths reflects the seeded set', () async {
+      expect(await host.uncommittedPaths('/repo'), isEmpty);
       final dirty = MemoryDnaHost(uncommitted: {'LICENSE'});
-      expect(dirty.uncommittedPaths('/repo'), {'LICENSE'});
+      expect(await dirty.uncommittedPaths('/repo'), {'LICENSE'});
     });
   });
 }

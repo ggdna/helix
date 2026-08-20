@@ -62,13 +62,19 @@ abstract class DnaHost {
   /// [repoRoot]. An empty set means everything below [repoRoot] is
   /// committed. Used to protect individual files from being overwritten
   /// (see `instantiateDna`).
-  Set<String> uncommittedPaths(String repoRoot);
+  ///
+  /// Asynchronous because it starts `git`: under `dart compile wasm` a
+  /// process is run through the embedder, which can only answer with a
+  /// future.
+  Future<Set<String>> uncommittedPaths(String repoRoot);
 
   /// Commits exactly [paths] (relative to [repoRoot]) with [message],
   /// leaving every other change in the working tree untouched. Throws
   /// when committing is not possible (no repository, no git identity) —
   /// the caller then reports the files for a manual commit instead.
-  void commitPaths(String repoRoot, List<String> paths, String message);
+  ///
+  /// Asynchronous for the same reason as [uncommittedPaths].
+  Future<void> commitPaths(String repoRoot, List<String> paths, String message);
 }
 
 // .............................................................................
@@ -184,10 +190,14 @@ class MemoryDnaHost extends DnaHost {
   }
 
   @override
-  Set<String> uncommittedPaths(String repoRoot) => uncommitted;
+  Future<Set<String>> uncommittedPaths(String repoRoot) async => uncommitted;
 
   @override
-  void commitPaths(String repoRoot, List<String> paths, String message) {
+  Future<void> commitPaths(
+    String repoRoot,
+    List<String> paths,
+    String message,
+  ) async {
     if (commitError != null) throw Exception(commitError);
     commits.add((paths: paths, message: message));
     uncommitted.removeAll(paths);
