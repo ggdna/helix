@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Release 1.0.2
+- Clean up the changelog
 
 ## 1.0.2 - 2026-08-20
 
