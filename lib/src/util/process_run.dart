@@ -43,7 +43,12 @@ class ProcessRunResult {
 /// `pnpm add`, `dart pub add` — out of the tests and out of the engine:
 /// the engine core never runs a process, and the command layer gets its
 /// runner injected.
-typedef ProcessRun = ProcessRunResult Function(
+///
+/// Asynchronous so the default implementation can route through
+/// `package:gg_process`'s `GgProcessDelegate` — the seam that keeps this
+/// package working under `dart compile wasm`, where `Process.runSync`
+/// throws.
+typedef ProcessRun = Future<ProcessRunResult> Function(
   String executable,
   List<String> args, {
   required String workingDirectory,

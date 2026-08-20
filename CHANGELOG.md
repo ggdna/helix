@@ -5,6 +5,7 @@
 ### Changed
 
 - Release dna_gg on top of the published layers
+- Route helix's process runs through gg_process so it works under dart compile wasm
 
 ## 1.0.1 - 2026-08-19
 

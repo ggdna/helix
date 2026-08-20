@@ -146,7 +146,7 @@ packages:
     source: hosted
     version: "1.1.0"
   gg_process:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: gg_process
       sha256: e94a32b4cbbba4e100f0eaec66083d67814ef79d6c0a3a84e11d7c5456350427

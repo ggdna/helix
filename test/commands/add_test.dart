@@ -37,7 +37,7 @@ void main() {
         String executable,
         List<String> args, {
         required String workingDirectory,
-      }) {
+      }) async {
         commands.add('$executable ${args.join(' ')}');
         return ProcessRunResult(exitCode: exitCode, stderr: stderr);
       };
@@ -353,7 +353,7 @@ void main() {
         await runAdd(
           host,
           [gitUrl],
-          processRun: (executable, args, {required workingDirectory}) {
+          processRun: (executable, args, {required workingDirectory}) async {
             commands.add('$executable ${args.join(' ')}');
             host.writeString(
               '$root/package.json',
