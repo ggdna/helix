@@ -12,6 +12,8 @@
 
 - Remove json merge directly and use from ggjson instead
 
+## 1.1.1 - 2026-08-25
+
 ## 1.1.0 - 2026-08-20
 
 ### Changed
