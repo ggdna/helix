@@ -1,12 +1,13 @@
 # Changelog
 
-## 1.2.0 - 2026-08-25
+## Unreleased
 
 ### Changed
 
 - JSON override merging moved to `gg_json` (`jsonMergePatch`,
 `joinArrays`, `encodeJsonPretty`); `lib/src/util/json_merge.dart` is gone
 - Carry the base DNA in the engine and run git through gg_process
+- Adjust versioning
 
 ### Removed
 
