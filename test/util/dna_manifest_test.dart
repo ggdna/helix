@@ -8,7 +8,7 @@ import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:helix/src/util/dna_layout.dart';
 import 'package:helix/src/util/dna_manifest.dart';
-import 'package:helix/src/util/json_merge.dart';
+import 'package:gg_json/gg_json.dart';
 import 'package:test/test.dart';
 
 void main() {

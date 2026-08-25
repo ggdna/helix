@@ -7,6 +7,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:gg_json/gg_json.dart';
+
 import '../util/claude_md.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
@@ -14,11 +16,20 @@ import '../util/dna_layout.dart';
 import '../util/dna_manifest.dart';
 import '../util/dna_tree_hash.dart';
 import '../util/dna_vars.dart';
-import '../util/json_merge.dart';
 import '../util/jsonc.dart';
 import '../util/layer_graph.dart';
 import '../util/md_tags.dart';
 import '../util/package_resolution.dart';
+
+// .............................................................................
+/// Sidecar suffix that merges into the same-named `.json` file.
+const String jsonOverridesSuffix = '.overrides.json';
+
+/// Structural YAML overrides are not supported yet — hard error.
+const List<String> yamlOverridesSuffixes = [
+  '.overrides.yaml',
+  '.overrides.yml',
+];
 
 // .............................................................................
 /// The folder a developer opens to edit [layer]: a localized checkout is
