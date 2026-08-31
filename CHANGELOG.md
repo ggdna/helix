@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Never use /tmp as test dir base on Windows - Dart and git resolve it to different paths
+
 ### Fixed
 
 - Fix Windows-specific test failures that blocked the review
