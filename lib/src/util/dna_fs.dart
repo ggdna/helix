@@ -22,6 +22,15 @@ abstract class DnaHost {
   /// Whether a directory exists at [path].
   bool existsDir(String path);
 
+  /// [path] with every symlink on it resolved; [path] itself when it
+  /// cannot be resolved.
+  ///
+  /// pnpm installs a package as a symlink into its store, and the
+  /// package's own dependencies live in the `node_modules` next to that
+  /// store folder — not below the link. Only the resolved path leads to
+  /// them, so layer resolution walks from here.
+  String realPath(String path) => path;
+
   /// Reads the file at [path] as bytes.
   Uint8List readBytes(String path);
 
@@ -82,14 +91,20 @@ abstract class DnaHost {
 /// hosts (WASM bridge). Stores files in a flat map keyed by normalized
 /// posix path.
 class MemoryDnaHost extends DnaHost {
-  /// Creates the host, optionally seeded with [files] (path → text) and
-  /// with [uncommitted] paths (relative to the repo root).
+  /// Creates the host, optionally seeded with [files] (path → text), with
+  /// [uncommitted] paths (relative to the repo root) and with [links]
+  /// (link path → target), which [realPath] follows.
   MemoryDnaHost({
     Map<String, String> files = const {},
     Set<String> uncommitted = const {},
-  }) : uncommitted = {...uncommitted} {
+    Map<String, String> links = const {},
+  }) : uncommitted = {...uncommitted},
+       links = {...links} {
     files.forEach(writeString);
   }
+
+  /// Symlinks: link path → target, followed by [realPath].
+  final Map<String, String> links;
 
   /// The stored files: normalized path → bytes.
   final Map<String, Uint8List> files = {};
@@ -125,6 +140,9 @@ class MemoryDnaHost extends DnaHost {
     final prefix = '${_norm(path)}/';
     return files.keys.any((k) => k.startsWith(prefix));
   }
+
+  @override
+  String realPath(String path) => links[_norm(path)] ?? super.realPath(path);
 
   @override
   Uint8List readBytes(String path) {

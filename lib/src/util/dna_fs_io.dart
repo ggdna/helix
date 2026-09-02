@@ -59,6 +59,15 @@ class IoDnaHost extends DnaHost {
   bool existsDir(String path) => Directory(path).existsSync();
 
   @override
+  String realPath(String path) {
+    try {
+      return Directory(path).resolveSymbolicLinksSync().replaceAll(r'\', '/');
+    } on FileSystemException {
+      return path;
+    }
+  }
+
+  @override
   Uint8List readBytes(String path) => File(path).readAsBytesSync();
 
   @override

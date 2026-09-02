@@ -35,6 +35,14 @@ void main() {
       expect(host.listFilesRecursive(path('a')), ['b/c.txt', 'd.txt']);
     });
 
+    test('realPath resolves a folder and falls back to its argument', () {
+      host.writeString(path('a/b/c.txt'), 'content');
+      final real = tmp.resolveSymbolicLinksSync().replaceAll(r'\', '/');
+      expect(host.realPath(path('a/b')), '$real/a/b');
+      // Nothing to resolve — the path is handed back unchanged.
+      expect(host.realPath(path('nope')), path('nope'));
+    });
+
     test('listFilesRecursive of a missing folder is empty', () {
       expect(host.listFilesRecursive(path('nope')), isEmpty);
     });

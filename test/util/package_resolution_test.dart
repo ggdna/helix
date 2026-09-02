@@ -152,6 +152,89 @@ packages:
     });
   });
 
+  group('locate — a layer\'s own parents', () {
+    // pnpm installs a package as a symlink into its store and puts the
+    // package's dependencies next to it there. A layer resolving its own
+    // parents therefore starts at a link path, and the consumer's
+    // node_modules holds none of them.
+    const store =
+        '/t/node_modules/.pnpm/@tssuite+dna-tssuite@0.1.1/node_modules';
+    const link = '/t/node_modules/@tssuite/dna-tssuite';
+    const manifest =
+        '{"name": "@tssuite/dna-tssuite", '
+        '"dependencies": {"@ggdna/dna-readme": "^0.1.0"}}';
+
+    PackageResolution readLayer() => PackageResolution.read(
+      MemoryDnaHost(
+        files: {
+          // The real file system reads both paths through the link.
+          '$link/package.json': manifest,
+          '$store/@tssuite/dna-tssuite/package.json': manifest,
+          '$store/@ggdna/dna-readme/package.json':
+              '{"name": "@ggdna/dna-readme", "version": "0.1.0"}',
+        },
+        links: {link: '$store/@tssuite/dna-tssuite'},
+      ),
+      link,
+    );
+
+    test('follows the link into the store and searches its node_modules', () {
+      final p = readLayer().locate('dna_readme')!;
+      expect(p.packageName, '@ggdna/dna-readme');
+      expect(p.root, '$store/@ggdna/dna-readme');
+      expect(p.version, '0.1.0');
+    });
+
+    test('package.json supplies the installed spelling', () {
+      // The layer ships no lock file, so `dna_readme` — the name
+      // dna/_dna.json uses — can only be mapped to `@ggdna/dna-readme`
+      // through the manifest.
+      final r = read({
+        '$root/package.json':
+            '{"name": "x", '
+            '"devDependencies": {"@ggdna/dna-readme": "^0.1.0"}}',
+        '$root/node_modules/@ggdna/dna-readme/package.json':
+            '{"name": "@ggdna/dna-readme", "version": "0.1.0"}',
+      });
+      expect(r.locate('dna_readme')!.packageName, '@ggdna/dna-readme');
+    });
+
+    test('pubspec.yaml supplies it on the pub side', () {
+      final r = read({
+        '$root/pubspec.yaml':
+            'name: x\ndev_dependencies:\n  dna_readme: ^0.1\n',
+        '$root/.dart_tool/package_config.json':
+            '{"packages": [ '
+            '{"name": "dna_readme", "rootUri": "file:///abs/dna_readme"}]}',
+        '/abs/dna_readme/pubspec.yaml': 'name: dna_readme\nversion: 0.1.0\n',
+      });
+      expect(r.locate('@ggdna/dna-readme')!.root, '/abs/dna_readme');
+    });
+
+    test('unreadable manifests contribute no names', () {
+      // Neither a broken nor a non-map manifest is ours to validate.
+      for (final files in [
+        {'$root/package.json': '{broken', '$root/pubspec.yaml': '*undefined'},
+        {'$root/package.json': '"text"', '$root/pubspec.yaml': 'text'},
+      ]) {
+        final r = read({
+          ...files,
+          '$root/node_modules/@ggdna/dna-readme/package.json':
+              '{"name": "@ggdna/dna-readme"}',
+        });
+        expect(r.locate('dna_readme'), isNull);
+      }
+    });
+
+    test('describeFailure names the node_modules folders it searched', () {
+      final r = read({'$root/node_modules/other/package.json': '{}'});
+      expect(
+        r.describeFailure('dna_readme'),
+        contains('in $root/node_modules'),
+      );
+    });
+  });
+
   group('resolveRootUri', () {
     test('resolves absolute file:// URIs and relative rootUris', () {
       // Relative rootUris are relative to the .dart_tool folder, and a
