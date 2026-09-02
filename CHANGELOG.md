@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 - 2026-09-02
+
+### Changed
+
+- Resolve transitive DNA layers installed by pnpm into its isolated store
+
 ## 1.2.1 - 2026-09-02
 
 ### Changed

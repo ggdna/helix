@@ -112,10 +112,16 @@ class PackageResolution {
     required this._nodeLock,
     required this._pubLock,
     required this._pubRoots,
+    required List<String> nodeDeclared,
+    required List<String> pubDeclared,
     required this.warnings,
   }) {
-    _nodeNames = _byIdentity([..._nodeLock.keys]);
-    _pubNames = _byIdentity([..._pubLock.keys, ..._pubRoots.keys]);
+    _nodeNames = _byIdentity([..._nodeLock.keys, ...nodeDeclared]);
+    _pubNames = _byIdentity([
+      ..._pubLock.keys,
+      ..._pubRoots.keys,
+      ...pubDeclared,
+    ]);
   }
 
   final DnaHost _host;
@@ -139,6 +145,8 @@ class PackageResolution {
       nodeLock: _readPnpmLock(host, targetRoot, warnings),
       pubLock: _readPubspecLock(host, targetRoot, warnings),
       pubRoots: _readPackageConfig(host, targetRoot, warnings),
+      nodeDeclared: _readPackageJsonNames(host, targetRoot),
+      pubDeclared: _readPubspecNames(host, targetRoot),
       warnings: warnings,
     );
   }
@@ -163,13 +171,16 @@ class PackageResolution {
     final identity = canonicalPackageName(declaredName);
     final found = <LocatedPackage>[];
 
-    for (final name in _nodeCandidates(declaredName, identity)) {
-      final root = '$_targetRoot/node_modules/$name';
-      if (!_host.existsDir(root)) continue;
-      found.add(
-        _hit(identity, name, PackageEcosystem.node, root, _nodeLock[name]),
-      );
-      break;
+    node:
+    for (final dir in _nodeModulesDirs) {
+      for (final name in _nodeCandidates(declaredName, identity)) {
+        final root = '$dir/$name';
+        if (!_host.existsDir(root)) continue;
+        found.add(
+          _hit(identity, name, PackageEcosystem.node, root, _nodeLock[name]),
+        );
+        break node;
+      }
     }
 
     for (final name in _pubCandidates(declaredName, identity)) {
@@ -210,10 +221,13 @@ class PackageResolution {
   /// tried where, and what the lock files know about it.
   String describeFailure(String declaredName) {
     final identity = canonicalPackageName(declaredName);
+    final dirs = _nodeModulesDirs.isEmpty
+        ? 'no node_modules folder'
+        : _nodeModulesDirs.join(', ');
     final lines = <String>[
       'identity:            $identity',
       'node_modules/:       tried '
-          '${_nodeCandidates(declaredName, identity).join(', ')}',
+          '${_nodeCandidates(declaredName, identity).join(', ')} in $dirs',
       'package_config.json: tried '
           '${_pubCandidates(declaredName, identity).join(', ')}',
     ];
@@ -306,6 +320,38 @@ class PackageResolution {
   );
 
   // ...........................................................................
+  /// The `node_modules` folders a package is looked up in, nearest first:
+  /// the target's own, then the one of every ancestor of its resolved
+  /// path — node's own lookup.
+  ///
+  /// The ancestors are what pnpm needs: it installs a layer as a symlink
+  /// into `node_modules/.pnpm/<name>@<version>/node_modules/<name>`, and
+  /// the layer's own dependencies sit right there, next to it. The
+  /// consumer's `node_modules` holds only what the consumer declared, so
+  /// without the walk a transitive parent DNA is invisible.
+  late final List<String> _nodeModulesDirs = _nodeModulesDirsOf(
+    _host,
+    _targetRoot,
+  );
+
+  static List<String> _nodeModulesDirsOf(DnaHost host, String targetRoot) {
+    final dirs = <String>[];
+    void add(String dir) {
+      if (!dirs.contains(dir) && host.existsDir(dir)) dirs.add(dir);
+    }
+
+    add('$targetRoot/node_modules');
+    var dir = normalizePosix(host.realPath(targetRoot));
+    while (true) {
+      add('$dir/node_modules');
+      final slash = dir.lastIndexOf('/');
+      if (slash <= 0) break;
+      dir = dir.substring(0, slash);
+    }
+    return dirs;
+  }
+
+  // ...........................................................................
   // Candidates cover the spelling written in the config, the canonical
   // one, and whatever the ecosystem actually installed — that last group
   // is what lets a pub-declared parent (`dna_base`) resolve inside a
@@ -379,6 +425,57 @@ String resolveRootUri(String rootUri, String targetRoot) {
 // malformed one an empty map plus a warning. Resolution must keep working
 // without them — they sharpen identity and versions, they do not gate.
 
+/// The dependency names `package.json` declares — the installed spelling
+/// of what the target depends on.
+///
+/// A layer installed from a registry ships no lock file, so its own
+/// manifest is the only place naming its parents: `dna/_dna.json` calls a
+/// layer `dna_readme`, `package.json` installs it as `@ggdna/dna-readme`.
+List<String> _readPackageJsonNames(DnaHost host, String targetRoot) {
+  final path = '$targetRoot/package.json';
+  if (!host.existsFile(path)) return const [];
+  final Object? doc;
+  try {
+    doc = jsonDecode(host.readString(path));
+  } on FormatException {
+    return const []; // Not our file to validate.
+  }
+  if (doc is! Map) return const [];
+
+  return [
+    for (final section in const [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ])
+      if (doc[section] case final Map<dynamic, dynamic> deps)
+        for (final name in deps.keys) '$name',
+  ];
+}
+
+// .............................................................................
+/// The dependency names `pubspec.yaml` declares — the pub counterpart of
+/// [_readPackageJsonNames].
+List<String> _readPubspecNames(DnaHost host, String targetRoot) {
+  final path = '$targetRoot/pubspec.yaml';
+  if (!host.existsFile(path)) return const [];
+  final Object? doc;
+  try {
+    doc = loadYaml(host.readString(path));
+  } on YamlException {
+    return const []; // Not our file to validate.
+  }
+  if (doc is! Map) return const [];
+
+  return [
+    for (final section in const ['dependencies', 'dev_dependencies'])
+      if (doc[section] case final Map<dynamic, dynamic> deps)
+        for (final name in deps.keys) '$name',
+  ];
+}
+
+// .............................................................................
 Map<String, _LockEntry> _readPnpmLock(
   DnaHost host,
   String targetRoot,

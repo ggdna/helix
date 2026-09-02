@@ -40,6 +40,14 @@ void main() {
       expect(host.existsFile('/repo/./dna/../LICENSE'), isTrue);
     });
 
+    test('realPath follows a seeded link and passes anything else on', () {
+      final linked = MemoryDnaHost(links: {'/repo/link': '/repo/target'});
+      expect(linked.realPath('/repo/link'), '/repo/target');
+      expect(linked.realPath('/repo/other'), '/repo/other');
+      // Without links a host resolves nothing — the base implementation.
+      expect(host.realPath('/repo/dna'), '/repo/dna');
+    });
+
     test('createDir is a no-op — folders exist implicitly', () {
       host.createDir('/repo/empty');
       expect(host.existsDir('/repo/empty'), isFalse);
