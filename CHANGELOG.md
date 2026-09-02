@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.1 - 2026-09-02
+
+### Changed
+
+- Never use /tmp as test dir base on Windows - Dart and git resolve it to different paths
+
+### Fixed
+
+- Fix Windows-specific test failures that blocked the review
+
 ## 1.2.0 - 2026-08-25
 
 ### Changed
