@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Point `repository` at ggdna, the org this repo actually lives in
+
 ## 1.3.0 - 2026-09-02
 
 ### Changed
