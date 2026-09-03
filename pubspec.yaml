@@ -1,6 +1,6 @@
 name: helix
 description: The DNA engine - resolves DNA packages declared as dev-dependencies, merges their dna folders and instantiates configs, docs, scripts and agent skills into the target repo.
-version: 1.3.0
+version: 1.3.1
 repository: https://github.com/ggdna/helix.git
 
 environment:
