@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 - 2026-09-07
 
 ### Added
 
 - `helix init` asks whether a folder without manifest is a Dart or a
-  TypeScript project instead of falling back to `npm init`; `--language`
-  answers for headless runs
+TypeScript project instead of falling back to `npm init`; `--language`
+answers for headless runs
 
 ## 1.3.1 - 2026-09-03
 
