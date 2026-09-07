@@ -33,8 +33,6 @@ every test run that they always match the generated originals.
      there (pnpm, yarn, npm),
    - places `dna/_dna.json`, with `layers` pre-filled from the DNA
      packages you already have installed,
-   - places `dna/doc/hello_world.md` — the getting-started doc, itself DNA
-     content, so the engine instantiates it to `doc/hello_world.md`,
    - places the wrapper test: `test/dna/dna_test.dart` when the project
      declares `test`, `test/dna/dna.spec.ts` when it declares `vitest`.
      Without a test framework nothing is placed — `helix build` runs the

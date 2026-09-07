@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0 - 2026-09-07
+
+### Changed
+
+- Stop shipping the hello world doc in the base DNA
+- Merge main and move the change to Unreleased
+
 ## 1.4.0 - 2026-09-07
 
 ### Added

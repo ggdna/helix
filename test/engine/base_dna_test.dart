@@ -35,10 +35,7 @@ void main() {
       // would ship a stale hash to every consumer — and `isDnaContent`
       // keeps it out of the hash anyway.
       expect(baseDnaFiles.keys, isNot(contains(dnaGeneratedFilename)));
-      expect(
-        baseDnaFiles.keys.where(isDnaContent).toList()..sort(),
-        [dnaVarsFilename, baseDnaHelloWorldPath]..sort(),
-      );
+      expect(baseDnaFiles.keys.where(isDnaContent), [dnaVarsFilename]);
     });
 
     test('declares no parent layer — it is the bottom of every tree', () {
@@ -46,9 +43,11 @@ void main() {
       expect(baseDnaConfig, contains('"version": $dnaFormatVersion'));
     });
 
-    test('is reachable under the path init places it at', () {
-      expect(helloWorldDnaPath, '$dnaDirname/$baseDnaHelloWorldPath');
-      expect(baseDnaFiles[baseDnaHelloWorldPath], helloWorldDoc);
+    test('ships nothing that becomes an instance', () {
+      // Both entries are private (`_` prefix): layer 0 carries the
+      // configuration every tree starts from, no files. A project that
+      // declares no layer of its own therefore gets no instances.
+      expect(baseDnaFiles.keys, everyElement(startsWith('_')));
     });
   });
 
