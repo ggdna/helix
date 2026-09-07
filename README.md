@@ -20,8 +20,11 @@ every test run that they always match the generated originals.
    ```
 
    It runs in a Dart project (`pubspec.yaml`), in a TypeScript project
-   (`package.json`) and in an empty folder — there it bootstraps a
-   `package.json` with `npm init` first. It then
+   (`package.json`) and in an empty folder — there it asks whether the
+   project is Dart or TypeScript and bootstraps a `pubspec.yaml` or a
+   `package.json` (with `npm init`) first. Pass `--language dart` or
+   `--language typescript` to skip the question, which headless runs
+   have to. It then
 
    - adds the engine as a dev-dependency: `helix` through `dart pub add`
      (`flutter pub add` in a Flutter project) and `@tssuite/helix-js`

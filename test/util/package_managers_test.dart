@@ -5,6 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'package:helix/src/util/dna_fs.dart';
+import 'package:yaml/yaml.dart';
 import 'package:helix/src/util/package_managers.dart';
 import 'package:test/test.dart';
 
@@ -202,6 +203,58 @@ void main() {
   group('pubAddDevArgs', () {
     test('adds to the dev dependencies', () {
       expect(pubAddDevArgs('helix'), ['pub', 'add', 'dev:helix']);
+    });
+  });
+
+  group('ProjectLanguage', () {
+    test('has the option values and labels of the prompt', () {
+      expect(ProjectLanguage.dart.option, 'dart');
+      expect(ProjectLanguage.typescript.option, 'typescript');
+      expect(ProjectLanguage.dart.label, 'Dart');
+      expect(ProjectLanguage.typescript.label, 'TypeScript');
+    });
+
+    test('fromOption(value) finds a language by its option value', () {
+      expect(ProjectLanguage.fromOption('dart'), ProjectLanguage.dart);
+      expect(
+        ProjectLanguage.fromOption('typescript'),
+        ProjectLanguage.typescript,
+      );
+      expect(ProjectLanguage.fromOption('rust'), isNull);
+      expect(ProjectLanguage.fromOption(null), isNull);
+    });
+  });
+
+  group('dartPackageName(root)', () {
+    test('is the folder name', () {
+      expect(dartPackageName('/projects/my_tool'), 'my_tool');
+      expect(dartPackageName('/projects/my_tool/'), 'my_tool');
+    });
+
+    test('lower-cases and replaces what pub does not accept', () {
+      expect(dartPackageName('/projects/My-Tool.v2'), 'my_tool_v2');
+      expect(dartPackageName('/projects/  spaced  name '), 'spaced_name');
+      expect(dartPackageName('/projects/--a--'), 'a');
+    });
+
+    test('prefixes a name that does not start with a letter', () {
+      expect(dartPackageName('/projects/2026'), 'project_2026');
+      expect(dartPackageName('/projects/_private'), 'private');
+    });
+
+    test('falls back to a fixed name when nothing usable is left', () {
+      expect(dartPackageName('/projects/---'), 'project');
+      expect(dartPackageName('/'), 'project');
+    });
+  });
+
+  group('pubspecSkeleton(name)', () {
+    test('is a pubspec dart pub add can work with', () {
+      final doc = loadYaml(pubspecSkeleton('my_tool')) as Map;
+      expect(doc['name'], 'my_tool');
+      expect(doc['version'], '0.1.0');
+      expect(doc['publish_to'], 'none');
+      expect((doc['environment'] as Map)['sdk'], dartSdkConstraint);
     });
   });
 }

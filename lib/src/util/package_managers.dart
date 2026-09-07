@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 
+import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
 import 'dna_fs.dart';
@@ -28,6 +29,71 @@ const String dartTestPackage = 'test';
 
 /// Arguments that create a `package.json` from npm's defaults.
 const List<String> npmInitArgs = ['init', '-y'];
+
+/// The SDK constraint of a `pubspec.yaml` helix bootstraps. There is no
+/// `dart pub init`, and `dart create --force` would overwrite files the
+/// folder already has, so helix writes the manifest itself.
+const String dartSdkConstraint = '^3.9.0';
+
+// .............................................................................
+/// The language `helix init` bootstraps a folder for that has neither
+/// manifest — what the user is asked when nothing on disk decides it.
+enum ProjectLanguage {
+  /// A Dart project: `pubspec.yaml`, engine `helix` through `dart pub`.
+  dart,
+
+  /// A TypeScript project: `package.json`, engine `@tssuite/helix-js`
+  /// through npm.
+  typescript;
+
+  /// The value of the `--language` option. The enum names are the values.
+  String get option => name;
+
+  /// How the choice is shown in the prompt.
+  String get label => switch (this) {
+    ProjectLanguage.dart => 'Dart',
+    ProjectLanguage.typescript => 'TypeScript',
+  };
+
+  /// The language whose [option] is [value]; `null` for anything else.
+  static ProjectLanguage? fromOption(String? value) {
+    for (final language in values) {
+      if (language.option == value) return language;
+    }
+    return null;
+  }
+}
+
+// .............................................................................
+/// A valid pub package name for the project at [root]: the folder name,
+/// lower-cased, with everything that is not a letter, digit or underscore
+/// turned into an underscore. A name that does not start with a letter
+/// gets a `project_` prefix, so a folder called `2026` still yields a
+/// name pub accepts.
+String dartPackageName(String root) {
+  final folder = p.posix.basename(p.posix.normalize(p.posix.absolute(root)));
+  final name = folder
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9_]'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  if (name.isEmpty) return 'project';
+  return RegExp(r'^[a-z]').hasMatch(name) ? name : 'project_$name';
+}
+
+// .............................................................................
+/// The `pubspec.yaml` helix bootstraps a Dart project with — the pub
+/// counterpart of `npm init -y`: enough for `dart pub add` to work.
+String pubspecSkeleton(String name) =>
+    '''
+name: $name
+description: A Dart project.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: "$dartSdkConstraint"
+''';
 
 // .............................................................................
 /// A node package manager `helix init` drives.

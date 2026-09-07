@@ -10,13 +10,17 @@ import 'package:gg_log/gg_log.dart';
 import 'commands/add.dart';
 import 'commands/build.dart';
 import 'commands/init.dart';
+import 'util/select_prompt.dart';
+
+export 'util/select_prompt.dart';
 
 /// The command line interface for Helix
 class Helix extends Command<dynamic> {
-  /// Constructor
-  Helix({required this.ggLog}) {
+  /// Constructor. [selectPrompt] replaces the plain terminal prompt of
+  /// `init` — `gg` passes its own menus here.
+  Helix({required this.ggLog, SelectPrompt? selectPrompt}) {
     addSubcommand(Add(ggLog: ggLog));
-    addSubcommand(Init(ggLog: ggLog));
+    addSubcommand(Init(ggLog: ggLog, selectPrompt: selectPrompt));
     addSubcommand(Build(ggLog: ggLog));
   }
 

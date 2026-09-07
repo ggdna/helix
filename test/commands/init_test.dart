@@ -14,6 +14,7 @@ import 'package:helix/src/util/dna_fs.dart';
 import 'package:helix/src/util/dna_layout.dart';
 import 'package:helix/src/util/package_managers.dart';
 import 'package:helix/src/util/process_run.dart';
+import 'package:helix/src/util/select_prompt.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -23,11 +24,27 @@ void main() {
 
   final messages = <String>[];
   final commands = <String>[];
+  final prompts = <({String prompt, List<String> options})>[];
 
   setUp(() {
     messages.clear();
     commands.clear();
+    prompts.clear();
   });
+
+  /// A [SelectPrompt] that records the question and answers [answer] —
+  /// or throws [unavailable] instead, like a prompt without a terminal.
+  SelectPrompt fakePrompt({
+    int answer = 0,
+    SelectPromptUnavailableException? unavailable,
+  }) => ({required String prompt, required List<String> options}) async {
+    prompts.add((prompt: prompt, options: options));
+    if (unavailable != null) throw unavailable;
+    return answer;
+  };
+
+  const dart = 0;
+  const typescript = 1;
 
   /// A [ProcessRun] that records its calls instead of running them.
   /// [onRun] simulates what the real command would write to disk.
@@ -46,16 +63,22 @@ void main() {
         return ProcessRunResult(exitCode: exitCode, stderr: stderr);
       };
 
-  Future<void> runInit(MemoryDnaHost host, {ProcessRun? processRun}) async {
+  Future<void> runInit(
+    MemoryDnaHost host, {
+    ProcessRun? processRun,
+    SelectPrompt? selectPrompt,
+    List<String> args = const [],
+  }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
       ..addCommand(
         Init(
           ggLog: messages.add,
           host: host,
           processRun: processRun ?? fakeRun(),
+          selectPrompt: selectPrompt ?? fakePrompt(answer: typescript),
         ),
       );
-    await runner.run(['init', '--target', root]);
+    await runner.run(['init', '--target', root, ...args]);
   }
 
   group('Init', () {
@@ -66,13 +89,24 @@ void main() {
       final command = Init(ggLog: messages.add);
       expect(command.name, 'init');
       expect(command.argParser.options, contains('target'));
+      expect(command.argParser.options, contains('language'));
     });
 
     group('manifests', () {
-      test('runs npm init when neither manifest is there', () async {
+      test('asks for the language when neither manifest is there', () async {
+        final host = MemoryDnaHost();
+        await runInit(host, selectPrompt: fakePrompt(answer: dart));
+        expect(prompts, hasLength(1));
+        expect(prompts.single.prompt, contains('No pubspec.yaml'));
+        expect(prompts.single.prompt, contains('"$root"'));
+        expect(prompts.single.options, ['Dart', 'TypeScript']);
+      });
+
+      test('runs npm init when TypeScript is chosen', () async {
         final host = MemoryDnaHost();
         await runInit(
           host,
+          selectPrompt: fakePrompt(answer: typescript),
           processRun: fakeRun(
             onRun: (executable, args) {
               if (args.first == 'init') {
@@ -83,7 +117,77 @@ void main() {
         );
         expect(commands.first, 'npm ${npmInitArgs.join(' ')}');
         expect(host.existsFile('$root/package.json'), isTrue);
+        expect(host.existsFile('$root/pubspec.yaml'), isFalse);
         expect(messages, contains(cDetail('✓ Created package.json')));
+      });
+
+      test('writes a pubspec.yaml when Dart is chosen', () async {
+        final host = MemoryDnaHost();
+        await runInit(host, selectPrompt: fakePrompt(answer: dart));
+        expect(host.readString('$root/pubspec.yaml'), pubspecSkeleton('p'));
+        expect(host.existsFile('$root/package.json'), isFalse);
+        expect(messages, contains(cDetail('✓ Created pubspec.yaml (p)')));
+        // And the Dart path continues from there.
+        expect(commands, ['dart pub add dev:helix']);
+        expect(commands.any((c) => c.contains('init')), isFalse);
+      });
+
+      test('--language decides without asking', () async {
+        final host = MemoryDnaHost();
+        await runInit(host, args: ['--language', 'dart']);
+        expect(prompts, isEmpty);
+        expect(host.existsFile('$root/pubspec.yaml'), isTrue);
+
+        final node = MemoryDnaHost();
+        await runInit(
+          node,
+          args: ['-l', 'typescript'],
+          selectPrompt: fakePrompt(answer: dart),
+          processRun: fakeRun(
+            onRun: (executable, args) {
+              if (args.first == 'init') {
+                node.writeString('$root/package.json', '{}');
+              }
+            },
+          ),
+        );
+        expect(prompts, isEmpty);
+        expect(node.existsFile('$root/package.json'), isTrue);
+        expect(node.existsFile('$root/pubspec.yaml'), isFalse);
+      });
+
+      test('--language rejects what is neither dart nor typescript', () async {
+        await expectLater(
+          () => runInit(MemoryDnaHost(), args: ['--language', 'rust']),
+          throwsA(isA<UsageException>()),
+        );
+      });
+
+      test('fails with the --language hint when it cannot ask', () async {
+        final host = MemoryDnaHost();
+        await expectLater(
+          () => runInit(
+            host,
+            selectPrompt: fakePrompt(
+              unavailable: const SelectPromptUnavailableException(
+                'stdin is not a terminal',
+              ),
+            ),
+          ),
+          throwsA(
+            isA<UsageException>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('No pubspec.yaml and no package.json in "$root"'),
+                contains('stdin is not a terminal'),
+                contains('--language dart|typescript'),
+              ),
+            ),
+          ),
+        );
+        expect(commands, isEmpty);
+        expect(host.files, isEmpty);
       });
 
       test('adds the engine after bootstrapping the package.json', () async {
@@ -118,9 +222,10 @@ void main() {
         );
       });
 
-      test('leaves an existing manifest alone', () async {
+      test('leaves an existing manifest alone and does not ask', () async {
         final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
-        await runInit(host);
+        await runInit(host, args: ['--language', 'typescript']);
+        expect(prompts, isEmpty);
         expect(commands.any((c) => c.contains('init')), isFalse);
         expect(host.existsFile('$root/package.json'), isFalse);
       });
