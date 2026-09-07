@@ -5,12 +5,8 @@
 ### Added
 
 - `helix init` asks whether a folder without manifest is a Dart or a
-TypeScript project instead of falling back to `npm init`; `--language`
-answers for headless runs
-
-### Changed
-
-- Ask for Dart or TypeScript when gg dna init runs in a folder without manifest
+  TypeScript project instead of falling back to `npm init`; `--language`
+  answers for headless runs
 
 ## 1.3.1 - 2026-09-03
 
