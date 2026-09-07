@@ -19,6 +19,8 @@ import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
 import '../util/process_run.dart';
 import '../util/process_run_io.dart';
+import '../util/select_prompt.dart';
+import '../util/select_prompt_io.dart';
 
 // The getting-started doc lives with the rest of the base DNA; `init`
 // places a copy of it, so it stays reachable from here.
@@ -88,16 +90,31 @@ String dnaConfigSkeleton(List<String> layers) {
 /// getting-started doc and the wrapper test. The instantiation itself runs
 /// inside that test on every test run.
 class Init extends Command<dynamic> {
-  /// Constructor. [host] and [processRun] are the injectable seams to the
-  /// file system and to the package managers.
-  Init({required this.ggLog, DnaHost? host, ProcessRun? processRun})
-    : _host = host ?? IoDnaHost(),
-      _processRun = processRun ?? ioProcessRun {
+  /// Constructor. [host], [processRun] and [selectPrompt] are the
+  /// injectable seams to the file system, to the package managers and to
+  /// the user.
+  Init({
+    required this.ggLog,
+    DnaHost? host,
+    ProcessRun? processRun,
+    SelectPrompt? selectPrompt,
+  }) : _host = host ?? IoDnaHost(),
+       _processRun = processRun ?? ioProcessRun,
+       _selectPrompt = selectPrompt ?? stdinSelectPrompt() {
     argParser.addOption(
       'target',
       abbr: 't',
       help: 'The project folder to initialize.',
       defaultsTo: '.',
+    );
+    argParser.addOption(
+      'language',
+      abbr: 'l',
+      help:
+          'The language to bootstrap a folder for that has neither a '
+          'pubspec.yaml nor a package.json. Asked interactively when '
+          'omitted.',
+      allowed: [for (final l in ProjectLanguage.values) l.option],
     );
   }
 
@@ -107,6 +124,8 @@ class Init extends Command<dynamic> {
   final DnaHost _host;
 
   final ProcessRun _processRun;
+
+  final SelectPrompt _selectPrompt;
 
   @override
   final name = 'init';
@@ -120,11 +139,17 @@ class Init extends Command<dynamic> {
     final target = (argResults!['target'] as String).replaceAll(r'\', '/');
     final root = target == '.' ? '.' : target;
 
-    final isDart = _host.existsFile('$root/pubspec.yaml');
+    var isDart = _host.existsFile('$root/pubspec.yaml');
     var isNode = _host.existsFile('$root/package.json');
     if (!isDart && !isNode) {
-      await _npmInit(root);
-      isNode = true;
+      switch (await _chooseLanguage(root)) {
+        case ProjectLanguage.dart:
+          _pubInit(root);
+          isDart = true;
+        case ProjectLanguage.typescript:
+          await _npmInit(root);
+          isNode = true;
+      }
     }
 
     if (isNode) await _addNodeDevDependency(root);
@@ -163,8 +188,47 @@ class Init extends Command<dynamic> {
   }
 
   // ...........................................................................
+  /// The language to bootstrap [root] for: `--language` when given, else
+  /// the user's answer. Without a terminal to ask on, the option is the
+  /// only way — a folder with no manifest is a decision, not a default.
+  Future<ProjectLanguage> _chooseLanguage(String root) async {
+    final option = ProjectLanguage.fromOption(
+      argResults!['language'] as String?,
+    );
+    if (option != null) return option;
+
+    const languages = ProjectLanguage.values;
+    try {
+      final index = await _selectPrompt(
+        prompt:
+            'No pubspec.yaml and no package.json in "$root". Which '
+            'language should the project use?',
+        options: [for (final l in languages) l.label],
+      );
+      return languages[index];
+    } on SelectPromptUnavailableException catch (e) {
+      usageException(
+        'No pubspec.yaml and no package.json in "$root", and the '
+        'language cannot be asked for (${e.reason}). Pass --language '
+        '${languages.map((l) => l.option).join('|')}.',
+      );
+    }
+  }
+
+  // ...........................................................................
+  /// Bootstraps a `pubspec.yaml` — the way on from a folder that is
+  /// neither a Dart nor a node project when the user chose Dart. The
+  /// package name comes from the folder name.
+  void _pubInit(String root) {
+    final name = dartPackageName(root);
+    _host.writeString('$root/pubspec.yaml', pubspecSkeleton(name));
+    ggLog(cDetail('✓ Created pubspec.yaml ($name)'));
+  }
+
+  // ...........................................................................
   /// Bootstraps a `package.json` with npm's defaults — the way on from a
-  /// folder that is neither a Dart nor a node project.
+  /// folder that is neither a Dart nor a node project when the user chose
+  /// TypeScript.
   Future<void> _npmInit(String root) async {
     final result = await _processRun(
       NodePackageManager.npm.executable,
