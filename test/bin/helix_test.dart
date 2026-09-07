@@ -6,7 +6,6 @@
 
 import 'dart:io';
 
-import 'package:helix/src/commands/init.dart';
 import 'package:test/test.dart';
 
 import '../../bin/helix.dart';
@@ -29,7 +28,7 @@ dev_dependencies:
         await run(args: ['init', '--target', tmp.path], ggLog: messages.add);
 
         expect(File('${tmp.path}/test/dna/dna_test.dart').existsSync(), isTrue);
-        expect(File('${tmp.path}/$helloWorldDnaPath').existsSync(), isTrue);
+        expect(File('${tmp.path}/dna/_dna.json').existsSync(), isTrue);
         expect(
           messages.any((m) => m.contains('gg dna add')),
           isTrue,

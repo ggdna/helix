@@ -8,7 +8,6 @@ import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
 
-import '../engine/base_dna.dart';
 import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
@@ -19,10 +18,6 @@ import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
 import '../util/process_run.dart';
 import '../util/process_run_io.dart';
-
-// The getting-started doc lives with the rest of the base DNA; `init`
-// places a copy of it, so it stays reachable from here.
-export '../engine/base_dna.dart' show helloWorldDnaPath, helloWorldDoc;
 
 /// Content of the placed Dart wrapper test.
 const String dartWrapperTest = '''
@@ -136,7 +131,6 @@ class Init extends Command<dynamic> {
       PackageResolution.read(_host, root),
     );
     _place('$root/$dnaConfigPath', dnaConfigSkeleton(layers));
-    _place('$root/$helloWorldDnaPath', helloWorldDoc);
 
     // Without a test framework no wrapper is placed — that is a project
     // shape, not a problem: `helix build` runs the same instantiation.

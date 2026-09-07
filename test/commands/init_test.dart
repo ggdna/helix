@@ -8,6 +8,7 @@ import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:helix/helix.dart' show cAction, cCmd, cDetail;
 import 'package:helix/src/commands/init.dart';
+import 'package:helix/src/engine/base_dna.dart';
 import 'package:helix/src/engine/instantiate.dart';
 import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
@@ -226,16 +227,14 @@ void main() {
         );
         // The rest of the initialization still happened.
         expect(host.existsFile('$root/$dnaConfigPath'), isTrue);
-        expect(host.existsFile('$root/$helloWorldDnaPath'), isTrue);
       });
     });
 
     group('placed files', () {
-      test('places the config and the hello world doc', () async {
+      test('places the config', () async {
         final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
         await runInit(host);
         expect(host.existsFile('$root/$dnaConfigPath'), isTrue);
-        expect(host.readString('$root/$helloWorldDnaPath'), helloWorldDoc);
         // dna/ is tracked anyway — no .gitignore surgery needed.
         expect(host.existsFile('$root/.gitignore'), isFalse);
       });
@@ -294,16 +293,14 @@ void main() {
             '$root/pubspec.yaml': dartProject,
             '$root/test/dna/dna_test.dart': '// custom',
             '$root/$dnaConfigPath': '// custom config',
-            '$root/$helloWorldDnaPath': '# custom doc',
           },
         );
         await runInit(host);
         expect(host.readString('$root/test/dna/dna_test.dart'), '// custom');
         expect(host.readString('$root/$dnaConfigPath'), '// custom config');
-        expect(host.readString('$root/$helloWorldDnaPath'), '# custom doc');
         expect(
           messages.where((m) => m.contains('✓ Kept existing')),
-          hasLength(3),
+          hasLength(2),
         );
       });
     });
@@ -335,7 +332,7 @@ void main() {
         }
         expect(
           steps.where((m) => m.contains('✓ Placed ')),
-          hasLength(3), // config, hello world doc, wrapper test
+          hasLength(2), // config, wrapper test
         );
       });
 
@@ -391,19 +388,18 @@ void main() {
       });
     });
 
-    group('the hello world doc', () {
-      test('is adopted by the engine and instantiated, not deleted', () async {
-        // Helix ships the same path in its own base DNA — that is what
-        // makes the placed copy DNA content instead of a hand-written file
-        // below `dna/`, which a `role: project` run would delete.
-        final host = MemoryDnaHost(
-          files: {
-            '$root/pubspec.yaml': dartProject,
-            '/base/$helloWorldDnaPath': helloWorldDoc,
-          },
-        );
+    group('the getting-started doc', () {
+      test('is not placed, and no run creates it', () async {
+        // The base DNA used to ship `dna/doc/hello_world.md`. It does not
+        // any more: `init` writes no doc, and a run against the base
+        // leaves the project without one.
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
         await runInit(host);
+        expect(host.existsFile('$root/dna/doc/hello_world.md'), isFalse);
 
+        for (final rel in baseDnaFiles.keys) {
+          host.writeString('/base/dna/$rel', baseDnaFiles[rel]!);
+        }
         final result = await instantiateDna(
           host: host,
           targetRoot: root,
@@ -412,14 +408,8 @@ void main() {
         );
 
         expect(result.blocked, isFalse);
-        expect(result.warnings, isEmpty);
-        expect(host.readString('$root/$helloWorldDnaPath'), helloWorldDoc);
-        expect(host.readString('$root/doc/hello_world.md'), helloWorldDoc);
-        expect(result.updated, isNot(contains('$helloWorldDnaPath (removed)')));
+        expect(host.existsFile('$root/doc/hello_world.md'), isFalse);
       });
-
-      // The copy below `dna/` is kept in sync by
-      // test/engine/base_dna_test.dart, the single owner of those files.
     });
   });
 }

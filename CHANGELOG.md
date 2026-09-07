@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Stop shipping the hello world doc in the base DNA
+
 ## 1.3.1 - 2026-09-03
 
 ### Fixed
