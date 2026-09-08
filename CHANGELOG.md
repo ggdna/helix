@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- Remove the stray ticket.json from the repository root
+
 ## 1.5.1 - 2026-09-08
 
 ### Deprecated
