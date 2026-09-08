@@ -2,7 +2,7 @@
 
 Helix is the **DNA engine**. The DNA (the guides, scripts, configurations
 and agent skills a project inherits) lives in separate **DNA packages**:
-`dna_base`, `dna_dart`, `dna-ts`, `ds-dna`, … Each of them ships a `dna/`
+`dna_guides`, `dna_dart`, `dna-ts`, `ds-dna`, … Each of them ships a `dna/`
 folder that mirrors a project root.
 
 Helix resolves the DNA packages a project depends on, merges their `dna/`
@@ -42,9 +42,9 @@ every test run that they always match the generated originals.
 
    ```bash
    helix add dna_dart                                  # pub package
-   helix add @tssuite/dna-base                         # npm package
-   helix add https://github.com/ggsuite/dna_base.git   # git repository
-   helix add git@github.com:ggsuite/dna_base.git       # git, ssh
+   helix add @ggdna/dna-guides                         # npm package
+   helix add https://github.com/ggdna/dna_guides.git   # git repository
+   helix add git@github.com:ggdna/dna_guides.git       # git, ssh
    ```
 
    Each `helix add` installs the DNA as a dev-dependency, appends its
@@ -86,8 +86,8 @@ development nothing DNA-specific is needed: gg_localize_refs writes
 resolution that produces.
 
 A DNA published to both registries collapses to one layer: the npm scope
-is dropped when folding a name to its identity, so `@tssuite/dna-base`,
-`dna_base` and `dna-base` are the same layer. node wins when both are
+is dropped when folding a name to its identity, so `@ggdna/dna-guides`,
+`dna_guides` and `dna-guides` are the same layer. node wins when both are
 installed; a warning fires when the two copies carry different `dna/`
 trees.
 
@@ -111,7 +111,7 @@ the config is what names the layers that folder builds on. Run
 ```jsonc
 {
   "version": 1, // required
-  "layers": ["dna_base", "dna_dart"],
+  "layers": ["dna_guides", "dna_dart"],
   "vars": { "dnaProjectName": "my_project" },
   "claude": { "claudeMdInclude": ["doc/conventions"] },
 }
@@ -226,7 +226,7 @@ A same-path `X.json` in a later layer replaces the file. A sidecar
 - `"key+"` **joins arrays** (append, deduplicated)
 
 ```jsonc
-// dna_base: dna/dot-vscode/extensions.json
+// dna_guides: dna/dot-vscode/extensions.json
 { "recommendations": ["esbenp.prettier-vscode"] }
 // dna_dart: dna/dot-vscode/extensions.overrides.json
 { "recommendations+": ["dart-code.dart-code"] }

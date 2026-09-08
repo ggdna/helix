@@ -14,22 +14,22 @@ void main() {
   group('addDnaLayer', () {
     test('fills an empty array', () {
       expect(
-        addDnaLayer('{"layers": []}', 'dna_base'),
-        '{"layers": ["dna_base"]}',
+        addDnaLayer('{"layers": []}', 'dna_guides'),
+        '{"layers": ["dna_guides"]}',
       );
     });
 
     test('appends inline in a one-line array', () {
       expect(
-        addDnaLayer('{"layers": ["dna_base"]}', 'dna_dart'),
-        '{"layers": ["dna_base", "dna_dart"]}',
+        addDnaLayer('{"layers": ["dna_guides"]}', 'dna_dart'),
+        '{"layers": ["dna_guides", "dna_dart"]}',
       );
     });
 
     test('respects an existing trailing comma', () {
       expect(
-        addDnaLayer('{"layers": ["dna_base",]}', 'dna_dart'),
-        '{"layers": ["dna_base", "dna_dart"]}',
+        addDnaLayer('{"layers": ["dna_guides",]}', 'dna_dart'),
+        '{"layers": ["dna_guides", "dna_dart"]}',
       );
     });
 
@@ -37,14 +37,14 @@ void main() {
       const text = '''
 {
   "layers": [
-    "dna_base"
+    "dna_guides"
   ]
 }
 ''';
       expect(addDnaLayer(text, 'dna_dart'), '''
 {
   "layers": [
-    "dna_base",
+    "dna_guides",
     "dna_dart"
   ]
 }
@@ -64,12 +64,12 @@ void main() {
       const text = '''
 {
   // The layers, in application order.
-  "layers": ["dna_base"] // last one wins
+  "layers": ["dna_guides"] // last one wins
 }
 ''';
       final result = addDnaLayer(text, 'dna_dart');
       expect(result, contains('// The layers, in application order.'));
-      expect(result, contains('"layers": ["dna_base", "dna_dart"]'));
+      expect(result, contains('"layers": ["dna_guides", "dna_dart"]'));
       expect(result, contains('// last one wins'));
     });
 
@@ -88,12 +88,12 @@ void main() {
     });
 
     test('adds a layers key to a config that has none', () {
-      final result = addDnaLayer('{\n  "version": 1\n}', 'dna_base');
-      expect(result, '{\n  "layers": ["dna_base"],\n  "version": 1\n}');
+      final result = addDnaLayer('{\n  "version": 1\n}', 'dna_guides');
+      expect(result, '{\n  "layers": ["dna_guides"],\n  "version": 1\n}');
     });
 
     test('adds a layers key to an empty object', () {
-      expect(addDnaLayer('{}', 'dna_base'), '{\n  "layers": ["dna_base"]}');
+      expect(addDnaLayer('{}', 'dna_guides'), '{\n  "layers": ["dna_guides"]}');
     });
 
     test('throws when the array is not closed', () {
@@ -110,12 +110,12 @@ void main() {
     test('the result of editing the init skeleton stays readable', () {
       const root = '/p';
       var text = dnaConfigSkeleton([]);
-      text = addDnaLayer(text, 'dna_base');
+      text = addDnaLayer(text, 'dna_guides');
       text = addDnaLayer(text, 'dna_dart');
 
       final host = MemoryDnaHost(files: {'$root/$dnaConfigPath': text});
       final result = readDnaConfig(host, root);
-      expect(result.config.layers, ['dna_base', 'dna_dart']);
+      expect(result.config.layers, ['dna_guides', 'dna_dart']);
       expect(result.warnings, isEmpty);
       // The explanatory comments of the skeleton survive.
       expect(text, contains('// The DNA layers, in application order'));

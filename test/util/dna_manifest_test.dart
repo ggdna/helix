@@ -17,8 +17,8 @@ void main() {
   const manifest = DnaManifest(
     layers: [
       DnaManifestLayer(
-        name: 'dna-base',
-        package: '@tssuite/dna-base',
+        name: 'dna-guides',
+        package: '@ggdna/dna-guides',
         ecosystem: 'node',
         resolvedVersion: '1.0.0',
         via: 'dna-dart',
@@ -46,8 +46,8 @@ void main() {
 
       final read = DnaManifest.read(host, root)!;
       expect(read.layers, hasLength(2));
-      expect(read.layers.first.name, 'dna-base');
-      expect(read.layers.first.package, '@tssuite/dna-base');
+      expect(read.layers.first.name, 'dna-guides');
+      expect(read.layers.first.package, '@ggdna/dna-guides');
       expect(read.layers.first.ecosystem, 'node');
       expect(read.layers.first.via, 'dna-dart');
       expect(read.layers.first.resolvedVersion, '1.0.0');

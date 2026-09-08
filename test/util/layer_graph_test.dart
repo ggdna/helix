@@ -69,12 +69,12 @@ void main() {
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"dependencies": {"dna-dart": "^2.0.0"}}',
-          ...npmDna('dna-dart', '2.1.0', layers: ['dna-base']),
-          ...npmDna('dna-base', '1.2.0'),
+          ...npmDna('dna-dart', '2.1.0', layers: ['dna-guides']),
+          ...npmDna('dna-guides', '1.2.0'),
         },
       );
       final r = expand(host, ['dna-dart']);
-      expect(r.layers.map((l) => l.name).toList(), ['dna-base', 'dna-dart']);
+      expect(r.layers.map((l) => l.name).toList(), ['dna-guides', 'dna-dart']);
       expect(r.layers.first.via, 'dna-dart');
       expect(r.layers.first.version, '1.2.0');
       expect(r.layers.first.ecosystem, PackageEcosystem.node);
@@ -111,19 +111,22 @@ void main() {
       final host = MemoryDnaHost(
         files: {
           ...npmDna('ds-dna-dart', '1.0.0', layers: ['dna-dart', 'ds-dna']),
-          ...npmDna('dna-dart', '2.0.0', layers: ['dna-base']),
-          ...npmDna('ds-dna', '1.0.0', layers: ['dna-base']),
-          ...npmDna('dna-base', '1.0.0'),
+          ...npmDna('dna-dart', '2.0.0', layers: ['dna-guides']),
+          ...npmDna('ds-dna', '1.0.0', layers: ['dna-guides']),
+          ...npmDna('dna-guides', '1.0.0'),
         },
       );
       final r = expand(host, ['ds-dna-dart']);
       expect(r.layers.map((l) => l.name).toList(), [
-        'dna-base',
+        'dna-guides',
         'dna-dart',
         'ds-dna',
         'ds-dna-dart',
       ]);
-      expect(r.layers.firstWhere((l) => l.name == 'dna-base').via, 'dna-dart');
+      expect(
+        r.layers.firstWhere((l) => l.name == 'dna-guides').via,
+        'dna-dart',
+      );
     });
 
     test('resolves pub packages via package_config.json, snake names', () {
@@ -152,22 +155,22 @@ void main() {
         files: {
           '$root/node_modules/dna-ts/package.json':
               '{"name": "dna-ts", "version": "1.0.0"}',
-          '$root/node_modules/dna-ts/$dnaConfigPath': dnaConfig(['dna-base']),
+          '$root/node_modules/dna-ts/$dnaConfigPath': dnaConfig(['dna-guides']),
           '$root/node_modules/dna-ts/dna/doc/ts.md': '# ts',
           // The parent lives below the layer, not below the target.
-          '$root/node_modules/dna-ts/node_modules/dna-base/package.json':
-              '{"name": "dna-base", "version": "1.2.0"}',
-          '$root/node_modules/dna-ts/node_modules/dna-base/$dnaConfigPath':
+          '$root/node_modules/dna-ts/node_modules/dna-guides/package.json':
+              '{"name": "dna-guides", "version": "1.2.0"}',
+          '$root/node_modules/dna-ts/node_modules/dna-guides/$dnaConfigPath':
               dnaConfig([]),
-          '$root/node_modules/dna-ts/node_modules/dna-base/dna/LICENSE':
+          '$root/node_modules/dna-ts/node_modules/dna-guides/dna/LICENSE':
               'MIT\n',
         },
       );
       final r = expand(host, ['dna-ts']);
-      expect(r.layers.map((l) => l.name).toList(), ['dna-base', 'dna-ts']);
+      expect(r.layers.map((l) => l.name).toList(), ['dna-guides', 'dna-ts']);
       expect(
         r.layers.first.root,
-        '$root/node_modules/dna-ts/node_modules/dna-base',
+        '$root/node_modules/dna-ts/node_modules/dna-guides',
       );
       expect(r.layers.first.via, 'dna-ts');
     });
@@ -180,15 +183,15 @@ void main() {
         files: {
           '$root/.dart_tool/package_config.json': packageConfig({
             'dna_dart': '../../cache/dna_dart',
-            'dna_base': '../../cache/dna_base',
+            'dna_guides': '../../cache/dna_guides',
           }),
-          ...pubDna('dna_dart', '1.0.0', layers: ['dna_base']),
-          ...pubDna('dna_base', '1.0.1'),
+          ...pubDna('dna_dart', '1.0.0', layers: ['dna_guides']),
+          ...pubDna('dna_guides', '1.0.1'),
         },
       );
       final r = expand(host, ['dna_dart']);
-      expect(r.layers.map((l) => l.name).toList(), ['dna-base', 'dna-dart']);
-      expect(r.layers.first.root, '/cache/dna_base');
+      expect(r.layers.map((l) => l.name).toList(), ['dna-guides', 'dna-dart']);
+      expect(r.layers.first.root, '/cache/dna_guides');
     });
 
     test('resolves file:// and trailing-slash rootUris', () {
@@ -267,39 +270,40 @@ void main() {
         files: {
           // The consumer declares the same DNA in both manifests.
           '$root/package.json':
-              '{"dependencies": {"@tssuite/dna-base": "1.0.0"}}',
-          '$root/pubspec.yaml': 'name: c\ndependencies:\n  dna_base: ^1.0.0\n',
+              '{"dependencies": {"@ggdna/dna-guides": "1.0.0"}}',
+          '$root/pubspec.yaml':
+              'name: c\ndependencies:\n  dna_guides: ^1.0.0\n',
           '$root/pnpm-lock.yaml': '''
 lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      '@tssuite/dna-base':
+      '@ggdna/dna-guides':
         specifier: 1.0.0
         version: 1.0.0
 packages:
-  '@tssuite/dna-base@1.0.0':
+  '@ggdna/dna-guides@1.0.0':
     resolution: {integrity: sha512-x}
 ''',
-          '$root/node_modules/@tssuite/dna-base/package.json':
-              '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
-          '$root/node_modules/@tssuite/dna-base/$dnaConfigPath': dnaConfig([]),
-          '$root/node_modules/@tssuite/dna-base/dna/doc/x.md': '# x',
+          '$root/node_modules/@ggdna/dna-guides/package.json':
+              '{"name": "@ggdna/dna-guides", "version": "1.0.0"}',
+          '$root/node_modules/@ggdna/dna-guides/$dnaConfigPath': dnaConfig([]),
+          '$root/node_modules/@ggdna/dna-guides/dna/doc/x.md': '# x',
           '$root/.dart_tool/package_config.json': packageConfig({
-            'dna_base': '../../cache/dna_base',
+            'dna_guides': '../../cache/dna_guides',
           }),
-          ...pubDna('dna_base', '1.0.1'),
-          '/cache/dna_base/dna/doc/x.md': '# x',
+          ...pubDna('dna_guides', '1.0.1'),
+          '/cache/dna_guides/dna/doc/x.md': '# x',
         },
       );
       // The pub copy carries the same tree — remove the file pubDna added
       // under its own name so both sides are identical.
-      host.deleteFile('/cache/dna_base/dna/doc/dna_base.md');
+      host.deleteFile('/cache/dna_guides/dna/doc/dna_guides.md');
 
-      final r = expand(host, ['dna_base']);
+      final r = expand(host, ['dna_guides']);
       expect(r.layers, hasLength(1));
-      expect(r.layers.single.name, 'dna-base');
-      expect(r.layers.single.package, '@tssuite/dna-base');
+      expect(r.layers.single.name, 'dna-guides');
+      expect(r.layers.single.package, '@ggdna/dna-guides');
       expect(r.warnings, isEmpty);
     });
 
@@ -311,27 +315,28 @@ lockfileVersion: '9.0'
 importers:
   .:
     dependencies:
-      '@tssuite/dna-base':
+      '@ggdna/dna-guides':
         specifier: 1.0.0
         version: 1.0.0
 ''',
-          '$root/node_modules/@tssuite/dna-base/package.json':
-              '{"name": "@tssuite/dna-base", "version": "1.0.0"}',
-          '$root/node_modules/@tssuite/dna-base/$dnaConfigPath': dnaConfig([]),
-          '$root/node_modules/@tssuite/dna-base/dna/doc/x.md': '# npm',
+          '$root/node_modules/@ggdna/dna-guides/package.json':
+              '{"name": "@ggdna/dna-guides", "version": "1.0.0"}',
+          '$root/node_modules/@ggdna/dna-guides/$dnaConfigPath': dnaConfig([]),
+          '$root/node_modules/@ggdna/dna-guides/dna/doc/x.md': '# npm',
           '$root/.dart_tool/package_config.json': packageConfig({
-            'dna_base': '../../cache/dna_base',
+            'dna_guides': '../../cache/dna_guides',
           }),
-          '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.1\n',
-          '/cache/dna_base/$dnaConfigPath': dnaConfig([]),
-          '/cache/dna_base/dna/doc/x.md': '# pub — stale',
+          '/cache/dna_guides/pubspec.yaml':
+              'name: dna_guides\nversion: 1.0.1\n',
+          '/cache/dna_guides/$dnaConfigPath': dnaConfig([]),
+          '/cache/dna_guides/dna/doc/x.md': '# pub — stale',
         },
       );
-      final r = expand(host, ['dna_base']);
-      expect(r.layers.single.package, '@tssuite/dna-base');
+      final r = expand(host, ['dna_guides']);
+      expect(r.layers.single.package, '@ggdna/dna-guides');
       expect(
         r.warnings.single,
-        allOf(contains('dna-base'), contains('the two copies differ')),
+        allOf(contains('dna-guides'), contains('the two copies differ')),
       );
     });
   });
@@ -380,10 +385,10 @@ importers:
         files: {
           '$root/pubspec.lock': '''
 packages:
-  dna_base:
+  dna_guides:
     dependency: "direct main"
     description:
-      name: dna_base
+      name: dna_guides
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
@@ -391,13 +396,13 @@ packages:
         },
       );
       expect(
-        () => expand(host, ['dna_base']),
+        () => expand(host, ['dna_guides']),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
             allOf(
-              contains('pubspec.lock knows dna_base 1.0.1'),
+              contains('pubspec.lock knows dna_guides 1.0.1'),
               contains('declared but not installed'),
             ),
           ),
@@ -460,10 +465,10 @@ packages:
     test('combines both manifests and dedups by identity', () {
       final host = MemoryDnaHost(
         files: {
-          '$root/package.json': '{"dependencies": {"dna-base": "^1.0.0"}}',
+          '$root/package.json': '{"dependencies": {"dna-guides": "^1.0.0"}}',
           '$root/pubspec.yaml':
-              'dependencies:\n  dna_base: ^1.0.0\n  dna_dart: ^1.0.0\n',
-          ...npmDna('dna-base', '1.0.0'),
+              'dependencies:\n  dna_guides: ^1.0.0\n  dna_dart: ^1.0.0\n',
+          ...npmDna('dna-guides', '1.0.0'),
           '$root/.dart_tool/package_config.json': packageConfig({
             'dna_dart': '../../cache/dna_dart',
           }),
@@ -471,7 +476,7 @@ packages:
         },
       );
       expect(suggestDnaLayers(host, root, PackageResolution.read(host, root)), [
-        'dna-base',
+        'dna-guides',
         'dna_dart',
       ]);
     });

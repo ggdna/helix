@@ -24,7 +24,7 @@ void main() {
       '{"version": $dnaFormatVersion, "role": "dna", '
       '"layers": [${layers.map((l) => '"$l"').join(', ')}]}';
 
-  /// Builds a target with dna-base and dna-dart installed via npm and a
+  /// Builds a target with dna-guides and dna-dart installed via npm and a
   /// pubspec.
   MemoryDnaHost makeHost({
     Map<String, String> extra = const {},
@@ -38,14 +38,15 @@ void main() {
           '{"dna-dart": "^1.0.0"}}',
       '$root/$dnaConfigPath':
           '{"version": $dnaFormatVersion, "layers": ["dna-dart"]}',
-      // dna-base (installed transitively) ..........................
-      '$root/node_modules/dna-base/package.json':
-          '{"name": "dna-base", "version": "1.0.0"}',
-      '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
-      '$root/node_modules/dna-base/dna/_vars.json':
+      // dna-guides (installed transitively) ..........................
+      '$root/node_modules/dna-guides/package.json':
+          '{"name": "dna-guides", "version": "1.0.0"}',
+      '$root/node_modules/dna-guides/$dnaConfigPath': layerConfig(),
+      '$root/node_modules/dna-guides/dna/_vars.json':
           '{"dnaCopyrightHolder": "ggsuite", "dnaProjectName": "unnamed"}',
-      '$root/node_modules/dna-base/dna/LICENSE': 'MIT (c) dnaCopyrightHolder\n',
-      '$root/node_modules/dna-base/dna/doc/develop.md': '''
+      '$root/node_modules/dna-guides/dna/LICENSE':
+          'MIT (c) dnaCopyrightHolder\n',
+      '$root/node_modules/dna-guides/dna/doc/develop.md': '''
 # Develop
 
 Package manager: npm.
@@ -54,20 +55,20 @@ Package manager: npm.
 
 Run npm update.
 ''',
-      '$root/node_modules/dna-base/dna/dot-vscode/settings.json': '''
+      '$root/node_modules/dna-guides/dna/dot-vscode/settings.json': '''
 {
   // base settings
   "editor.rulers": [80],
   "files.trimTrailingWhitespace": true
 }
 ''',
-      '$root/node_modules/dna-base/dna/dot-vscode/extensions.json':
+      '$root/node_modules/dna-guides/dna/dot-vscode/extensions.json':
           '{"recommendations": ["esbenp.prettier-vscode"]}\n',
       // dna-dart ...................................................
       '$root/node_modules/dna-dart/package.json':
           '{"name": "dna-dart", "version": "1.0.0", '
-          '"dependencies": {"dna-base": "^1.0.0"}}',
-      '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig(['dna-base']),
+          '"dependencies": {"dna-guides": "^1.0.0"}}',
+      '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig(['dna-guides']),
       '$root/node_modules/dna-dart/dna/doc/develop.overrides.md': '''
 ## @update Update dependencies
 
@@ -240,7 +241,7 @@ Run dart pub upgrade.
       final manifest = DnaManifest.read(host, root)!;
       // The repo's own dna/ is always the last layer now.
       expect(manifest.layers.map((l) => l.name).toList(), [
-        'dna-base',
+        'dna-guides',
         'dna-dart',
         'self',
       ]);
@@ -270,7 +271,7 @@ Run dart pub upgrade.
         );
 
         host.writeString(
-          '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
+          '$root/node_modules/dna-guides/dna/dot-vscode/extensions.json',
           '{"recommendations": ["esbenp.prettier-vscode", "new.extension"]}\n',
         );
         final r = await instantiateDna(
@@ -337,7 +338,7 @@ Run dart pub upgrade.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.sources['LICENSE'], 'dna-base/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna-guides/dna/LICENSE');
       expect(r.backedUp, contains('LICENSE'));
 
       // Markdown overrides win over the base file they patch.
@@ -360,15 +361,16 @@ Run dart pub upgrade.
         files: {
           '$root/pubspec.yaml':
               'name: consumer\n'
-              'dev_dependencies:\n  dna_base: ^1.0.0\n',
+              'dev_dependencies:\n  dna_guides: ^1.0.0\n',
           '$root/$dnaConfigPath':
-              '{"version": $dnaFormatVersion, "layers": ["dna-base"]}',
+              '{"version": $dnaFormatVersion, "layers": ["dna-guides"]}',
           '$root/.dart_tool/package_config.json':
               '{"packages": [ '
-              '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
-          '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
-          '/cache/dna_base/$dnaConfigPath': layerConfig(),
-          '/cache/dna_base/dna/LICENSE': 'MIT\n',
+              '{"name": "dna_guides", "rootUri": "../../cache/dna_guides"}]}',
+          '/cache/dna_guides/pubspec.yaml':
+              'name: dna_guides\nversion: 1.0.0\n',
+          '/cache/dna_guides/$dnaConfigPath': layerConfig(),
+          '/cache/dna_guides/dna/LICENSE': 'MIT\n',
         },
       );
       await instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
@@ -378,7 +380,7 @@ Run dart pub upgrade.
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      expect(r.sources['LICENSE'], 'dna_base/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna_guides/dna/LICENSE');
     });
 
     test('a localized layer is shown as the folder to open', () async {
@@ -482,7 +484,7 @@ packages:
 
         // User moves the change into the DNA source instead.
         host.writeString(
-          '$root/node_modules/dna-base/dna/LICENSE',
+          '$root/node_modules/dna-guides/dna/LICENSE',
           'MIT (c) dnaCopyrightHolder — edited\n',
         );
         final healed = await instantiateDna(
@@ -593,7 +595,7 @@ packages:
 
       // The DNA changes and the target instance is dirty at the same time.
       host.writeString(
-        '$root/node_modules/dna-base/dna/LICENSE',
+        '$root/node_modules/dna-guides/dna/LICENSE',
         'MIT (c) dnaCopyrightHolder — new\n',
       );
       host.uncommitted.add('LICENSE');
@@ -608,7 +610,7 @@ packages:
       expect(r.updated, isEmpty);
       expect(host.files, before);
       expect(r.messages, contains(uncommittedTargetsMessage));
-      expect(r.sources['LICENSE'], 'dna-base/dna/LICENSE');
+      expect(r.sources['LICENSE'], 'dna-guides/dna/LICENSE');
     });
 
     test('an uncommitted file that is only created does not block', () async {
@@ -675,7 +677,7 @@ packages:
 
       // The DNA stops shipping the extensions file.
       host.deleteFile(
-        '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
+        '$root/node_modules/dna-guides/dna/dot-vscode/extensions.json',
       );
       host.deleteFile(
         '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json',
@@ -696,7 +698,7 @@ packages:
       await instantiateDna(host: host2, targetRoot: root, baseVersion: '4.0.0');
       host2.writeString('$root/.vscode/extensions.json', '{"mine": 1}');
       host2.deleteFile(
-        '$root/node_modules/dna-base/dna/dot-vscode/extensions.json',
+        '$root/node_modules/dna-guides/dna/dot-vscode/extensions.json',
       );
       host2.deleteFile(
         '$root/node_modules/dna-dart/dna/dot-vscode/extensions.overrides.json',
@@ -711,24 +713,24 @@ packages:
     });
 
     test('role dna: own dna/ is synced whatever layers are declared', () async {
-      // Two declared layers, a chain (dna-dart -> dna-base), each shipping
+      // Two declared layers, a chain (dna-dart -> dna-guides), each shipping
       // the same paths as the target. The own dna/ still wins every
       // conflict and still contributes its exclusive files.
       final host = MemoryDnaHost(
         files: {
           '$root/package.json':
               '{"name": "leaf-dna", "version": "1.0.0", '
-              '"dependencies": {"dna-dart": "^1.0.0", "dna-base": "^1.0.0"}}',
-          '$root/$dnaConfigPath': layerConfig(['dna-base', 'dna-dart']),
-          '$root/node_modules/dna-base/package.json':
-              '{"name": "dna-base", "version": "1.0.0"}',
-          '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
-          '$root/node_modules/dna-base/dna/doc/develop.md': '# Base\n',
+              '"dependencies": {"dna-dart": "^1.0.0", "dna-guides": "^1.0.0"}}',
+          '$root/$dnaConfigPath': layerConfig(['dna-guides', 'dna-dart']),
+          '$root/node_modules/dna-guides/package.json':
+              '{"name": "dna-guides", "version": "1.0.0"}',
+          '$root/node_modules/dna-guides/$dnaConfigPath': layerConfig(),
+          '$root/node_modules/dna-guides/dna/doc/develop.md': '# Base\n',
           '$root/node_modules/dna-dart/package.json':
               '{"name": "dna-dart", "version": "1.0.0", '
-              '"dependencies": {"dna-base": "^1.0.0"}}',
+              '"dependencies": {"dna-guides": "^1.0.0"}}',
           '$root/node_modules/dna-dart/$dnaConfigPath': layerConfig([
-            'dna-base',
+            'dna-guides',
           ]),
           '$root/node_modules/dna-dart/dna/doc/develop.md': '# Dart\n',
           '$root/dna/doc/develop.md': '# Own version\n',
@@ -748,7 +750,7 @@ packages:
       // The ordering the win depends on, asserted directly.
       final manifest = DnaManifest.read(host, root)!;
       expect(manifest.layers.map((l) => l.name), [
-        'dna-base',
+        'dna-guides',
         'dna-dart',
         'self',
       ]);
@@ -761,13 +763,13 @@ packages:
           files: {
             '$root/package.json':
                 '{"name": "dna-dart", "version": "1.0.0", '
-                '"dependencies": {"dna-base": "^1.0.0"}}',
-            '$root/$dnaConfigPath': layerConfig(['dna-base']),
-            '$root/node_modules/dna-base/package.json':
-                '{"name": "dna-base", "version": "1.0.0"}',
-            '$root/node_modules/dna-base/$dnaConfigPath': layerConfig(),
-            '$root/node_modules/dna-base/dna/doc/develop.md': '# Base\n',
-            '$root/node_modules/dna-base/dna/LICENSE': 'MIT\n',
+                '"dependencies": {"dna-guides": "^1.0.0"}}',
+            '$root/$dnaConfigPath': layerConfig(['dna-guides']),
+            '$root/node_modules/dna-guides/package.json':
+                '{"name": "dna-guides", "version": "1.0.0"}',
+            '$root/node_modules/dna-guides/$dnaConfigPath': layerConfig(),
+            '$root/node_modules/dna-guides/dna/doc/develop.md': '# Base\n',
+            '$root/node_modules/dna-guides/dna/LICENSE': 'MIT\n',
             '$root/dna/doc/develop.md': '# Own version\n',
             '$root/dna/dot-vscode/settings.json': '{"a": 1}\n',
           },
@@ -797,7 +799,7 @@ packages:
         // The hand-authored config survives inside the hand-authored dna/.
         expect(
           host.readString('$root/$dnaConfigPath'),
-          layerConfig(['dna-base']),
+          layerConfig(['dna-guides']),
         );
       },
     );

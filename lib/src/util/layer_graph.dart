@@ -42,7 +42,7 @@ class ResolvedLayer {
   /// Root folder of the layer checkout (its `dna/` lives below).
   final String root;
 
-  /// Package name as installed (`dna_base`, `@tssuite/dna-base`).
+  /// Package name as installed (`dna_guides`, `@ggdna/dna-guides`).
   final String package;
 
   /// Which ecosystem provided the copy that was used.
