@@ -12,7 +12,7 @@ Two things are easy to confuse:
   instantiates DNA. It ships no `dna/` folder and therefore no
   conventions of its own.
 - **The DNA is the content** — it lives in the DNA packages
-  (`dna_base`, `dna_dart`, `dna-ts`, `ds-dna`, …). That is where you
+  (`dna_guides`, `dna_dart`, `dna-ts`, `ds-dna`, …). That is where you
   edit anything you want your projects to inherit.
 
 ## What a DNA Is
@@ -56,12 +56,12 @@ once. Layers are named by the **package name** they are declared under in
 `pubspec.yaml`/`package.json` — never by a path:
 
 ```jsonc
-{ "version": 1, "layers": ["dna_base"] }
+{ "version": 1, "layers": ["dna_guides"] }
 ```
 
 A DNA published to both registries is one layer, not two: the npm scope is
-dropped when folding a name to its identity, so `@tssuite/dna-base` and
-`dna_base` mean the same thing.
+dropped when folding a name to its identity, so `@ggdna/dna-guides` and
+`dna_guides` mean the same thing.
 
 For local development nothing DNA-specific is needed — `gg_localize_refs`
 points `pubspec_overrides.yaml`/`pnpm-workspace.yaml` at the sibling
@@ -226,7 +226,7 @@ instances are rewritten automatically.
 {
   "version": 1,                 // required
   "role": "project",            // "dna" for DNA repositories
-  "layers": ["dna_base"],       // package names, in application order
+  "layers": ["dna_guides"],       // package names, in application order
   "vars": { "dnaProjectName": "my-project" },
   "fileNaming": "snake_case",   // camelCase | kebab-case | keep
   "claude": { "claudeMdInclude": ["doc/conventions"] }
@@ -248,7 +248,7 @@ never be edited by hand.
 ## Where the Content Lives
 
 Helix ships no content. The lowest layer of a typical setup is
-`dna_base`, which carries what every repository of the family shares:
+`dna_guides`, which carries what every repository of the family shares:
 
 - `doc/conventions/` — code, test, and documentation conventions,
 - `doc/guides/` — this guide and a Claude Code quick start,

@@ -445,18 +445,19 @@ void main() {
         final host = MemoryDnaHost(
           files: {
             '$root/pubspec.yaml':
-                'name: x\ndependencies:\n  dna_base: ^1.0.0\n',
+                'name: x\ndependencies:\n  dna_guides: ^1.0.0\n',
             '$root/.dart_tool/package_config.json':
                 '{"packages": [ '
-                '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
-            '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
-            '/cache/dna_base/$dnaConfigPath':
+                '{"name": "dna_guides", "rootUri": "../../cache/dna_guides"}]}',
+            '/cache/dna_guides/pubspec.yaml':
+                'name: dna_guides\nversion: 1.0.0\n',
+            '/cache/dna_guides/$dnaConfigPath':
                 '{"version": $dnaFormatVersion, "role": "dna"}',
-            '/cache/dna_base/dna/LICENSE': 'MIT\n',
+            '/cache/dna_guides/dna/LICENSE': 'MIT\n',
           },
         );
         await runInit(host);
-        expect(messages, contains(cDetail('✓ Layers: dna_base')));
+        expect(messages, contains(cDetail('✓ Layers: dna_guides')));
         expect(
           messages.any((m) => m.contains('gg dna add <dnaPackage>')),
           isTrue,
@@ -477,19 +478,20 @@ void main() {
         final host = MemoryDnaHost(
           files: {
             '$root/pubspec.yaml':
-                'name: x\ndependencies:\n  dna_base: ^1.0.0\n',
+                'name: x\ndependencies:\n  dna_guides: ^1.0.0\n',
             '$root/.dart_tool/package_config.json':
                 '{"packages": [ '
-                '{"name": "dna_base", "rootUri": "../../cache/dna_base"}]}',
-            '/cache/dna_base/pubspec.yaml': 'name: dna_base\nversion: 1.0.0\n',
-            '/cache/dna_base/$dnaConfigPath':
+                '{"name": "dna_guides", "rootUri": "../../cache/dna_guides"}]}',
+            '/cache/dna_guides/pubspec.yaml':
+                'name: dna_guides\nversion: 1.0.0\n',
+            '/cache/dna_guides/$dnaConfigPath':
                 '{"version": $dnaFormatVersion, "role": "dna"}',
-            '/cache/dna_base/dna/LICENSE': 'MIT\n',
+            '/cache/dna_guides/dna/LICENSE': 'MIT\n',
           },
         );
         await runInit(host);
-        expect(readDnaConfig(host, root).config.layers, ['dna_base']);
-        expect(messages.any((m) => m.contains('dna_base')), isTrue);
+        expect(readDnaConfig(host, root).config.layers, ['dna_guides']);
+        expect(messages.any((m) => m.contains('dna_guides')), isTrue);
       });
     });
 

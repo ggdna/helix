@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Deprecated
+
+- Replace the deprecated dna_base in docs, comments and test fixtures
+
 ## 1.5.0 - 2026-09-07
 
 ### Changed

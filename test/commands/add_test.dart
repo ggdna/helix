@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 void main() {
   const root = '/p';
   const dartProject = 'name: x\ndev_dependencies:\n  test: ^1.31.2\n';
-  const gitUrl = 'https://github.com/ggsuite/dna_base.git';
+  const gitUrl = 'https://github.com/ggdna/dna_guides.git';
 
   final messages = <String>[];
   final commands = <String>[];
@@ -219,12 +219,12 @@ void main() {
 
       test('appends to the layers that are already there', () async {
         final host = project(
-          config: dnaConfigSkeleton(['dna_base']),
+          config: dnaConfigSkeleton(['dna_guides']),
           installed: ['dna_dart'],
         );
         await runAdd(host, ['dna_dart']);
         // The last layer wins, so a new one goes to the end.
-        expect(layersOf(host), ['dna_base', 'dna_dart']);
+        expect(layersOf(host), ['dna_guides', 'dna_dart']);
       });
 
       test('uses flutter pub in a Flutter project', () async {
@@ -274,11 +274,11 @@ void main() {
           pubspec: null,
           packageJson: '{}',
           pnpmLock: '',
-          installed: ['@tssuite/dna-base'],
+          installed: ['@ggdna/dna-guides'],
         );
-        await runAdd(host, ['@tssuite/dna-base']);
-        expect(commands, ['pnpm add -D @tssuite/dna-base']);
-        expect(layersOf(host), ['@tssuite/dna-base']);
+        await runAdd(host, ['@ggdna/dna-guides']);
+        expect(commands, ['pnpm add -D @ggdna/dna-guides']);
+        expect(layersOf(host), ['@ggdna/dna-guides']);
       });
 
       test('a dashed name goes to node even in a hybrid project', () async {
@@ -296,7 +296,7 @@ void main() {
       test('rejects an npm name without a package.json', () async {
         final host = project();
         await expectLater(
-          () => runAdd(host, ['@tssuite/dna-base']),
+          () => runAdd(host, ['@ggdna/dna-guides']),
           throwsA(
             isA<UsageException>().having(
               (e) => e.message,
@@ -322,33 +322,33 @@ void main() {
 
     group('git targets', () {
       test('adds a pub git dependency under the repository name', () async {
-        final host = project(installed: ['dna_base']);
+        final host = project(installed: ['dna_guides']);
         await runAdd(host, [gitUrl]);
-        expect(commands, ['dart pub add dev:dna_base@{git: $gitUrl}']);
-        expect(layersOf(host), ['dna_base']);
+        expect(commands, ['dart pub add dev:dna_guides@{git: $gitUrl}']);
+        expect(layersOf(host), ['dna_guides']);
       });
 
       test('adds a node git dependency with a git+ protocol', () async {
         final host = project(
           pubspec: null,
           packageJson: '{}',
-          installed: ['dna_base'],
+          installed: ['dna_guides'],
         );
-        await runAdd(host, ['git@github.com:ggsuite/dna_base.git']);
+        await runAdd(host, ['git@github.com:ggdna/dna_guides.git']);
         expect(commands, [
-          'npm install -D git+ssh://git@github.com/ggsuite/dna_base.git',
+          'npm install -D git+ssh://git@github.com/ggdna/dna_guides.git',
         ]);
-        expect(layersOf(host), ['dna_base']);
+        expect(layersOf(host), ['dna_guides']);
       });
 
       test('uses the name the package manager declared', () async {
         // npm writes the name from the repository's own package.json —
-        // `dna_base.git` lands as `@tssuite/dna-base`, and that is the
+        // `dna_guides.git` lands as `@ggdna/dna-guides`, and that is the
         // name the engine resolves a layer by.
         final host = project(
           pubspec: null,
           packageJson: '{}',
-          installed: ['@tssuite/dna-base'],
+          installed: ['@ggdna/dna-guides'],
         );
         await runAdd(
           host,
@@ -357,15 +357,15 @@ void main() {
             commands.add('$executable ${args.join(' ')}');
             host.writeString(
               '$root/package.json',
-              '{"devDependencies": {"@tssuite/dna-base": "github:o/r"}}',
+              '{"devDependencies": {"@ggdna/dna-guides": "github:o/r"}}',
             );
             return const ProcessRunResult(exitCode: 0);
           },
         );
-        expect(layersOf(host), ['@tssuite/dna-base']);
+        expect(layersOf(host), ['@ggdna/dna-guides']);
         expect(
           messages,
-          contains(cDetail('$gitUrl is declared as @tssuite/dna-base')),
+          contains(cDetail('$gitUrl is declared as @ggdna/dna-guides')),
         );
       });
 
@@ -373,9 +373,9 @@ void main() {
         // The declared name may point somewhere else — a git target always
         // runs, and the package manager decides what to do with it.
         final host = project(
-          installed: ['dna_base'],
+          installed: ['dna_guides'],
           pubspec: null,
-          packageJson: '{"devDependencies": {"dna_base": "^1.0.0"}}',
+          packageJson: '{"devDependencies": {"dna_guides": "^1.0.0"}}',
         );
         await runAdd(host, [gitUrl]);
         expect(commands, ['npm install -D git+$gitUrl']);
@@ -441,7 +441,7 @@ void main() {
 
       test('adds one DNA at a time', () async {
         await expectLater(
-          () => runAdd(project(), ['dna_base', 'dna_dart']),
+          () => runAdd(project(), ['dna_guides', 'dna_dart']),
           throwsA(
             isA<UsageException>().having(
               (e) => e.message,
@@ -519,7 +519,7 @@ void main() {
         final host = project(
           pubspec: null,
           packageJson: '{}',
-          installed: ['dna_base'],
+          installed: ['dna_guides'],
           shipsDnaConfig: false,
         );
         await expectLater(

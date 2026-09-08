@@ -18,9 +18,9 @@ void main() {
       });
 
       test('recognizes a scoped npm name as node-only', () {
-        final target = AddTarget.parse('@tssuite/dna-base');
+        final target = AddTarget.parse('@ggdna/dna-guides');
         expect(target.kind, AddTargetKind.package);
-        expect(target.name, '@tssuite/dna-base');
+        expect(target.name, '@ggdna/dna-guides');
         expect(target.isNodeOnlyName, isTrue);
       });
 
@@ -39,44 +39,44 @@ void main() {
 
     group('git urls', () {
       test('takes the repository name from an https url', () {
-        final target = AddTarget.parse('https://github.com/ggsuite/dna_base');
+        final target = AddTarget.parse('https://github.com/ggdna/dna_guides');
         expect(target.kind, AddTargetKind.git);
-        expect(target.name, 'dna_base');
+        expect(target.name, 'dna_guides');
       });
 
       test('strips a .git suffix and a trailing slash', () {
         expect(
-          AddTarget.parse('https://github.com/ggsuite/dna_base.git/').name,
-          'dna_base',
+          AddTarget.parse('https://github.com/ggdna/dna_guides.git/').name,
+          'dna_guides',
         );
       });
 
       test('drops a #ref fragment', () {
         expect(
-          AddTarget.parse('https://github.com/o/dna_base.git#main').name,
-          'dna_base',
+          AddTarget.parse('https://github.com/o/dna_guides.git#main').name,
+          'dna_guides',
         );
       });
 
       test('reads the scp form of ssh urls', () {
-        final target = AddTarget.parse('git@github.com:ggsuite/dna_base.git');
+        final target = AddTarget.parse('git@github.com:ggdna/dna_guides.git');
         expect(target.kind, AddTargetKind.git);
-        expect(target.name, 'dna_base');
+        expect(target.name, 'dna_guides');
       });
 
       test('reads git:// and ssh:// urls', () {
         expect(
-          AddTarget.parse('git://github.com/o/dna_base.git').kind,
+          AddTarget.parse('git://github.com/o/dna_guides.git').kind,
           AddTargetKind.git,
         );
         expect(
-          AddTarget.parse('ssh://git@github.com/o/dna_base.git').name,
-          'dna_base',
+          AddTarget.parse('ssh://git@github.com/o/dna_guides.git').name,
+          'dna_guides',
         );
       });
 
       test('reads a plain path ending in .git', () {
-        expect(AddTarget.parse('../dna_base.git').name, 'dna_base');
+        expect(AddTarget.parse('../dna_guides.git').name, 'dna_guides');
       });
 
       test('rejects a url without a repository name', () {
@@ -111,8 +111,9 @@ void main() {
 
       test('pubGitDescriptor keeps the format pub expects', () {
         expect(
-          AddTarget.parse('https://github.com/o/dna_base.git').pubGitDescriptor,
-          'dev:dna_base@{git: https://github.com/o/dna_base.git}',
+          AddTarget.parse('https://github.com/o/dna_guides.git')
+              .pubGitDescriptor,
+          'dev:dna_guides@{git: https://github.com/o/dna_guides.git}',
         );
       });
     });

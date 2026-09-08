@@ -169,8 +169,8 @@ class Add extends Command<dynamic> {
   /// under.
   ///
   /// A git target is installed by URL, and the package manager writes the
-  /// name from the repository's own `package.json`: `dna_base.git` becomes
-  /// `@tssuite/dna-base`. The layers array needs that name — the engine
+  /// name from the repository's own `package.json`: `dna_guides.git` becomes
+  /// `@ggdna/dna-guides`. The layers array needs that name — the engine
   /// looks a layer up under the name a manifest declares, and only a
   /// pnpm lock file would let it fold the two spellings into one identity.
   Future<String> _addNodeDependency(String root, AddTarget target) async {

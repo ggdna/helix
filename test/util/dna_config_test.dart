@@ -55,13 +55,13 @@ void main() {
 {
   // the role
   "role": "dna",
-  "layers": ["dna_base", "@tssuite/dna-dart"],
+  "layers": ["dna_guides", "@tssuite/dna-dart"],
   "vars": {"dnaProjectName": "my_project"},
   "claude": {"claudeMdInclude": ["doc/conventions"]},
 }'''),
         root,
       );
-      expect(r.config.layers, ['dna_base', '@tssuite/dna-dart']);
+      expect(r.config.layers, ['dna_guides', '@tssuite/dna-dart']);
       expect(r.config.vars, {'dnaProjectName': 'my_project'});
       expect(r.config.claude.claudeMdInclude, ['doc/conventions']);
       expect(r.warnings, hasLength(1));
@@ -98,13 +98,13 @@ void main() {
         () => readDnaConfig(
           hostWith('{"layers": "x"}'),
           root,
-          packageLabel: '@tssuite/dna-base',
+          packageLabel: '@ggdna/dna-guides',
         ),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('@tssuite/dna-base'),
+            contains('@ggdna/dna-guides'),
           ),
         ),
       );
@@ -129,7 +129,7 @@ void main() {
 
     test('rejects a path where a package name belongs', () {
       expect(
-        () => readDnaConfig(hostWith('{"layers": ["../dna_base"]}'), root),
+        () => readDnaConfig(hostWith('{"layers": ["../dna_guides"]}'), root),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
