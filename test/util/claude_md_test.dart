@@ -78,18 +78,23 @@ void main() {
     test('wraps one @import per line between the markers', () {
       expect(buildClaudeMdBlock(['a.md', 'b/c.md']), '''
 $claudeMdStartMarker
+
 @a.md
 @b/c.md
+
 $claudeMdEndMarker''');
     });
 
     test('puts the body before the imports, trimmed', () {
       expect(buildClaudeMdBlock(['a.md'], body: '\n# Body\n\ntext\n\n'), '''
 $claudeMdStartMarker
+
 # Body
 
 text
+
 @a.md
+
 $claudeMdEndMarker''');
     });
 

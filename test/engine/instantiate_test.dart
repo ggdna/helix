@@ -1019,8 +1019,8 @@ packages:
         expect(
           claude,
           '# My project\n\nHand-written.\n\n'
-          '<!-- helix:claude_md:start -->\n'
-          '# Guides for unnamed\n\n@doc/develop.md\n'
+          '<!-- helix:claude_md:start -->\n\n'
+          '# Guides for unnamed\n\n@doc/develop.md\n\n'
           '<!-- helix:claude_md:end -->\n',
         );
         // No plain instance, the manifest remembers where it came from.
@@ -1042,8 +1042,8 @@ packages:
         );
         expect(
           host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n'
-          '# From DNA\n'
+          '<!-- helix:claude_md:start -->\n\n'
+          '# From DNA\n\n'
           '<!-- helix:claude_md:end -->\n',
         );
       });
@@ -1065,9 +1065,9 @@ packages:
         );
         expect(
           host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n'
-          '# From DNA\n'
-          '@doc/develop.md\n'
+          '<!-- helix:claude_md:start -->\n\n'
+          '# From DNA\n\n'
+          '@doc/develop.md\n\n'
           '<!-- helix:claude_md:end -->\n',
         );
       });

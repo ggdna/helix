@@ -76,14 +76,20 @@ List<String> expandClaudeMdIncludes({
 /// merged `CLAUDE.md` the DNA layers ship, if any — then one `@`-import
 /// line per path. Claude Code expands each import at session start
 /// (relative paths resolve relative to the CLAUDE.md, max four hops deep).
+///
+/// The content is set off from the markers by blank lines — the form
+/// prettier produces. Without them prettier inserts the blank line after
+/// the start marker itself, the file no longer matches what the engine
+/// wrote, and the next run refuses to touch the "edited" CLAUDE.md.
 String buildClaudeMdBlock(Iterable<String> importPaths, {String? body}) {
   final trimmedBody = body?.trim();
-  return [
-    claudeMdStartMarker,
+  final imports = importPaths.map((path) => '@$path').join('\n');
+  final parts = [
     if (trimmedBody != null && trimmedBody.isNotEmpty) trimmedBody,
-    ...importPaths.map((path) => '@$path'),
-    claudeMdEndMarker,
-  ].join('\n');
+    if (imports.isNotEmpty) imports,
+  ];
+  if (parts.isEmpty) return '$claudeMdStartMarker\n$claudeMdEndMarker';
+  return '$claudeMdStartMarker\n\n${parts.join('\n\n')}\n\n$claudeMdEndMarker';
 }
 
 // .............................................................................

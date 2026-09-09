@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The managed CLAUDE.md block sets its content off from the markers by
+blank lines, the form prettier produces. Before, prettier inserted the
+blank line itself and the next DNA run refused the "edited" file.
+
 ## 1.6.0 - 2026-09-09
 
 ### Added
