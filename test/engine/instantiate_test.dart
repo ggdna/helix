@@ -978,8 +978,8 @@ packages:
     test('forbidden instance targets are skipped with a warning', () async {
       final host = makeHost(
         extra: {
-          '$root/node_modules/dna-dart/dna/CLAUDE.md': '# no\n',
           '$root/node_modules/dna-dart/dna/.git/config': 'x\n',
+          '$root/node_modules/dna-dart/dna/dot-git/HEAD': 'ref: x\n',
         },
       );
       final r = await instantiateDna(
@@ -987,14 +987,164 @@ packages:
         targetRoot: root,
         baseVersion: '4.0.0',
       );
-      // `.git/**` never even enters the merge (it is not dna content),
-      // CLAUDE.md is dropped at instance planning time.
+      // A literal `.git/**` never even enters the merge (it is not dna
+      // content); the escaped form would decode to `.git/HEAD` and is
+      // dropped at instance planning time.
       expect(
         r.warnings.where((w) => w.contains('forbidden')).single,
-        contains('CLAUDE.md'),
+        contains('.git/HEAD'),
       );
-      expect(host.existsFile('$root/CLAUDE.md'), isFalse);
+      expect(host.existsFile('$root/.git/HEAD'), isFalse);
       expect(host.existsFile('$root/dna/.git/config'), isFalse);
+    });
+
+    group('a CLAUDE.md shipped by a layer', () {
+      const layerClaudeMd = '$root/node_modules/dna-dart/dna/CLAUDE.md';
+
+      test('lands in the managed block, the rest stays untouched', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# Guides for dnaProjectName\n\n@doc/develop.md\n',
+            '$root/CLAUDE.md': '# My project\n\nHand-written.\n',
+          },
+        );
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(r.warnings.where((w) => w.contains('forbidden')), isEmpty);
+        expect(r.updated, contains('CLAUDE.md'));
+        final claude = host.readString('$root/CLAUDE.md');
+        expect(
+          claude,
+          '# My project\n\nHand-written.\n\n'
+          '<!-- helix:claude_md:start -->\n'
+          '# Guides for unnamed\n\n@doc/develop.md\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+        // No plain instance, the manifest remembers where it came from.
+        final manifest = DnaManifest.read(host, root)!;
+        expect(
+          manifest.instances.map((i) => i.path),
+          isNot(contains('CLAUDE.md')),
+        );
+        expect(manifest.claude.claudeMdFromDna, isTrue);
+        expect(manifest.claude.claudeMdInclude, isNull);
+      });
+
+      test('creates CLAUDE.md when the project has none', () async {
+        final host = makeHost(extra: {layerClaudeMd: '# From DNA\n'});
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n'
+          '# From DNA\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('is followed by the claudeMdInclude imports', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# From DNA\n',
+            '$root/$dnaConfigPath':
+                '{"version": $dnaFormatVersion, '
+                '"layers": ["dna-dart"], '
+                '"claude": {"claudeMdInclude": ["doc"]}}',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n'
+          '# From DNA\n'
+          '@doc/develop.md\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('the own dna/ wins over the layer', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# From layer\n',
+            '$root/dna/CLAUDE.md': '# From self\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        final claude = host.readString('$root/CLAUDE.md');
+        expect(claude, contains('# From self'));
+        expect(claude, isNot(contains('# From layer')));
+      });
+
+      test('empties the block once no layer ships one any more', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# From DNA\n',
+            '$root/CLAUDE.md': '# My project\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(host.readString('$root/CLAUDE.md'), contains('# From DNA'));
+
+        host.deleteFile(layerClaudeMd);
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(r.updated, contains('CLAUDE.md'));
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '# My project\n\n'
+          '<!-- helix:claude_md:start -->\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+        expect(DnaManifest.read(host, root)!.claude.claudeMdFromDna, isFalse);
+
+        // A third run has nothing left to do.
+        final again = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(again.updated, isNot(contains('CLAUDE.md')));
+      });
+
+      test('an uncommitted CLAUDE.md blocks the run', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# From DNA\n',
+            '$root/CLAUDE.md': '# My project\n',
+          },
+        );
+        host.uncommitted.add('CLAUDE.md');
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(r.blocked, isTrue);
+        expect(r.uncommittedTargets, ['CLAUDE.md']);
+        expect(r.sources['CLAUDE.md'], contains('dna-dart'));
+        expect(host.readString('$root/CLAUDE.md'), '# My project\n');
+      });
     });
 
     test('instance name collisions are a hard error', () async {

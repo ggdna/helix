@@ -68,13 +68,19 @@ String? invalidDotSegment(String relPosix) {
 }
 
 // .............................................................................
-/// Whether instantiating to [relPosix] is forbidden: git internals and the
-/// managed `CLAUDE.md` (which mixes project-owned content with the managed
-/// block).
+/// Whether instantiating to [relPosix] is forbidden: git internals.
+///
+/// `CLAUDE.md` is not forbidden but also no plain instance: the merged
+/// DNA content lands in the managed block of the project's `CLAUDE.md`
+/// (see [isClaudeMdTarget]), so the content outside the block stays with
+/// the project.
 bool isForbiddenInstanceTarget(String relPosix) =>
-    relPosix == '.git' ||
-    relPosix.startsWith('.git/') ||
-    relPosix == 'CLAUDE.md';
+    relPosix == '.git' || relPosix.startsWith('.git/');
+
+// .............................................................................
+/// Whether [relPosix] is the project's `CLAUDE.md`, the one instance path
+/// that is written into a managed block instead of replacing the file.
+bool isClaudeMdTarget(String relPosix) => relPosix == 'CLAUDE.md';
 
 // .............................................................................
 /// All ancestor folders of [paths], deepest first — the candidates to

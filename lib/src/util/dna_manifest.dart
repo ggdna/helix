@@ -93,19 +93,28 @@ class DnaManifestInstance {
 /// The Claude section of the manifest.
 class DnaManifestClaude {
   /// Creates the record.
-  const DnaManifestClaude({this.claudeMdInclude});
+  const DnaManifestClaude({this.claudeMdInclude, this.claudeMdFromDna = false});
 
   /// Reads the section from decoded JSON.
   factory DnaManifestClaude.fromJson(Map<String, dynamic> json) =>
       DnaManifestClaude(
         claudeMdInclude: (json['claudeMdInclude'] as List?)?.cast<String>(),
+        claudeMdFromDna: json['claudeMdFromDna'] == true,
       );
 
   /// The configured CLAUDE.md includes at instantiation time.
   final List<String>? claudeMdInclude;
 
+  /// Whether a DNA layer shipped a `CLAUDE.md` whose content went into
+  /// the managed block. Lets the next run empty the block once no layer
+  /// ships one any more.
+  final bool claudeMdFromDna;
+
   /// JSON representation.
-  Map<String, dynamic> toJson() => {'claudeMdInclude': claudeMdInclude};
+  Map<String, dynamic> toJson() => {
+    'claudeMdInclude': claudeMdInclude,
+    'claudeMdFromDna': claudeMdFromDna,
+  };
 }
 
 // .............................................................................

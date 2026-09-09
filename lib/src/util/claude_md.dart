@@ -72,14 +72,19 @@ List<String> expandClaudeMdIncludes({
 }
 
 // .............................................................................
-/// Builds the managed block: one `@`-import line per path between the
-/// markers. Claude Code expands each import at session start (relative
-/// paths resolve relative to the CLAUDE.md, max four hops deep).
-String buildClaudeMdBlock(Iterable<String> importPaths) => [
-  claudeMdStartMarker,
-  ...importPaths.map((path) => '@$path'),
-  claudeMdEndMarker,
-].join('\n');
+/// Builds the managed block between the markers: first [body] — the
+/// merged `CLAUDE.md` the DNA layers ship, if any — then one `@`-import
+/// line per path. Claude Code expands each import at session start
+/// (relative paths resolve relative to the CLAUDE.md, max four hops deep).
+String buildClaudeMdBlock(Iterable<String> importPaths, {String? body}) {
+  final trimmedBody = body?.trim();
+  return [
+    claudeMdStartMarker,
+    if (trimmedBody != null && trimmedBody.isNotEmpty) trimmedBody,
+    ...importPaths.map((path) => '@$path'),
+    claudeMdEndMarker,
+  ].join('\n');
+}
 
 // .............................................................................
 /// Replaces the managed block in [content] with [block], or appends it
@@ -108,18 +113,20 @@ String upsertClaudeMdBlock(String content, String block) {
 }
 
 // .............................................................................
-/// The updated content of `<targetRoot>/CLAUDE.md` for [importPaths], or
-/// `null` when the file already carries exactly this block.
+/// The updated content of `<targetRoot>/CLAUDE.md` for [body] and
+/// [importPaths], or `null` when the file already carries exactly this
+/// block.
 String? updatedClaudeMd(
   DnaHost host,
   String targetRoot,
-  Iterable<String> importPaths,
-) {
+  Iterable<String> importPaths, {
+  String? body,
+}) {
   final path = '$targetRoot/CLAUDE.md';
   final existing = host.existsFile(path) ? host.readString(path) : '';
   final updated = upsertClaudeMdBlock(
     existing,
-    buildClaudeMdBlock(importPaths),
+    buildClaudeMdBlock(importPaths, body: body),
   );
   return existing == updated ? null : updated;
 }
