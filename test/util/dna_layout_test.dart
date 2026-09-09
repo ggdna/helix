@@ -66,12 +66,20 @@ void main() {
   });
 
   group('isForbiddenInstanceTarget', () {
-    test('git internals and CLAUDE.md are forbidden', () {
+    test('git internals are forbidden', () {
       expect(isForbiddenInstanceTarget('.git'), isTrue);
       expect(isForbiddenInstanceTarget('.git/config'), isTrue);
-      expect(isForbiddenInstanceTarget('CLAUDE.md'), isTrue);
+      expect(isForbiddenInstanceTarget('CLAUDE.md'), isFalse);
       expect(isForbiddenInstanceTarget('.claude/skills/x/SKILL.md'), isFalse);
       expect(isForbiddenInstanceTarget('doc/claude.md'), isFalse);
+    });
+  });
+
+  group('isClaudeMdTarget', () {
+    test('only the root CLAUDE.md', () {
+      expect(isClaudeMdTarget('CLAUDE.md'), isTrue);
+      expect(isClaudeMdTarget('doc/CLAUDE.md'), isFalse);
+      expect(isClaudeMdTarget('claude.md'), isFalse);
     });
   });
 

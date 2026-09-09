@@ -163,8 +163,9 @@ your layers.
   `dna/_generated.json` (Helix's: layers, hashes, and the project files
   the DNA owns). The effective variables are neither: they are
   content and live in `dna/_vars.json`.
-- Forbidden instance targets: `.git/**` and `CLAUDE.md` (the latter is
-  managed via the `claude` block below).
+- Forbidden instance targets: `.git/**`. A `dna/CLAUDE.md` is no plain
+  instance either: its merged content goes into the managed block of the
+  project's `CLAUDE.md` (see below).
 
 ## The placed test: instantiate + verify in one
 
@@ -290,11 +291,18 @@ the only path rewriting Helix performs).
 
 - Skills are plain instances: `dna/dot-claude/skills/<name>/SKILL.md` →
   `.claude/skills/<name>/SKILL.md`.
-- `CLAUDE.md` keeps the managed block: `claude.claudeMdInclude`
-  lists files/folders (human documentation!) that get one `@`-import
-  line each between `<!-- helix:claude_md:start/end -->`. Content
-  outside the block is never touched. All documentation is written for
-  humans — the AI consumes the same files.
+- `CLAUDE.md` keeps the managed block between
+  `<!-- helix:claude_md:start/end -->`. Content outside the block is
+  never touched. The block holds, in this order:
+  - the merged `CLAUDE.md` of the layers, if any ships one under
+    `dna/CLAUDE.md` — merged, rendered and substituted like every other
+    DNA file, the own `dna/` wins as usual. Once no layer ships one any
+    more, the next run empties the block again.
+  - one `@`-import line per file of `claude.claudeMdInclude` (files or
+    folders of human documentation!).
+
+  All documentation is written for humans — the AI consumes the same
+  files.
 
 ## Helix API
 

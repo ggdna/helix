@@ -232,11 +232,21 @@ Future<DnaInstantiationResult> instantiateDna({
 
   // 5. Plan instances.
   final instancePlan = <String, String>{}; // instance path -> merged rel
+  // The merged CLAUDE.md is no instance: it goes into the managed block
+  // of the project's CLAUDE.md (step 8), the rest of that file belongs
+  // to the project.
+  String? dnaClaudeMd;
+  String? dnaClaudeMdRel;
   for (final rel in merged.keys) {
     if (isPrivatePath(rel)) continue;
     final instancePath = decodeDotSegments(rel);
     if (isForbiddenInstanceTarget(instancePath)) {
       warnings.add('Instance target "$instancePath" is forbidden — skipped.');
+      continue;
+    }
+    if (isClaudeMdTarget(instancePath)) {
+      dnaClaudeMd = _decodeText(merged[rel]!);
+      dnaClaudeMdRel = rel;
       continue;
     }
     final collision = instancePlan[instancePath];
@@ -261,6 +271,8 @@ Future<DnaInstantiationResult> instantiateDna({
       '$dnaDirname/${entry.key}': entry.value,
     for (final entry in instancePlan.entries)
       if (provenance[entry.value] != null) entry.key: provenance[entry.value]!,
+    if (dnaClaudeMdRel != null && provenance[dnaClaudeMdRel] != null)
+      'CLAUDE.md': provenance[dnaClaudeMdRel]!,
   };
 
   // 7. Reconcile with the current project state.
@@ -330,9 +342,13 @@ Future<DnaInstantiationResult> instantiateDna({
     }
   }
 
-  // 8. CLAUDE.md managed block.
+  // 8. CLAUDE.md managed block: the merged CLAUDE.md of the layers, then
+  // the `@`-imports of `claude.claudeMdInclude`. A block that the DNA
+  // filled last time is emptied once no layer ships a CLAUDE.md any more,
+  // so the project does not keep stale layer content.
   String? claudeMdContent;
   List<String>? claudeImports;
+  final claudeMdWasFromDna = previous?.claude.claudeMdFromDna ?? false;
   if (config.claude.claudeMdInclude != null) {
     claudeImports = expandClaudeMdIncludes(
       host: host,
@@ -343,7 +359,14 @@ Future<DnaInstantiationResult> instantiateDna({
         ...merged.keys.map((rel) => '$dnaDirname/$rel'),
       },
     );
-    claudeMdContent = updatedClaudeMd(host, targetRoot, claudeImports);
+  }
+  if (claudeImports != null || dnaClaudeMd != null || claudeMdWasFromDna) {
+    claudeMdContent = updatedClaudeMd(
+      host,
+      targetRoot,
+      claudeImports ?? const [],
+      body: dnaClaudeMd,
+    );
   }
 
   // 9. New manifest.
@@ -377,7 +400,10 @@ Future<DnaInstantiationResult> instantiateDna({
           hash: hashFileBytes(instanceBytes[path]!),
         ),
     ],
-    claude: DnaManifestClaude(claudeMdInclude: claudeImports),
+    claude: DnaManifestClaude(
+      claudeMdInclude: claudeImports,
+      claudeMdFromDna: dnaClaudeMd != null,
+    ),
     baseVersion: baseVersion,
     baseHash: baseDnaRoot == null
         ? null

@@ -82,6 +82,22 @@ $claudeMdStartMarker
 @b/c.md
 $claudeMdEndMarker''');
     });
+
+    test('puts the body before the imports, trimmed', () {
+      expect(buildClaudeMdBlock(['a.md'], body: '\n# Body\n\ntext\n\n'), '''
+$claudeMdStartMarker
+# Body
+
+text
+@a.md
+$claudeMdEndMarker''');
+    });
+
+    test('a blank body adds no line', () {
+      expect(buildClaudeMdBlock([], body: '  \n'), '''
+$claudeMdStartMarker
+$claudeMdEndMarker''');
+    });
   });
 
   group('upsertClaudeMdBlock', () {
@@ -131,6 +147,7 @@ $claudeMdEndMarker''');
       host.writeString('$root/CLAUDE.md', first!);
       expect(updatedClaudeMd(host, root, ['a.md']), isNull);
       expect(updatedClaudeMd(host, root, ['b.md']), isNotNull);
+      expect(updatedClaudeMd(host, root, ['a.md'], body: '# B'), isNotNull);
     });
   });
 }

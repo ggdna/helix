@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- A `dna/CLAUDE.md` shipped by a DNA layer is written into the managed
+block of the project's `CLAUDE.md` instead of being skipped as a forbidden
+instance target. Content outside the block stays with the project; the
+`claudeMdInclude` imports follow the layer content.
+
 ### Removed
 
 - Remove the stray ticket.json from the repository root
