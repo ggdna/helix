@@ -162,25 +162,22 @@ void main() {
       expect(host.readString('$root/doc/hello.md'), '# My notes\n');
     });
 
-    test('fails when LICENSE is missing', () async {
+    test('passes without a LICENSE — a license is not the engine\'s '
+        'business', () async {
       final host = MemoryDnaHost(
         files: {
           '$root/package.json': '{"devDependencies": {"a-dna": "^1.0.0"}}',
+          '$root/dna/_dna.json': '{"version": 1, "layers": ["a-dna"]}',
           '$root/node_modules/a-dna/package.json':
               '{"name": "a-dna", "version": "1.0.0"}',
+          '$root/node_modules/a-dna/dna/_dna.json':
+              '{"version": 1, "role": "dna"}',
           '$root/node_modules/a-dna/dna/doc/hello.md': '# Hello\n',
         },
       );
-      await expectLater(
-        () => run(host),
-        throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            contains('LICENSE is missing'),
-          ),
-        ),
-      );
+      await run(host);
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+      expect(host.existsFile('$root/doc/hello.md'), isTrue);
     });
 
     test('emits warnings and messages through the log', () async {
@@ -200,20 +197,9 @@ void main() {
       // exercised, but nothing is ever read from or written to the real
       // repository.
       final host = MemoryDnaHost();
-      await expectLater(
-        () => runDnaTest(host: host, log: log.add),
-        throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            contains('LICENSE is missing'),
-          ),
-        ),
-      );
-      // The carried base DNA really was applied — the run got as far as
-      // the LICENSE check above, which only a materialized base reaches.
-      // …and the temp folder it was written to is cleaned up again, even
-      // though the run ended in a throw.
+      await runDnaTest(host: host, log: log.add);
+      // The carried base DNA was materialized for the run — and the temp
+      // folder it was written to is cleaned up again afterwards.
       expect(
         host.files.keys.any((p) => p.contains('helix_base_dna_')),
         isFalse,
@@ -244,20 +230,10 @@ void main() {
 
       // The temp folder is no git repository, so the generated files
       // stay for a manual commit — reported through the log, not thrown.
-      // What fails here is the missing LICENSE.
-      await expectLater(
-        () => runDnaTest(
-          targetRoot: target,
-          baseDnaRoot: emptyBase,
-          log: log.add,
-        ),
-        throwsA(
-          isA<Exception>().having(
-            (e) => '$e',
-            'message',
-            contains('LICENSE is missing'),
-          ),
-        ),
+      await runDnaTest(
+        targetRoot: target,
+        baseDnaRoot: emptyBase,
+        log: log.add,
       );
       expect(log.any((m) => m.contains('Could not commit')), isTrue);
       expect(File('$target/dna/_generated.json').existsSync(), isTrue);

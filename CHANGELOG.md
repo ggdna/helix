@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 - 2026-09-10
+
+### Changed
+
+- gg dna init suggests git init -b main when the target folder is no git repository, ahead of the gg dna add hint
+- The DNA test no longer fails when LICENSE is missing - a license is the project's choice, not the engine's
+
 ## 1.6.1 - 2026-09-09
 
 ### Fixed

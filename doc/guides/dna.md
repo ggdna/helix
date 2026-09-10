@@ -93,7 +93,6 @@ Outcomes (golden-update semantics):
 | The DNA produced updates | Files are written and committed as `#gg: generated DNA` |
 | An instance was edited locally | The edit is backed up to a system-temp folder, the DNA content is written |
 | A file to be overwritten carries invalid changes | Test fails without writing |
-| `LICENSE` missing | Test fails |
 
 Two rules follow from this:
 
