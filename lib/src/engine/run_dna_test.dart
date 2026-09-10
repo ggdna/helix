@@ -29,7 +29,6 @@ import 'instantiate.dart';
 ///   failure)
 /// - a file to be overwritten carries uncommitted work → fails without
 ///   writing (unrelated dirty files do not block)
-/// - missing LICENSE → fails
 Future<void> runDnaTest({
   String? targetRoot,
   DnaHost? host,
@@ -93,11 +92,6 @@ Future<void> _runDnaTest({
     throw Exception(
       '\n${cError(uncommittedTargetsMessage)}\n'
       '${describeDnaSources(result.uncommittedTargets, result.sources)}',
-    );
-  }
-  if (!effectiveHost.existsFile('$root/LICENSE')) {
-    throw Exception(
-      'LICENSE is missing — ship it via a DNA layer or add it manually.',
     );
   }
 }
