@@ -411,17 +411,58 @@ void main() {
     });
 
     group('the closing message', () {
+      final gitInit =
+          '${cAction('Init git by running ')}'
+          '${cCmd('git init -b main')}${cAction('.')}';
+      final dnaAdd =
+          '${cAction('Add dna by running ')}'
+          '${cCmd('gg dna add <dnaPackage>')}${cAction('.')}';
+
       test('is a headline and the command that comes next', () async {
-        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        final host = MemoryDnaHost(
+          files: {'$root/pubspec.yaml': dartProject, '$root/.git/HEAD': ''},
+        );
         await runInit(host);
         expect(messages.sublist(messages.length - 5), [
           '',
           cH2('✓ Initialized.'),
           '',
-          '${cAction('Add dna by running ')}'
-              '${cCmd('gg dna add <dnaPackage>')}${cAction('.')}',
+          dnaAdd,
           '',
         ]);
+      });
+
+      test('suggests git init first when the folder is no git repo', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await runInit(host);
+        expect(messages.sublist(messages.length - 6), [
+          '',
+          cH2('✓ Initialized.'),
+          '',
+          gitInit,
+          dnaAdd,
+          '',
+        ]);
+      });
+
+      test('does not suggest git init inside a repo\'s subfolder', () async {
+        final host = MemoryDnaHost(
+          files: {'$root/pubspec.yaml': dartProject, '/.git/HEAD': ''},
+        );
+        await runInit(host);
+        expect(messages, isNot(contains(gitInit)));
+        expect(messages, contains(dnaAdd));
+      });
+
+      test('takes a .git file for a worktree or submodule', () async {
+        final host = MemoryDnaHost(
+          files: {
+            '$root/pubspec.yaml': dartProject,
+            '$root/.git': 'gitdir: /repo/.git/worktrees/p',
+          },
+        );
+        await runInit(host);
+        expect(messages, isNot(contains(gitInit)));
       });
 
       test('the steps above are checked off in the detail color', () async {

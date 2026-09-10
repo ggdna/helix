@@ -7,6 +7,7 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
+import 'package:path/path.dart' as p;
 
 import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
@@ -174,11 +175,35 @@ class Init extends Command<dynamic> {
     ggLog('');
     // Concatenated, never nested: a cCmd inside a cAction resets the
     // yellow and the rest of the sentence loses it.
+    if (!_isInGitRepo(root)) {
+      // The engine commits what it generates, so git comes before the
+      // first `gg dna add`.
+      ggLog(
+        '${cAction('Init git by running ')}'
+        '${cCmd('git init -b main')}${cAction('.')}',
+      );
+    }
     ggLog(
       '${cAction('Add dna by running ')}'
       '${cCmd('gg dna add <dnaPackage>')}${cAction('.')}',
     );
     ggLog('');
+  }
+
+  // ...........................................................................
+  /// Whether [root] lies in a git work tree — its own `.git` or that of a
+  /// parent folder, the way git itself looks for it. `.git` is a folder in
+  /// a repository and a file in a worktree or submodule.
+  bool _isInGitRepo(String root) {
+    var dir = _host.realPath(root);
+    while (true) {
+      if (_host.existsDir('$dir/.git') || _host.existsFile('$dir/.git')) {
+        return true;
+      }
+      final parent = p.dirname(dir);
+      if (parent == dir) return false;
+      dir = parent;
+    }
   }
 
   // ...........................................................................

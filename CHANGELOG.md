@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- gg dna init suggests git init -b main when the target folder is no git repository, ahead of the gg dna add hint
+
 ## 1.6.1 - 2026-09-09
 
 ### Fixed
