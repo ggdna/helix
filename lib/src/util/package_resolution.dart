@@ -484,12 +484,17 @@ Map<String, _LockEntry> _readPnpmLock(
   final out = <String, _LockEntry>{};
   final path = '$targetRoot/pnpm-lock.yaml';
   if (!host.existsFile(path)) {
-    for (final other in const ['package-lock.json', 'yarn.lock']) {
-      if (host.existsFile('$targetRoot/$other')) {
-        warnings.add(
-          '$other found but no pnpm-lock.yaml — DNA repositories use pnpm. '
-          'Run `pnpm import` and delete $other.',
-        );
+    // A stray npm or yarn lock only matters where node dependencies are
+    // declared at all. A pure Dart package that happened to see an
+    // `npm install` has nothing to import into pnpm.
+    if (host.existsFile('$targetRoot/package.json')) {
+      for (final other in const ['package-lock.json', 'yarn.lock']) {
+        if (host.existsFile('$targetRoot/$other')) {
+          warnings.add(
+            '$other found but no pnpm-lock.yaml — DNA repositories use pnpm. '
+            'Run `pnpm import` and delete $other.',
+          );
+        }
       }
     }
     return out;

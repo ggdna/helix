@@ -144,11 +144,25 @@ packages:
     });
 
     test('package-lock.json without pnpm-lock.yaml warns', () {
-      final r = read({'$root/package-lock.json': '{"lockfileVersion": 3}'});
+      final r = read({
+        '$root/package.json': '{"name": "a"}',
+        '$root/package-lock.json': '{"lockfileVersion": 3}',
+      });
       expect(
         r.warnings.single,
         allOf(contains('package-lock.json'), contains('pnpm')),
       );
+    });
+
+    test('a stray lock file in a package without package.json is ignored', () {
+      // A pure Dart package that once saw an `npm install` has no node
+      // dependencies to import into pnpm — the advice would not apply.
+      final r = read({
+        '$root/pubspec.yaml': 'name: a\n',
+        '$root/package-lock.json': '{"lockfileVersion": 3}',
+        '$root/yarn.lock': '',
+      });
+      expect(r.warnings, isEmpty);
     });
   });
 
