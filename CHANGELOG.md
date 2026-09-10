@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.1 - 2026-09-10
+
+### Changed
+
+- Warn about a stray package-lock.json or yarn.lock only when the target declares a package.json
+
 ## 1.7.0 - 2026-09-10
 
 ### Changed
