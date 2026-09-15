@@ -26,10 +26,14 @@ void main() {
   /// The builds `add` triggered: one entry per call, with its target.
   final builds = <String?>[];
 
+  /// The `workspace` flag each triggered build received, in call order.
+  final buildWorkspaceFlags = <bool>[];
+
   setUp(() {
     messages.clear();
     commands.clear();
     builds.clear();
+    buildWorkspaceFlags.clear();
   });
 
   ProcessRun fakeRun({int exitCode = 0, String stderr = ''}) =>
@@ -63,6 +67,7 @@ void main() {
                 bool workspace = false,
               }) async {
                 builds.add(targetRoot);
+                buildWorkspaceFlags.add(workspace);
                 log?.call('+ instantiated LICENSE');
                 if (buildThrows != null) throw buildThrows;
               },
@@ -134,6 +139,18 @@ void main() {
         expect(builds, [root]);
         // The engine report reaches the user.
         expect(messages.last, '+ instantiated LICENSE');
+      });
+
+      test('defaults --workspace to false', () async {
+        final host = project(installed: ['dna_dart']);
+        await runAdd(host, ['dna_dart']);
+        expect(buildWorkspaceFlags, [false]);
+      });
+
+      test('passes --workspace through to the build', () async {
+        final host = project(installed: ['dna_dart']);
+        await runAdd(host, ['dna_dart', '--workspace']);
+        expect(buildWorkspaceFlags, [true]);
       });
 
       test('builds the current folder when no target is given', () async {

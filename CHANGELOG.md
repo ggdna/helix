@@ -6,6 +6,10 @@
 
 - Add a --workspace build mode to helix so a bare workspace only gets .claude/ and CLAUDE.md, splicing referenced docs in via a new include marker; drop dna_gg's external cleanup script in favor of inline git steps
 
+### Changed
+
+- Also pass --workspace to gg dna add, whose own internal build previously ignored it and instantiated the full package output before the explicit build --workspace step ran
+
 ## 1.7.1 - 2026-09-10
 
 ### Changed
