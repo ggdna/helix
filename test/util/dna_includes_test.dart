@@ -86,6 +86,17 @@ void main() {
       expect(result, 'Details.');
     });
 
+    test('ignores a bare @tag such as an @license header line', () {
+      final merged = mergedOf({});
+      final result = resolveIncludes(
+        '@license',
+        merged,
+        selfLabel: 'host.md',
+        inlineAtImports: true,
+      );
+      expect(result, '@license');
+    });
+
     test('does not treat an @-word inside a longer line as an import', () {
       final merged = mergedOf({});
       final result = resolveIncludes(

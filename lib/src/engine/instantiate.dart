@@ -243,18 +243,24 @@ Future<DnaInstantiationResult> instantiateDna({
   merged[dnaVarsFilename] = _encodeText(encodeJsonPretty(vars.toJson()));
 
   // 4b. Resolve includes: `<!-- helix:include:… -->` always, `@…` import
-  // lines only in workspace mode — there, the imported path is never
+  // lines only in workspace mode and only in a file workspace mode keeps
+  // (`.claude/` or `CLAUDE.md`) — there, the imported path is never
   // written as its own file, so the plain import would point at nothing.
+  // Everywhere else an `@word` stays untouched, so a copyright header's
+  // bare `@license` line is never mistaken for one.
   for (final rel in merged.keys.toList()) {
     if (!rel.toLowerCase().endsWith('.md')) continue;
     final text = _decodeText(merged[rel]!);
     if (text == null) continue;
+    final instancePath = decodeDotSegments(rel);
+    final keptInWorkspace =
+        isClaudeMdTarget(instancePath) || instancePath.startsWith('.claude/');
     merged[rel] = _encodeText(
       resolveIncludes(
         text,
         merged,
         selfLabel: provenance[rel] ?? rel,
-        inlineAtImports: workspace,
+        inlineAtImports: workspace && keptInWorkspace,
       ),
     );
   }

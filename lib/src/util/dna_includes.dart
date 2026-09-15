@@ -22,8 +22,10 @@ final RegExp includeMarkerRe = RegExp(r'^<!--\s*helix:include:(.+?)\s*-->$');
 
 /// One line `@<path>` — Claude Code's own import syntax. Resolved only in
 /// `--workspace` builds, where the imported path is never written as its
-/// own file and the plain `@`-line would otherwise point nowhere.
-final RegExp atImportRe = RegExp(r'^@(\S+)$');
+/// own file and the plain `@`-line would otherwise point nowhere. The
+/// captured path must carry a file extension, so a bare `@tag` — like the
+/// `@license` line of a copyright header — never matches.
+final RegExp atImportRe = RegExp(r'^@(\S+\.\w+)$');
 
 // .............................................................................
 /// Replaces every include marker in [text] with the content [merged] holds
