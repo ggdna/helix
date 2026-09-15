@@ -39,6 +39,14 @@ class Add extends Command<dynamic> {
       help: 'The project folder to add the DNA to.',
       defaultsTo: '.',
     );
+    argParser.addFlag(
+      'workspace',
+      help:
+          'Only instantiate .claude/ and CLAUDE.md — for a bare .ocean '
+          'ticket workspace, not a package of its own.',
+      defaultsTo: false,
+      negatable: false,
+    );
   }
 
   /// The log function.
@@ -96,7 +104,11 @@ class Add extends Command<dynamic> {
     // A layer is added to be applied, so the build follows right away —
     // the same run `helix build` performs. `null` is what the placed test
     // passes for »the current folder«.
-    await _dnaTest(targetRoot: root == '.' ? null : root, log: ggLog);
+    await _dnaTest(
+      targetRoot: root == '.' ? null : root,
+      log: ggLog,
+      workspace: argResults!['workspace'] as bool,
+    );
   }
 
   // ...........................................................................
