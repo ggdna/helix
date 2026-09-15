@@ -34,6 +34,7 @@ Future<void> runDnaTest({
   DnaHost? host,
   String? baseDnaRoot,
   void Function(String message)? log,
+  bool workspace = false,
 }) async {
   final effectiveHost = host ?? IoDnaHost();
   final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
@@ -43,7 +44,13 @@ Future<void> runDnaTest({
   final emit = log ?? print; // coverage:ignore-line
 
   try {
-    await _runDnaTest(host: effectiveHost, root: root, base: base, emit: emit);
+    await _runDnaTest(
+      host: effectiveHost,
+      root: root,
+      base: base,
+      emit: emit,
+      workspace: workspace,
+    );
   } finally {
     if (baseDnaRoot == null) effectiveHost.deleteDir(base);
   }
@@ -56,6 +63,7 @@ Future<void> _runDnaTest({
   required String root,
   required String base,
   required void Function(String message) emit,
+  required bool workspace,
 }) async {
   final effectiveHost = host;
 
@@ -72,6 +80,7 @@ Future<void> _runDnaTest({
     targetRoot: root,
     baseDnaRoot: base,
     baseVersion: helixVersion,
+    workspace: workspace,
   );
 
   for (final warning in result.warnings) {
@@ -104,6 +113,7 @@ typedef DnaTestRunner = Future<void> Function({
   DnaHost? host,
   String? baseDnaRoot,
   void Function(String message)? log,
+  bool workspace,
 });
 
 // .............................................................................

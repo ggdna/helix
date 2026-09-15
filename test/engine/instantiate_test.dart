@@ -1258,4 +1258,80 @@ packages:
       expect(manifest.baseHash, isNotNull);
     });
   });
+
+  group('instantiateDna — workspace mode', () {
+    const layerClaudeMd = '$root/node_modules/dna-dart/dna/CLAUDE.md';
+    const skillMd =
+        '$root/node_modules/dna-dart/dna/dot-claude/skills/index/SKILL.md';
+
+    MemoryDnaHost makeWorkspaceHost() => makeHost(
+      extra: {
+        layerClaudeMd: '# Guides\n\n@doc/develop.md\n',
+        skillMd: '# Index\n\n<!-- helix:include:doc/develop.md -->\n',
+      },
+    );
+
+    test('writes only .claude/ and the managed CLAUDE.md block', () async {
+      final host = makeWorkspaceHost();
+      final r = await instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4.0.0',
+        workspace: true,
+      );
+
+      expect(r.blocked, isFalse);
+      expect(host.existsFile('$root/doc/develop.md'), isFalse);
+      expect(host.existsFile('$root/.vscode/settings.json'), isFalse);
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+      expect(host.existsFile('$root/.claude/skills/index/SKILL.md'), isTrue);
+      expect(host.existsFile('$root/CLAUDE.md'), isTrue);
+    });
+
+    test('inlines an @-import the target file will never write', () async {
+      final host = makeWorkspaceHost();
+      await instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4.0.0',
+        workspace: true,
+      );
+      final claude = host.readString('$root/CLAUDE.md');
+      expect(claude, contains('Run dart pub upgrade.'));
+      expect(claude, isNot(contains('@doc/develop.md')));
+    });
+
+    test('resolves a helix:include marker inside a skill', () async {
+      final host = makeWorkspaceHost();
+      await instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4.0.0',
+        workspace: true,
+      );
+      final skill = host.readString('$root/.claude/skills/index/SKILL.md');
+      expect(skill, contains('Run dart pub upgrade.'));
+      expect(skill, isNot(contains('helix:include')));
+    });
+
+    test('leaves no dna/ scaffold and no manifest behind', () async {
+      final host = makeWorkspaceHost();
+      await instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4.0.0',
+        workspace: true,
+      );
+      expect(host.existsDir('$root/dna'), isFalse);
+      expect(host.existsFile('$root/$dnaGeneratedPath'), isFalse);
+      expect(DnaManifest.read(host, root), isNull);
+    });
+
+    test('a non-workspace build keeps the plain @-import untouched', () async {
+      final host = makeWorkspaceHost();
+      await instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
+      expect(host.readString('$root/CLAUDE.md'), contains('@doc/develop.md'));
+      expect(host.existsFile('$root/doc/develop.md'), isTrue);
+    });
+  });
 }

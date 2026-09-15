@@ -12,6 +12,7 @@ import 'package:gg_json/gg_json.dart';
 import '../util/claude_md.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
+import '../util/dna_includes.dart';
 import '../util/dna_layout.dart';
 import '../util/dna_manifest.dart';
 import '../util/dna_tree_hash.dart';
@@ -135,11 +136,22 @@ class DnaInstantiationResult {
 /// generated state with the project — honoring instance ownership from the
 /// manifest and the per-file guard (no existing file with uncommitted work
 /// is ever overwritten).
+/// [workspace] restricts the run to a bare `.ocean` ticket workspace, not a
+/// package of its own: only `.claude/` and the managed block of `CLAUDE.md`
+/// are instantiated, every other DNA path (`doc/`, `scripts/`, `.github/`,
+/// …) is skipped, `dna/_generated.json` is never written, and the `dna/`
+/// scaffold `init`/`add` placed to resolve the layers is removed once the
+/// build is done — there is nothing left to track for a later update, a
+/// workspace is re-initialized from scratch instead. `@`-import lines that
+/// would otherwise point at a file this run never writes are inlined the
+/// same way `<!-- helix:include:… -->` always is (see
+/// [resolveIncludes]).
 Future<DnaInstantiationResult> instantiateDna({
   required DnaHost host,
   required String targetRoot,
   String? baseDnaRoot,
   required String baseVersion,
+  bool workspace = false,
 }) async {
   final messages = <String>[];
   final warnings = <String>[];
@@ -230,6 +242,23 @@ Future<DnaInstantiationResult> instantiateDna({
   }
   merged[dnaVarsFilename] = _encodeText(encodeJsonPretty(vars.toJson()));
 
+  // 4b. Resolve includes: `<!-- helix:include:… -->` always, `@…` import
+  // lines only in workspace mode — there, the imported path is never
+  // written as its own file, so the plain import would point at nothing.
+  for (final rel in merged.keys.toList()) {
+    if (!rel.toLowerCase().endsWith('.md')) continue;
+    final text = _decodeText(merged[rel]!);
+    if (text == null) continue;
+    merged[rel] = _encodeText(
+      resolveIncludes(
+        text,
+        merged,
+        selfLabel: provenance[rel] ?? rel,
+        inlineAtImports: workspace,
+      ),
+    );
+  }
+
   // 5. Plan instances.
   final instancePlan = <String, String>{}; // instance path -> merged rel
   // The merged CLAUDE.md is no instance: it goes into the managed block
@@ -249,6 +278,10 @@ Future<DnaInstantiationResult> instantiateDna({
       dnaClaudeMdRel = rel;
       continue;
     }
+    // Workspace mode keeps only `.claude/` — every other DNA path stays
+    // unwritten, its content already reached `.claude/`/`CLAUDE.md`
+    // through an include (step 4b) wherever it was meant to.
+    if (workspace && !instancePath.startsWith('.claude/')) continue;
     final collision = instancePlan[instancePath];
     if (collision != null) {
       throw FormatException(
@@ -411,15 +444,21 @@ Future<DnaInstantiationResult> instantiateDna({
   );
   final generatedJson = encodeJsonPretty(manifest.toJson());
   final generatedPath = '$targetRoot/$dnaGeneratedPath';
+  // Workspace mode tracks nothing to update later — a workspace is
+  // re-initialized from scratch instead, never rebuilt in place.
   final generatedChanged =
-      !host.existsFile(generatedPath) ||
-      host.readString(generatedPath) != generatedJson;
+      !workspace &&
+      (!host.existsFile(generatedPath) ||
+          host.readString(generatedPath) != generatedJson);
+  final dnaScaffoldPath = '$targetRoot/$dnaDirname';
+  final workspaceCleanupPending = workspace && host.existsDir(dnaScaffoldPath);
 
   final hasChanges =
       instanceWrites.isNotEmpty ||
       instanceDeletes.isNotEmpty ||
       claudeMdContent != null ||
-      generatedChanged;
+      generatedChanged ||
+      workspaceCleanupPending;
   if (!hasChanges) {
     return DnaInstantiationResult(messages: messages, warnings: warnings);
   }
@@ -502,6 +541,18 @@ Future<DnaInstantiationResult> instantiateDna({
     if (host.listFilesRecursive(path).isNotEmpty) continue;
     host.deleteDir(path);
     messages.add('- removed empty folder $dir');
+  }
+
+  // 11b. Workspace mode keeps only `.claude/` and `CLAUDE.md` — the `dna/`
+  // scaffold `init`/`add` placed to resolve the layers served only this
+  // run and is never itself an instance, so it is not part of
+  // `touchedPaths`/the commit below.
+  if (workspaceCleanupPending) {
+    host.deleteDir(dnaScaffoldPath);
+    messages.add(
+      '- removed $dnaDirname (workspace mode keeps only '
+      '.claude and CLAUDE.md)',
+    );
   }
 
   // 12. Commit what the DNA generated — it is machine-owned, so it never

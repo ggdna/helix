@@ -22,6 +22,14 @@ class Build extends Command<dynamic> {
       help: 'The project folder to build.',
       defaultsTo: '.',
     );
+    argParser.addFlag(
+      'workspace',
+      help:
+          'Only instantiate .claude/ and CLAUDE.md — for a bare .ocean '
+          'ticket workspace, not a package of its own.',
+      defaultsTo: false,
+      negatable: false,
+    );
   }
 
   /// The log function.
@@ -43,6 +51,7 @@ class Build extends Command<dynamic> {
     await _runner(
       targetRoot: target == '.' ? null : target.replaceAll(r'\', '/'),
       log: ggLog,
+      workspace: argResults!['workspace'] as bool,
     );
   }
 }

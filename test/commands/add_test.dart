@@ -60,6 +60,7 @@ void main() {
                 DnaHost? host,
                 String? baseDnaRoot,
                 void Function(String message)? log,
+                bool workspace = false,
               }) async {
                 builds.add(targetRoot);
                 log?.call('+ instantiated LICENSE');
@@ -160,6 +161,7 @@ void main() {
                 DnaHost? host,
                 String? baseDnaRoot,
                 void Function(String message)? log,
+                bool workspace = false,
               }) async => builds.add(targetRoot),
             ),
           );

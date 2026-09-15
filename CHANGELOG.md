@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add a --workspace build mode to helix so a bare workspace only gets .claude/ and CLAUDE.md, splicing referenced docs in via a new include marker; drop dna_gg's external cleanup script in favor of inline git steps
+
 ## 1.7.1 - 2026-09-10
 
 ### Changed
