@@ -16,7 +16,8 @@ void main() {
   setUp(messages.clear);
 
   /// Records how the command called the engine.
-  late List<({String? targetRoot, bool hasLog, bool workspace})> calls;
+  late List<({String? targetRoot, bool hasLog, bool workspace, bool quiet})>
+  calls;
   Object? thrown;
 
   DnaTestRunner recordingRunner() =>
@@ -26,11 +27,13 @@ void main() {
         String? baseDnaRoot,
         void Function(String message)? log,
         bool workspace = false,
+        bool quiet = false,
       }) async {
         calls.add((
           targetRoot: targetRoot,
           hasLog: log != null,
           workspace: workspace,
+          quiet: quiet,
         ));
         log?.call('dna is up to date');
         if (thrown != null) throw thrown!;
@@ -81,6 +84,16 @@ void main() {
     test('passes --workspace through to the engine', () async {
       await runBuild(['--workspace']);
       expect(calls.single.workspace, isTrue);
+    });
+
+    test('defaults --quiet to false', () async {
+      await runBuild([]);
+      expect(calls.single.quiet, isFalse);
+    });
+
+    test('passes --quiet through to the engine', () async {
+      await runBuild(['--quiet']);
+      expect(calls.single.quiet, isTrue);
     });
 
     test('routes the DNA report to ggLog', () async {

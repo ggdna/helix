@@ -29,12 +29,18 @@ import 'instantiate.dart';
 ///   failure)
 /// - a file to be overwritten carries uncommitted work → fails without
 ///   writing (unrelated dirty files do not block)
+///
+/// [quiet] drops the two reports a caller emits its own summary for: the
+/// per-file instantiation report and the failed automatic commit. What
+/// asks for a decision — warnings, backed up local changes, the blocking
+/// failure — is always reported.
 Future<void> runDnaTest({
   String? targetRoot,
   DnaHost? host,
   String? baseDnaRoot,
   void Function(String message)? log,
   bool workspace = false,
+  bool quiet = false,
 }) async {
   final effectiveHost = host ?? IoDnaHost();
   final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
@@ -50,6 +56,7 @@ Future<void> runDnaTest({
       base: base,
       emit: emit,
       workspace: workspace,
+      quiet: quiet,
     );
   } finally {
     if (baseDnaRoot == null) effectiveHost.deleteDir(base);
@@ -64,6 +71,7 @@ Future<void> _runDnaTest({
   required String base,
   required void Function(String message) emit,
   required bool workspace,
+  required bool quiet,
 }) async {
   final effectiveHost = host;
 
@@ -86,8 +94,13 @@ Future<void> _runDnaTest({
   for (final warning in result.warnings) {
     emit('warning: $warning');
   }
-  for (final message in result.messages) {
-    emit(message);
+  if (result.commitError != null && !quiet) {
+    emit('warning: ${result.commitError}');
+  }
+  if (!quiet) {
+    for (final message in result.messages) {
+      emit(message);
+    }
   }
 
   for (final path in result.backedUp) {
@@ -114,6 +127,7 @@ typedef DnaTestRunner = Future<void> Function({
   String? baseDnaRoot,
   void Function(String message)? log,
   bool workspace,
+  bool quiet,
 });
 
 // .............................................................................

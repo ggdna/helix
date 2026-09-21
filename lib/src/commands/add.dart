@@ -47,6 +47,14 @@ class Add extends Command<dynamic> {
       defaultsTo: false,
       negatable: false,
     );
+    argParser.addFlag(
+      'quiet',
+      help:
+          'Do not report the instantiated files and a failed automatic '
+          'commit — for a caller that prints its own summary.',
+      defaultsTo: false,
+      negatable: false,
+    );
   }
 
   /// The log function.
@@ -108,6 +116,7 @@ class Add extends Command<dynamic> {
       targetRoot: root == '.' ? null : root,
       log: ggLog,
       workspace: argResults!['workspace'] as bool,
+      quiet: argResults!['quiet'] as bool,
     );
   }
 

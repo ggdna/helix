@@ -86,6 +86,7 @@ class DnaInstantiationResult {
     this.uncommittedTargets = const [],
     this.sources = const {},
     this.committed = false,
+    this.commitError,
   });
 
   /// Progress and adoption log lines.
@@ -111,6 +112,12 @@ class DnaInstantiationResult {
   /// [generatedDnaCommitMessage]. `false` means the files are written
   /// but still need a manual commit (no repository, no git identity).
   final bool committed;
+
+  /// Why the automatic commit did not happen — `null` when it did, or
+  /// when there was nothing to commit. It is the only report a quiet run
+  /// drops silently: a workspace is no repository of its own, so there
+  /// the failure is expected rather than something to act on.
+  final String? commitError;
 
   /// Existing files this run had to overwrite or delete that carry
   /// uncommitted work — the run fails and writes nothing.
@@ -565,14 +572,15 @@ Future<DnaInstantiationResult> instantiateDna({
   // belongs in the developer's working tree. A repository without git or
   // without an identity keeps the files for a manual commit.
   var committed = false;
+  String? commitError;
   try {
     await host.commitPaths(targetRoot, touchedPaths, generatedDnaCommitMessage);
     committed = true;
     messages.add('committed as "$generatedDnaCommitMessage"');
   } on Object catch (e) {
-    warnings.add(
-      'Could not commit the generated files ($e) — commit them manually.',
-    );
+    commitError =
+        'Could not commit the generated files ($e) — '
+        'commit them manually.';
   }
 
   return DnaInstantiationResult(
@@ -580,6 +588,7 @@ Future<DnaInstantiationResult> instantiateDna({
     warnings: warnings,
     updated: updated,
     committed: committed,
+    commitError: commitError,
     backedUp: backedUp,
     backupDir: backupDir,
     sources: _sourcesFor(backedUp, pathSources),

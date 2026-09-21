@@ -118,6 +118,42 @@ void main() {
       expect(log.any((m) => m.contains('Could not commit')), isTrue);
     });
 
+    test('a quiet run keeps the instantiation report to itself', () async {
+      // What `gg do init workspace` does: the caller prints its own
+      // summary, so the per-file report and the commit that could never
+      // work in a folder without git are none of the user's business.
+      final host = makeHost()..commitError = 'not a git repository';
+      await runDnaTest(
+        targetRoot: root,
+        host: host,
+        baseDnaRoot: '/no-base',
+        log: log.add,
+        quiet: true,
+      );
+
+      // The files are there — only the report is gone.
+      expect(host.existsFile('$root/LICENSE'), isTrue);
+      expect(log, isEmpty);
+    });
+
+    test('a quiet run still reports what asks for a decision', () async {
+      final host = makeHost(
+        extra: {
+          '$root/dna/_dna.json':
+              '{"version": 1, "layers": ["a-dna"], "unknownKey": 1}',
+        },
+      );
+      await runDnaTest(
+        targetRoot: root,
+        host: host,
+        baseDnaRoot: '/no-base',
+        log: log.add,
+        quiet: true,
+      );
+      expect(log.any((m) => m.startsWith('warning: ')), isTrue);
+      expect(log.any((m) => m.contains('instantiated')), isFalse);
+    });
+
     test('backs up locally changed files and prints where they went', () async {
       final host = makeHost();
       await run(host);
