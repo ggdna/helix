@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 - 2026-09-22
+
+### Added
+
+- Add a --quiet flag to add and build that drops the per-file instantiation report and the failed automatic commit
+
 ## 1.8.0 - 2026-09-15
 
 ### Added

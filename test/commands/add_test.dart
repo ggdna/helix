@@ -29,11 +29,15 @@ void main() {
   /// The `workspace` flag each triggered build received, in call order.
   final buildWorkspaceFlags = <bool>[];
 
+  /// The `quiet` flag each triggered build received, in call order.
+  final buildQuietFlags = <bool>[];
+
   setUp(() {
     messages.clear();
     commands.clear();
     builds.clear();
     buildWorkspaceFlags.clear();
+    buildQuietFlags.clear();
   });
 
   ProcessRun fakeRun({int exitCode = 0, String stderr = ''}) =>
@@ -65,9 +69,11 @@ void main() {
                 String? baseDnaRoot,
                 void Function(String message)? log,
                 bool workspace = false,
+                bool quiet = false,
               }) async {
                 builds.add(targetRoot);
                 buildWorkspaceFlags.add(workspace);
+                buildQuietFlags.add(quiet);
                 log?.call('+ instantiated LICENSE');
                 if (buildThrows != null) throw buildThrows;
               },
@@ -153,6 +159,18 @@ void main() {
         expect(buildWorkspaceFlags, [true]);
       });
 
+      test('defaults --quiet to false', () async {
+        final host = project(installed: ['dna_dart']);
+        await runAdd(host, ['dna_dart']);
+        expect(buildQuietFlags, [false]);
+      });
+
+      test('passes --quiet through to the build', () async {
+        final host = project(installed: ['dna_dart']);
+        await runAdd(host, ['dna_dart', '--quiet']);
+        expect(buildQuietFlags, [true]);
+      });
+
       test('builds the current folder when no target is given', () async {
         // Seeded at the working folder instead of below /p, because that is
         // what `--target` defaults to.
@@ -179,6 +197,7 @@ void main() {
                 String? baseDnaRoot,
                 void Function(String message)? log,
                 bool workspace = false,
+                bool quiet = false,
               }) async => builds.add(targetRoot),
             ),
           );

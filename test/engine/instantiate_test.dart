@@ -527,7 +527,11 @@ packages:
       expect(r.upToDate, isFalse);
       expect(r.updated, isNotEmpty);
       expect(host.existsFile('$root/LICENSE'), isTrue);
-      expect(r.warnings.any((w) => w.contains('Could not commit')), isTrue);
+      // Reported apart from the warnings: a caller that knows the target
+      // is no repository — a ticket workspace — drops it and keeps the
+      // warnings that do ask for a decision.
+      expect(r.commitError, contains('Could not commit'));
+      expect(r.warnings.any((w) => w.contains('Could not commit')), isFalse);
     });
 
     test('the config is read, the bookkeeping written, side by side', () async {
