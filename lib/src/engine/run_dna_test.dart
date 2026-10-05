@@ -146,6 +146,12 @@ String cAction(Object message) => yellow(message);
 String cDetail(Object message) => darkGray(message);
 
 // .............................................................................
+/// Tells the user that a command left the current folder for the root of
+/// its repository — `gg dna build` from `lib/src` builds the project.
+String describeRepositoryRoot(String root) =>
+    '${cDetail('Running in the repository root')} ${cCmd(root)}';
+
+// .............................................................................
 /// The paths below `<root>/dna/` that escape a leading dot with `dot_`
 /// instead of `dot-`, project-relative. Only `dot-` is decoded, so these
 /// would instantiate as literal `dot_…` folders.

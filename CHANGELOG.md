@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- gg dna build and gg dna add run in the root of the repository the current folder lies in when no --target is given
+
 ## 1.9.0 - 2026-09-22
 
 ### Added

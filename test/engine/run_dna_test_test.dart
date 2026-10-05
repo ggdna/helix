@@ -314,6 +314,15 @@ void main() {
     });
   });
 
+  group('describeRepositoryRoot', () {
+    test('names the root the command moved to, the path as a file', () {
+      expect(
+        describeRepositoryRoot('/repo'),
+        '${cDetail('Running in the repository root')} ${cCmd('/repo')}',
+      );
+    });
+  });
+
   group('messages', () {
     test('are single-line headlines', () {
       expect(

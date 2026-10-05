@@ -8,19 +8,30 @@ import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
 import '../engine/run_dna_test.dart';
+import '../util/dna_fs.dart';
+import '../util/dna_fs_io.dart';
+import '../util/git_root.dart';
 
 /// Builds the DNA of a project: one instantiation plus the verification of
 /// the instances — exactly what the placed test does in a project that has
 /// a test framework, and the way to run the DNA cycle in one that has none.
 class Build extends Command<dynamic> {
-  /// Constructor. [runner] is injectable for tests.
-  Build({required this.ggLog, DnaTestRunner? runner})
-    : _runner = runner ?? runDnaTest {
+  /// Constructor. [runner], [host] and `workingDir` — the folder the
+  /// repository root is searched from, the current one by default — are
+  /// injectable for tests.
+  Build({
+    required this.ggLog,
+    DnaTestRunner? runner,
+    DnaHost? host,
+    this._workingDir = '.',
+  }) : _runner = runner ?? runDnaTest,
+       _host = host ?? IoDnaHost() {
     argParser.addOption(
       'target',
       abbr: 't',
-      help: 'The project folder to build.',
-      defaultsTo: '.',
+      help:
+          'The project folder to build. Defaults to the root of the '
+          'repository the current folder lies in.',
     );
     argParser.addFlag(
       'workspace',
@@ -45,6 +56,10 @@ class Build extends Command<dynamic> {
 
   final DnaTestRunner _runner;
 
+  final DnaHost _host;
+
+  final String _workingDir;
+
   @override
   final name = 'build';
 
@@ -54,13 +69,19 @@ class Build extends Command<dynamic> {
   // ...........................................................................
   @override
   Future<void> run() async {
-    final target = argResults!['target'] as String;
+    final quiet = argResults!['quiet'] as bool;
+    final root = resolveTarget(
+      _host,
+      argResults!['target'] as String?,
+      _workingDir,
+      onMoved: quiet ? null : (root) => ggLog(describeRepositoryRoot(root)),
+    );
     // `null` is what the placed test passes: the current folder, absolute.
     await _runner(
-      targetRoot: target == '.' ? null : target.replaceAll(r'\', '/'),
+      targetRoot: root == '.' ? null : root,
       log: ggLog,
       workspace: argResults!['workspace'] as bool,
-      quiet: argResults!['quiet'] as bool,
+      quiet: quiet,
     );
   }
 }

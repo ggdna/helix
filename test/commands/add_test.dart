@@ -10,6 +10,7 @@ import 'package:args/command_runner.dart';
 import 'package:helix/helix.dart' show cAction, cCmd, cDetail, cError;
 import 'package:helix/src/commands/add.dart';
 import 'package:helix/src/commands/init.dart';
+import 'package:helix/src/engine/run_dna_test.dart' show describeRepositoryRoot;
 import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:helix/src/util/process_run.dart';
@@ -55,12 +56,14 @@ void main() {
     List<String> args, {
     ProcessRun? processRun,
     Object? buildThrows,
+    String? workingDir,
   }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
       ..addCommand(
         Add(
           ggLog: messages.add,
           host: host,
+          workingDir: workingDir ?? '.',
           processRun: processRun ?? fakeRun(),
           dnaTest:
               ({
@@ -79,7 +82,12 @@ void main() {
               },
         ),
       );
-    await runner.run(['add', ...args, '--target', root]);
+    // Started from [workingDir], `add` finds its folder itself.
+    await runner.run([
+      'add',
+      ...args,
+      if (workingDir == null) ...['--target', root],
+    ]);
   }
 
   /// A project with a DNA config, as `helix init` leaves it.
@@ -204,6 +212,27 @@ void main() {
         await runner.run(['add', 'dna_dart']);
         // `null` means »the current folder«, as the placed test passes it.
         expect(builds, [null]);
+      });
+
+      test('works in the repository root when started below it', () async {
+        final host = project(installed: ['dna_dart'])
+          ..writeString('$root/.git/HEAD', 'ref: refs/heads/main');
+        await runAdd(host, ['dna_dart'], workingDir: '$root/lib/src');
+        expect(commands, ['dart pub add dev:dna_dart']);
+        expect(layersOf(host), ['dna_dart']);
+        expect(builds, [root]);
+        expect(messages.first, describeRepositoryRoot(root));
+      });
+
+      test('does not report the repository root with --quiet', () async {
+        final host = project(installed: ['dna_dart'])
+          ..writeString('$root/.git/HEAD', 'ref: refs/heads/main');
+        await runAdd(host, [
+          'dna_dart',
+          '--quiet',
+        ], workingDir: '$root/lib/src');
+        expect(builds, [root]);
+        expect(messages, isNot(contains(describeRepositoryRoot(root))));
       });
 
       test('builds even when nothing changed', () async {
