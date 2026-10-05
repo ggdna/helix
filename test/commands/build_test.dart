@@ -39,9 +39,28 @@ void main() {
         if (thrown != null) throw thrown!;
       };
 
-  Future<void> runBuild(List<String> args) async {
+  /// A project in `/repo` with its repository and a `lib/src` folder.
+  MemoryDnaHost repository() => MemoryDnaHost(
+    files: {
+      '/repo/.git/HEAD': 'ref: refs/heads/main',
+      '/repo/lib/src/a.dart': '',
+    },
+  );
+
+  Future<void> runBuild(
+    List<String> args, {
+    DnaHost? host,
+    String workingDir = '.',
+  }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
-      ..addCommand(Build(ggLog: messages.add, runner: recordingRunner()));
+      ..addCommand(
+        Build(
+          ggLog: messages.add,
+          runner: recordingRunner(),
+          host: host ?? MemoryDnaHost(),
+          workingDir: workingDir,
+        ),
+      );
     await runner.run(['build', ...args]);
   }
 
@@ -63,6 +82,49 @@ void main() {
     test('instantiates the current folder by default', () async {
       await runBuild([]);
       // null means »the current folder«, the same the placed test passes.
+      expect(calls.single.targetRoot, isNull);
+    });
+
+    test('builds the repository root when started below it', () async {
+      await runBuild([], host: repository(), workingDir: '/repo/lib/src');
+      expect(calls.single.targetRoot, '/repo');
+      expect(messages.first, describeRepositoryRoot('/repo'));
+    });
+
+    test('stays in the repository root when started there', () async {
+      await runBuild([], host: repository(), workingDir: '/repo');
+      expect(calls.single.targetRoot, '/repo');
+      expect(messages, ['dna is up to date']);
+    });
+
+    test('stays in the current folder outside a repository', () async {
+      await runBuild([], host: repository(), workingDir: '/other/lib');
+      expect(calls.single.targetRoot, '/other/lib');
+      expect(messages, ['dna is up to date']);
+    });
+
+    test('does not report the repository root with --quiet', () async {
+      await runBuild(
+        ['--quiet'],
+        host: repository(),
+        workingDir: '/repo/lib/src',
+      );
+      expect(calls.single.targetRoot, '/repo');
+      expect(messages, ['dna is up to date']);
+    });
+
+    test('keeps an explicit target inside a repository', () async {
+      await runBuild(
+        ['--target', '/repo/lib'],
+        host: repository(),
+        workingDir: '/repo/lib/src',
+      );
+      expect(calls.single.targetRoot, '/repo/lib');
+      expect(messages, ['dna is up to date']);
+    });
+
+    test('keeps an explicit target of the current folder', () async {
+      await runBuild(['--target', '.'], host: repository());
       expect(calls.single.targetRoot, isNull);
     });
 

@@ -7,13 +7,13 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
-import 'package:path/path.dart' as p;
 
 import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
 import '../util/dna_layout.dart';
+import '../util/git_root.dart';
 import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
@@ -194,17 +194,7 @@ class Init extends Command<dynamic> {
   /// Whether [root] lies in a git work tree — its own `.git` or that of a
   /// parent folder, the way git itself looks for it. `.git` is a folder in
   /// a repository and a file in a worktree or submodule.
-  bool _isInGitRepo(String root) {
-    var dir = _host.realPath(root);
-    while (true) {
-      if (_host.existsDir('$dir/.git') || _host.existsFile('$dir/.git')) {
-        return true;
-      }
-      final parent = p.dirname(dir);
-      if (parent == dir) return false;
-      dir = parent;
-    }
-  }
+  bool _isInGitRepo(String root) => findGitRoot(_host, root) != null;
 
   // ...........................................................................
   /// The language to bootstrap [root] for: `--language` when given, else

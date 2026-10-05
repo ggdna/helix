@@ -13,6 +13,7 @@ import '../util/dna_config.dart';
 import '../util/dna_config_edit.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
+import '../util/git_root.dart';
 import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
@@ -24,20 +25,24 @@ import '../util/process_run_io.dart';
 /// `dna/_dna.json`.
 class Add extends Command<dynamic> {
   /// Constructor. [host], [processRun] and [dnaTest] are the injectable
-  /// seams to the file system, to the package managers and to the engine.
+  /// seams to the file system, to the package managers and to the engine;
+  /// `workingDir` is the folder the repository root is searched from, the
+  /// current one by default.
   Add({
     required this.ggLog,
     DnaHost? host,
     ProcessRun? processRun,
     DnaTestRunner? dnaTest,
+    this._workingDir = '.',
   }) : _host = host ?? IoDnaHost(),
        _processRun = processRun ?? ioProcessRun,
        _dnaTest = dnaTest ?? runDnaTest {
     argParser.addOption(
       'target',
       abbr: 't',
-      help: 'The project folder to add the DNA to.',
-      defaultsTo: '.',
+      help:
+          'The project folder to add the DNA to. Defaults to the root of '
+          'the repository the current folder lies in.',
     );
     argParser.addFlag(
       'workspace',
@@ -65,6 +70,8 @@ class Add extends Command<dynamic> {
   final ProcessRun _processRun;
 
   final DnaTestRunner _dnaTest;
+
+  final String _workingDir;
 
   @override
   final name = 'add';
@@ -121,10 +128,14 @@ class Add extends Command<dynamic> {
   }
 
   // ...........................................................................
-  String _root() {
-    final option = (argResults!['target'] as String).replaceAll(r'\', '/');
-    return option == '.' ? '.' : option;
-  }
+  String _root() => resolveTarget(
+    _host,
+    argResults!['target'] as String?,
+    _workingDir,
+    onMoved: argResults!['quiet'] as bool
+        ? null
+        : (root) => ggLog(describeRepositoryRoot(root)),
+  );
 
   // ...........................................................................
   AddTarget _target() {

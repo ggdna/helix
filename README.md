@@ -67,6 +67,11 @@ every test run that they always match the generated originals.
    DNA and commits what it generated as `#gg: generated DNA`. From now on
    every test run keeps the project in sync.
 
+   `helix build` and `helix add` work on the root of the repository the
+   current folder lies in, so they can be run from any subfolder. Outside
+   a repository they use the current folder; `--target` names another
+   folder explicitly.
+
 ## Distribution: dev-dependencies + inheritance tree
 
 DNAs are normal packages (pnpm, for Dart-reachable DNAs additionally
