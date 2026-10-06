@@ -506,6 +506,71 @@ void main() {
       });
     });
 
+    group('--quiet', () {
+      test('defaults to false', () {
+        final command = Init(ggLog: messages.add);
+        expect(command.argParser.options['quiet']!.defaultsTo, isFalse);
+      });
+
+      test('keeps only the package manager steps', () async {
+        final host = MemoryDnaHost();
+        await runInit(host, args: ['--language', 'dart', '--quiet']);
+        expect(messages, [cDetail('✓ dart pub add dev:helix')]);
+        // Quiet changes the report, not the work.
+        expect(host.existsFile('$root/pubspec.yaml'), isTrue);
+        expect(host.existsFile('$root/$dnaConfigPath'), isTrue);
+      });
+
+      test('drops the kept files and the layers as well', () async {
+        final host = MemoryDnaHost(
+          files: {
+            '$root/pubspec.yaml':
+                'name: x\ndependencies:\n  dna_guides: ^1.0.0\n'
+                'dev_dependencies:\n  helix: ^1.0.0\n',
+            '$root/$dnaConfigPath': '// custom config',
+            '$root/.dart_tool/package_config.json':
+                '{"packages": [ '
+                '{"name": "dna_guides", "rootUri": "../../cache/dna_guides"}]}',
+            '/cache/dna_guides/pubspec.yaml':
+                'name: dna_guides\nversion: 1.0.0\n',
+            '/cache/dna_guides/$dnaConfigPath':
+                '{"version": $dnaFormatVersion, "role": "dna"}',
+            '/cache/dna_guides/dna/LICENSE': 'MIT\n',
+          },
+        );
+        await runInit(host, args: ['--quiet']);
+        expect(messages, [cDetail('✓ Kept existing dev dependency helix')]);
+      });
+
+      test('keeps a failed command, which needs action', () async {
+        final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});
+        await runInit(
+          host,
+          args: ['--quiet'],
+          processRun: fakeRun(exitCode: 66, stderr: 'no network'),
+        );
+        expect(messages, [
+          '! dart pub add dev:helix failed — run it manually:\nno network',
+        ]);
+      });
+
+      test('drops the created package.json', () async {
+        final host = MemoryDnaHost();
+        await runInit(
+          host,
+          args: ['--language', 'typescript', '--quiet'],
+          processRun: fakeRun(
+            onRun: (executable, args) {
+              if (args.first == 'init') {
+                host.writeString('$root/package.json', '{}');
+              }
+            },
+          ),
+        );
+        expect(messages, [cDetail('✓ npm install -D @tssuite/helix-js')]);
+      });
+    });
+
     group('the config skeleton', () {
       test('parses as a valid empty config', () async {
         final host = MemoryDnaHost(files: {'$root/pubspec.yaml': dartProject});

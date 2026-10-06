@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- gg do init workspace no longer prints the next steps of gg dna init: helix init gets a --quiet flag
+
 ## 1.10.0 - 2026-10-05
 
 ### Changed

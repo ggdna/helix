@@ -112,6 +112,14 @@ class Init extends Command<dynamic> {
           'omitted.',
       allowed: [for (final l in ProjectLanguage.values) l.option],
     );
+    argParser.addFlag(
+      'quiet',
+      help:
+          'Do not report the created files and the next steps — for a '
+          'caller that prints its own summary.',
+      defaultsTo: false,
+      negatable: false,
+    );
   }
 
   /// The log function.
@@ -167,6 +175,11 @@ class Init extends Command<dynamic> {
       _place('$root/test/dna/dna.spec.ts', tsWrapperTest);
     }
 
+    // A caller that runs init as one step of its own — `gg do init
+    // workspace` — adds the layer itself, and its folder is no repository
+    // by design: the next steps below would only mislead there.
+    if (_quiet) return;
+
     if (layers.isNotEmpty) {
       ggLog(cDetail('✓ Layers: ${layers.join(', ')}'));
     }
@@ -189,6 +202,9 @@ class Init extends Command<dynamic> {
     );
     ggLog('');
   }
+
+  // ...........................................................................
+  bool get _quiet => argResults!['quiet'] as bool;
 
   // ...........................................................................
   /// Whether [root] lies in a git work tree — its own `.git` or that of a
@@ -231,7 +247,7 @@ class Init extends Command<dynamic> {
   void _pubInit(String root) {
     final name = dartPackageName(root);
     _host.writeString('$root/pubspec.yaml', pubspecSkeleton(name));
-    ggLog(cDetail('✓ Created pubspec.yaml ($name)'));
+    if (!_quiet) ggLog(cDetail('✓ Created pubspec.yaml ($name)'));
   }
 
   // ...........................................................................
@@ -252,7 +268,7 @@ class Init extends Command<dynamic> {
         '${result.failureOutput}',
       );
     }
-    ggLog(cDetail('✓ Created package.json'));
+    if (!_quiet) ggLog(cDetail('✓ Created package.json'));
   }
 
   // ...........................................................................
@@ -306,10 +322,10 @@ class Init extends Command<dynamic> {
   // ...........................................................................
   void _place(String path, String content) {
     if (_host.existsFile(path)) {
-      ggLog(cDetail('✓ Kept existing $path'));
+      if (!_quiet) ggLog(cDetail('✓ Kept existing $path'));
       return;
     }
     _host.writeString(path, content);
-    ggLog(cDetail('✓ Placed $path'));
+    if (!_quiet) ggLog(cDetail('✓ Placed $path'));
   }
 }
