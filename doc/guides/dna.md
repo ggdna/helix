@@ -205,6 +205,41 @@ rejected before instantiation starts: a cycle (`dnaA` → `dnaB` → `dnaA`,
 including a variable referencing itself), reported with the path that
 closes it, and a chain reaching deeper than 10 levels.
 
+### Values a Layer Must Set: `mustOverride`
+
+A layer marks variables whose value every layer below it has to set
+explicitly — in `dna/_dna.json`, next to `layers`:
+
+```jsonc
+{
+  "version": 1,
+  "layers": [],
+  "mustOverride": { "dnaGitQuickCheckPipelineName": true },
+}
+```
+
+- `true`: every child layer (a layer listing this one in its `layers`)
+  and the project must give the variable a value in its **own**
+  `dna/_vars.json`. `vars` in `dna/_dna.json` and `null` do not count; a
+  value that only reaches the merge through a sibling layer does not
+  either.
+- A layer that does not mention the variable inherits the flag of its
+  parents — one parent passing on `true` is enough.
+- `false` lifts the duty for the layers below. The layer that writes
+  `false` is itself still bound by what it inherits.
+- The declaring layer is never bound by its own flag, so its own placed
+  test needs no value.
+- A `--workspace` build exempts the workspace itself (its `dna/` is a
+  throwaway scaffold); its layers are still checked.
+
+A missing value fails the run before anything is written, naming the
+file to fix and the layer that asks for it:
+
+```text
+Variables marked mustOverride have no value:
+  dna/_vars.json must set "dnaGitQuickCheckPipelineName" (mustOverride of dna-scripts)
+```
+
 ## File-Naming Conversion
 
 DNA files use **canonical kebab-case** names (`code-conventions.md`). At
@@ -227,6 +262,7 @@ instances are rewritten automatically.
   "role": "project",            // "dna" for DNA repositories
   "layers": ["dna_guides"],       // package names, in application order
   "vars": { "dnaProjectName": "my-project" },
+  "mustOverride": { "dnaProjectName": true }, // layers below must set it
   "fileNaming": "snake_case",   // camelCase | kebab-case | keep
   "claude": { "claudeMdInclude": ["doc/conventions"] }
 }

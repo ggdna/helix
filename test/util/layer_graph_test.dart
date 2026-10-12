@@ -25,10 +25,11 @@ void main() {
     String name,
     String version, {
     List<String> layers = const [],
+    String? config,
   }) => {
     '$root/node_modules/$name/package.json':
         '{"name": "$name", "version": "$version"}',
-    '$root/node_modules/$name/$dnaConfigPath': dnaConfig(layers),
+    '$root/node_modules/$name/$dnaConfigPath': config ?? dnaConfig(layers),
     '$root/node_modules/$name/dna/doc/$name.md': '# $name',
   };
 
@@ -127,6 +128,34 @@ void main() {
         r.layers.firstWhere((l) => l.name == 'dna-guides').via,
         'dna-dart',
       );
+    });
+
+    test('every layer carries all its parents and its flags', () {
+      final host = MemoryDnaHost(
+        files: {
+          ...npmDna(
+            'ds-dna-dart',
+            '1.0.0',
+            config:
+                '{"version": $dnaFormatVersion, '
+                '"layers": ["dna-dart", "@acme/ds-dna", "ds-dna-dart"], '
+                '"mustOverride": {"dnaPipeline": false}}',
+          ),
+          ...npmDna('dna-dart', '2.0.0', layers: ['dna-guides']),
+          ...npmDna('@acme/ds-dna', '1.0.0', layers: ['dna-guides']),
+          ...npmDna('dna-guides', '1.0.0'),
+        },
+      );
+      final layers = {
+        for (final l in expand(host, ['ds-dna-dart']).layers) l.name: l,
+      };
+      // Canonical names, the own name dropped — and the second child of
+      // the diamond still names its parent although `via` does not.
+      expect(layers['ds-dna-dart']!.parents, ['dna-dart', 'ds-dna']);
+      expect(layers['ds-dna']!.parents, ['dna-guides']);
+      expect(layers['dna-guides']!.parents, isEmpty);
+      expect(layers['ds-dna-dart']!.mustOverride, {'dnaPipeline': false});
+      expect(layers['dna-guides']!.mustOverride, isEmpty);
     });
 
     test('resolves pub packages via package_config.json, snake names', () {

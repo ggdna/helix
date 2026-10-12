@@ -127,6 +127,37 @@ void main() {
       }
     });
 
+    test('parses mustOverride flags', () {
+      final r = readDnaConfig(
+        hostWith('{"mustOverride": {"dnaPipeline": true, "dnaOrg": false}}'),
+        root,
+      );
+      expect(r.config.mustOverride, {'dnaPipeline': true, 'dnaOrg': false});
+      expect(r.warnings, isEmpty);
+      expect(readDnaConfig(hostWith('{}'), root).config.mustOverride, isEmpty);
+    });
+
+    test('rejects malformed mustOverride sections', () {
+      for (final (config, message) in [
+        ('{"mustOverride": ["dnaX"]}', 'must be an object'),
+        ('{"mustOverride": {"pipeline": true}}', 'which is no variable'),
+        ('{"mustOverride": {"dnaX": "yes"}}', 'must be true or false'),
+        ('{"mustOverride": {"dnaX": null}}', 'must be true or false'),
+      ]) {
+        expect(
+          () => readDnaConfig(hostWith(config), root),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains(message),
+            ),
+          ),
+          reason: config,
+        );
+      }
+    });
+
     test('rejects a path where a package name belongs', () {
       expect(
         () => readDnaConfig(hostWith('{"layers": ["../dna_guides"]}'), root),

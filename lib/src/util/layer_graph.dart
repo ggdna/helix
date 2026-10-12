@@ -33,6 +33,8 @@ class ResolvedLayer {
     required this.source,
     this.version,
     this.via,
+    this.parents = const [],
+    this.mustOverride = const {},
   });
 
   /// Canonical layer identity (lowercase, npm scope dropped, `_` folded
@@ -56,6 +58,14 @@ class ResolvedLayer {
 
   /// Name of the layer that pulled this one in; `null` for direct layers.
   final String? via;
+
+  /// Canonical names of the layers this one declares as its own parents
+  /// — unlike [via], every one of them, not just the first that reached
+  /// it.
+  final List<String> parents;
+
+  /// The `mustOverride` flags of the layer's own `dna/_dna.json`.
+  final Map<String, bool> mustOverride;
 }
 
 // .............................................................................
@@ -133,8 +143,10 @@ class ResolvedLayer {
 
     inProgress.add(name);
     final parentChain = [resolutionOf(located.root), ...chain];
+    final parents = <String>[];
     for (final parent in ownConfig.config.layers) {
       if (canonicalPackageName(parent) == name) continue;
+      parents.add(canonicalPackageName(parent));
       expand(parent, name, depth + 1, parentChain);
     }
     inProgress.removeLast();
@@ -149,6 +161,8 @@ class ResolvedLayer {
         source: located.source,
         version: located.version,
         via: via,
+        parents: parents,
+        mustOverride: ownConfig.config.mustOverride,
       ),
     );
   }

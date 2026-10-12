@@ -34,6 +34,7 @@ class DnaConfig {
   const DnaConfig({
     this.layers = const [],
     this.vars = const {},
+    this.mustOverride = const {},
     this.claude = const DnaClaudeConfig(),
   });
 
@@ -44,6 +45,12 @@ class DnaConfig {
 
   /// Raw variable entries (`null` values delete inherited variables).
   final Map<String, Object?> vars;
+
+  /// Variables whose value the layers below this one must set explicitly
+  /// in their own `dna/_vars.json` (`true`), or no longer have to
+  /// (`false`). A variable not listed keeps the flag it inherits from the
+  /// parent layers (see `dna_must_override.dart`).
+  final Map<String, bool> mustOverride;
 
   /// The Claude tool configuration.
   final DnaClaudeConfig claude;
@@ -90,7 +97,7 @@ class DnaConfig {
 
   _requireFormatVersion(decoded['version'], where);
 
-  const knownKeys = {'version', 'layers', 'vars', 'claude'};
+  const knownKeys = {'version', 'layers', 'vars', 'mustOverride', 'claude'};
   for (final key in decoded.keys) {
     // "role" is gone: every dna/ is hand-authored source now, and whether a
     // package is used as a layer is decided by the consumer's "layers".
@@ -117,6 +124,7 @@ class DnaConfig {
     config: DnaConfig(
       layers: _parseLayers(decoded['layers'], where),
       vars: _parseVars(decoded['vars'], where, warnings),
+      mustOverride: _parseMustOverride(decoded['mustOverride'], where),
       claude: _parseClaude(decoded['claude'], where, warnings),
     ),
     warnings: warnings,
@@ -175,6 +183,31 @@ Map<String, Object?> _parseVars(
   final validated = validateDnaVarEntries(value, sourceLabel: '$where vars');
   warnings.addAll(validated.warnings);
   return validated.entries;
+}
+
+// .............................................................................
+Map<String, bool> _parseMustOverride(Object? value, String where) {
+  if (value == null) return const {};
+  if (value is! Map<String, dynamic>) {
+    throw FormatException('$where: mustOverride must be an object.');
+  }
+  final result = <String, bool>{};
+  for (final entry in value.entries) {
+    if (!dnaVarKeyRe.hasMatch(entry.key)) {
+      throw FormatException(
+        '$where: mustOverride names "${entry.key}", which is no variable — '
+        'variables are camelCase and start with "dna".',
+      );
+    }
+    final flag = entry.value;
+    if (flag is! bool) {
+      throw FormatException(
+        '$where: mustOverride of "${entry.key}" must be true or false.',
+      );
+    }
+    result[entry.key] = flag;
+  }
+  return result;
 }
 
 // .............................................................................
