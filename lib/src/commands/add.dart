@@ -7,6 +7,7 @@
 import 'package:args/command_runner.dart';
 import 'package:gg_log/gg_log.dart';
 
+import '../engine/ask_must_overrides.dart';
 import '../engine/run_dna_test.dart';
 import '../util/add_target.dart';
 import '../util/dna_config.dart';
@@ -17,26 +18,31 @@ import '../util/git_root.dart';
 import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
+import '../util/plain_errors.dart';
 import '../util/process_run.dart';
 import '../util/process_run_io.dart';
+import '../util/select_prompt_io.dart';
+import '../util/text_prompt.dart';
 
 /// Adds a DNA layer to a project: the package or git reference becomes a
 /// dev dependency, and its name becomes the last entry of `layers` in
 /// `dna/_dna.json`.
 class Add extends Command<dynamic> {
-  /// Constructor. [host], [processRun] and [dnaTest] are the injectable
-  /// seams to the file system, to the package managers and to the engine;
-  /// `workingDir` is the folder the repository root is searched from, the
-  /// current one by default.
+  /// Constructor. [host], [processRun], [dnaTest] and [textPrompt] are
+  /// the injectable seams to the file system, to the package managers, to
+  /// the engine and to the user; `workingDir` is the folder the repository
+  /// root is searched from, the current one by default.
   Add({
     required this.ggLog,
     DnaHost? host,
     ProcessRun? processRun,
     DnaTestRunner? dnaTest,
+    TextPrompt? textPrompt,
     this._workingDir = '.',
   }) : _host = host ?? IoDnaHost(),
        _processRun = processRun ?? ioProcessRun,
-       _dnaTest = dnaTest ?? runDnaTest {
+       _dnaTest = dnaTest ?? runDnaTest,
+       _textPrompt = textPrompt ?? stdinTextPrompt() {
     argParser.addOption(
       'target',
       abbr: 't',
@@ -71,6 +77,8 @@ class Add extends Command<dynamic> {
 
   final DnaTestRunner _dnaTest;
 
+  final TextPrompt _textPrompt;
+
   final String _workingDir;
 
   @override
@@ -81,17 +89,7 @@ class Add extends Command<dynamic> {
 
   // ...........................................................................
   @override
-  Future<void> run() async {
-    // The command runner strips »Exception: « from what it prints, which
-    // turns a FormatException into a message starting with »Format«. The
-    // messages here are written for a person to read, so they arrive as
-    // plain exceptions.
-    try {
-      await _add();
-    } on FormatException catch (e) {
-      throw Exception(e.message);
-    }
-  }
+  Future<void> run() => withPlainFormatErrors(_add);
 
   // ...........................................................................
   Future<void> _add() async {
@@ -116,13 +114,25 @@ class Add extends Command<dynamic> {
     _requireDnaPackage(root, target, layer);
     _addLayer(root, layer, layers);
 
+    final workspace = argResults!['workspace'] as bool;
+    // The new layer may ask for values only the project can give. A
+    // workspace is exempt: its dna/ scaffold is gone after the build.
+    if (!workspace) {
+      await askMustOverrides(
+        host: _host,
+        targetRoot: root,
+        prompt: _textPrompt,
+        ggLog: (m) => ggLog(cDetail(m)),
+      );
+    }
+
     // A layer is added to be applied, so the build follows right away —
     // the same run `helix build` performs. `null` is what the placed test
     // passes for »the current folder«.
     await _dnaTest(
       targetRoot: root == '.' ? null : root,
       log: ggLog,
-      workspace: argResults!['workspace'] as bool,
+      workspace: workspace,
       quiet: argResults!['quiet'] as bool,
     );
   }

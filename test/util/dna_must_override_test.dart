@@ -4,7 +4,10 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_must_override.dart';
+import 'package:helix/src/util/layer_graph.dart';
+import 'package:helix/src/util/package_resolution.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -160,6 +163,46 @@ void main() {
       expect(v.layer.varsFile, 'b/dna/_vars.json');
       expect(v.variable, 'dnaX');
       expect(v.requiredBy, 'a');
+    });
+  });
+
+  group('mustOverrideLayers', () {
+    const guides = ResolvedLayer(
+      name: 'dna-guides',
+      root: '/n/dna-guides',
+      package: '@ggdna/dna-guides',
+      ecosystem: PackageEcosystem.node,
+      source: PackageSource.registry,
+      mustOverride: {'dnaX': true},
+    );
+    const config = DnaConfig(
+      layers: ['@ggdna/dna-guides'],
+      mustOverride: {'dnaY': false},
+    );
+
+    List<MustOverrideLayer> build({bool includeSelf = true}) =>
+        mustOverrideLayers(
+          layers: [guides],
+          config: config,
+          varsFileOf: (layer) => '${layer.package}/dna/_vars.json',
+          ownVarsOf: (name) => {'$name-var'},
+          includeSelf: includeSelf,
+        );
+
+    test('lists the layers, then the project with canonical parents', () {
+      final layers = build();
+      expect(layers.map((l) => l.name), ['dna-guides', mustOverrideSelf]);
+      expect(layers.first.varsFile, '@ggdna/dna-guides/dna/_vars.json');
+      expect(layers.first.mustOverride, {'dnaX': true});
+      expect(layers.first.ownVars, {'dna-guides-var'});
+      expect(layers.last.varsFile, 'dna/_vars.json');
+      expect(layers.last.parents, ['dna-guides']);
+      expect(layers.last.mustOverride, {'dnaY': false});
+      expect(layers.last.ownVars, {'$mustOverrideSelf-var'});
+    });
+
+    test('leaves the project out on request', () {
+      expect(build(includeSelf: false).map((l) => l.name), ['dna-guides']);
     });
   });
 }

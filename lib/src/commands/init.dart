@@ -8,6 +8,7 @@ import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
 
+import '../engine/ask_must_overrides.dart';
 import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
@@ -18,9 +19,11 @@ import '../util/layer_graph.dart';
 import '../util/package_managers.dart';
 import '../util/package_resolution.dart';
 import '../util/process_run.dart';
+import '../util/plain_errors.dart';
 import '../util/process_run_io.dart';
 import '../util/select_prompt.dart';
 import '../util/select_prompt_io.dart';
+import '../util/text_prompt.dart';
 
 /// Content of the placed Dart wrapper test.
 const String dartWrapperTest = '''
@@ -86,17 +89,19 @@ String dnaConfigSkeleton(List<String> layers) {
 /// getting-started doc and the wrapper test. The instantiation itself runs
 /// inside that test on every test run.
 class Init extends Command<dynamic> {
-  /// Constructor. [host], [processRun] and [selectPrompt] are the
-  /// injectable seams to the file system, to the package managers and to
-  /// the user.
+  /// Constructor. [host], [processRun], [selectPrompt] and [textPrompt]
+  /// are the injectable seams to the file system, to the package managers
+  /// and to the user.
   Init({
     required this.ggLog,
     DnaHost? host,
     ProcessRun? processRun,
     SelectPrompt? selectPrompt,
+    TextPrompt? textPrompt,
   }) : _host = host ?? IoDnaHost(),
        _processRun = processRun ?? ioProcessRun,
-       _selectPrompt = selectPrompt ?? stdinSelectPrompt() {
+       _selectPrompt = selectPrompt ?? stdinSelectPrompt(),
+       _textPrompt = textPrompt ?? stdinTextPrompt() {
     argParser.addOption(
       'target',
       abbr: 't',
@@ -131,6 +136,8 @@ class Init extends Command<dynamic> {
 
   final SelectPrompt _selectPrompt;
 
+  final TextPrompt _textPrompt;
+
   @override
   final name = 'init';
 
@@ -139,7 +146,10 @@ class Init extends Command<dynamic> {
 
   // ...........................................................................
   @override
-  Future<void> run() async {
+  Future<void> run() => withPlainFormatErrors(_init);
+
+  // ...........................................................................
+  Future<void> _init() async {
     final target = (argResults!['target'] as String).replaceAll(r'\', '/');
     final root = target == '.' ? '.' : target;
 
@@ -173,6 +183,18 @@ class Init extends Command<dynamic> {
     }
     if (isNode && declaresNodeDependency(_host, root, nodeTestPackage)) {
       _place('$root/test/dna/dna.spec.ts', tsWrapperTest);
+    }
+
+    // The suggested layers may ask for values only the project can give.
+    // A quiet run belongs to a caller with its own flow — `gg do init
+    // workspace`, whose workspace is exempt from the duty anyway.
+    if (!_quiet) {
+      await askMustOverrides(
+        host: _host,
+        targetRoot: root,
+        prompt: _textPrompt,
+        ggLog: (m) => ggLog(cDetail(m)),
+      );
     }
 
     // A caller that runs init as one step of its own — `gg do init

@@ -208,11 +208,12 @@ closes it, and a chain reaching deeper than 10 levels.
 ### Values a Layer Must Set: `mustOverride`
 
 A layer marks variables whose value every layer below it has to set
-explicitly — in `dna/_dna.json`, next to `layers`:
+explicitly — in `dna/_dna.json`, next to `layers`. The flags need format
+version 2:
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "layers": [],
   "mustOverride": { "dnaGitQuickCheckPipelineName": true },
 }
@@ -240,6 +241,24 @@ Variables marked mustOverride have no value:
   dna/_vars.json must set "dnaGitQuickCheckPipelineName" (mustOverride of dna-scripts)
 ```
 
+`helix init` and `helix add` ask for every value the layers require and
+the project does not set yet, and write the answers into
+`dna/_vars.json` — comments stay. The inherited value is never offered:
+it is exactly what has to be replaced. Only a value the project already
+gives in the `vars` of `dna/_dna.json` is offered as the default. A
+`--workspace` add and a `--quiet` init ask nothing; without a terminal
+they name the variables to set by hand instead.
+
+**Compatibility.** Configs with `"version": 1` stay valid and are read
+as before; only a config using `mustOverride` needs `"version": 2`, and
+`mustOverride` in a version 1 config is an error. The version is what
+enforces a current engine: a helix (or gg) that predates the flags
+rejects a version 2 config instead of ignoring them silently — in a
+consumer as much as in the layer itself, since every layer's config
+is read. A `helix: ^1.12.0` in a layer's `pubspec.yaml` covers only
+its own placed test: helix is a dev dependency there, and dev
+dependencies do not reach the consumers.
+
 ## File-Naming Conversion
 
 DNA files use **canonical kebab-case** names (`code-conventions.md`). At
@@ -262,7 +281,7 @@ instances are rewritten automatically.
   "role": "project",            // "dna" for DNA repositories
   "layers": ["dna_guides"],       // package names, in application order
   "vars": { "dnaProjectName": "my-project" },
-  "mustOverride": { "dnaProjectName": true }, // layers below must set it
+  "mustOverride": { "dnaProjectName": true }, // needs "version": 2
   "fileNaming": "snake_case",   // camelCase | kebab-case | keep
   "claude": { "claudeMdInclude": ["doc/conventions"] }
 }

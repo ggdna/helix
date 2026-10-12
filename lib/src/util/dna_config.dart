@@ -95,7 +95,7 @@ class DnaConfig {
     throw FormatException('$where must contain a JSON object.');
   }
 
-  _requireFormatVersion(decoded['version'], where);
+  final version = _requireFormatVersion(decoded['version'], where);
 
   const knownKeys = {'version', 'layers', 'vars', 'mustOverride', 'claude'};
   for (final key in decoded.keys) {
@@ -124,7 +124,7 @@ class DnaConfig {
     config: DnaConfig(
       layers: _parseLayers(decoded['layers'], where),
       vars: _parseVars(decoded['vars'], where, warnings),
-      mustOverride: _parseMustOverride(decoded['mustOverride'], where),
+      mustOverride: _parseMustOverride(decoded['mustOverride'], where, version),
       claude: _parseClaude(decoded['claude'], where, warnings),
     ),
     warnings: warnings,
@@ -132,13 +132,22 @@ class DnaConfig {
 }
 
 // .............................................................................
-void _requireFormatVersion(Object? value, String where) {
-  if (value == dnaFormatVersion) return;
+/// Returns the format version of a config, which may be any version from
+/// [dnaFormatVersion] up to [dnaLatestConfigFormatVersion] — older
+/// configs stay readable.
+int _requireFormatVersion(Object? value, String where) {
+  if (value is int &&
+      value >= dnaFormatVersion &&
+      value <= dnaLatestConfigFormatVersion) {
+    return value;
+  }
   throw FormatException(
     value == null
         ? '$where: "version" is missing — add "version": $dnaFormatVersion.'
         : '$where: format version $value is not supported — this helix '
-              'reads version $dnaFormatVersion.',
+              'reads versions $dnaFormatVersion to '
+              '$dnaLatestConfigFormatVersion. Update gg and helix to the '
+              'newest version.',
   );
 }
 
@@ -186,8 +195,17 @@ Map<String, Object?> _parseVars(
 }
 
 // .............................................................................
-Map<String, bool> _parseMustOverride(Object? value, String where) {
+Map<String, bool> _parseMustOverride(Object? value, String where, int version) {
   if (value == null) return const {};
+  // A helix that reads only version 1 would drop the flags with a mere
+  // "unknown key" warning — the version is what makes it fail instead.
+  if (version < dnaMustOverrideFormatVersion) {
+    throw FormatException(
+      '$where: mustOverride needs "version": '
+      '$dnaMustOverrideFormatVersion — older helix versions would ignore '
+      'it silently.',
+    );
+  }
   if (value is! Map<String, dynamic>) {
     throw FormatException('$where: mustOverride must be an object.');
   }

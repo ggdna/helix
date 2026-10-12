@@ -126,7 +126,7 @@ the config is what names the layers that folder builds on. Run
 - `layers` lists package names in application order. A dependency that
   is not listed is not a layer.
 - `mustOverride` names variables the layers below must set themselves
-  (see [Variables](#variables)).
+  and needs `"version": 2` (see [Variables](#variables)).
 
 `dna/` is always hand-authored source. Helix never writes into it — the
 merged result is instantiated into the project root and nowhere else.
@@ -291,11 +291,12 @@ chain deeper than 10 levels.
 ### Values a layer must set: `mustOverride`
 
 A layer marks variables whose value every layer below it has to set
-explicitly — in `dna/_dna.json`, next to `layers`:
+explicitly — in `dna/_dna.json`, next to `layers`. The flags need format
+version 2:
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "layers": [],
   "mustOverride": { "dnaGitQuickCheckPipelineName": true },
 }
@@ -322,6 +323,24 @@ file to fix and the layer that asks for it:
 Variables marked mustOverride have no value:
   dna/_vars.json must set "dnaGitQuickCheckPipelineName" (mustOverride of dna-scripts)
 ```
+
+`helix init` and `helix add` ask for every value the layers require and
+the project does not set yet, and write the answers into
+`dna/_vars.json` — comments stay. The inherited value is never offered:
+it is exactly what has to be replaced. Only a value the project already
+gives in the `vars` of `dna/_dna.json` is offered as the default. A
+`--workspace` add and a `--quiet` init ask nothing; without a terminal
+they name the variables to set by hand instead.
+
+**Compatibility.** Configs with `"version": 1` stay valid and are read
+as before; only a config using `mustOverride` needs `"version": 2`, and
+`mustOverride` in a version 1 config is an error. The version is what
+enforces a current engine: a helix (or gg) that predates the flags
+rejects a version 2 config instead of ignoring them silently — in a
+consumer as much as in the layer itself, since every layer's config
+is read. A `helix: ^1.12.0` in a layer's `pubspec.yaml` covers only
+its own placed test: helix is a dev dependency there, and dev
+dependencies do not reach the consumers.
 
 ## File naming
 

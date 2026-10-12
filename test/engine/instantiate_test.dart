@@ -975,7 +975,7 @@ packages:
       MemoryDnaHost hostWith(Map<String, String> extra) => makeHost(
         extra: {
           guidesConfig:
-              '{"version": $dnaFormatVersion, "layers": [], '
+              '{"version": $dnaMustOverrideFormatVersion, "layers": [], '
               '"mustOverride": {"dnaProjectName": true}}',
           ...extra,
         },
@@ -1027,7 +1027,8 @@ packages:
       test('false in a layer frees the layers below it', () async {
         final host = hostWith({
           dartConfig:
-              '{"version": $dnaFormatVersion, "layers": ["dna-guides"], '
+              '{"version": $dnaMustOverrideFormatVersion, '
+              '"layers": ["dna-guides"], '
               '"mustOverride": {"dnaProjectName": false}}',
           dartVars: '{"dnaProjectName": "dart_project"}',
         });

@@ -4,6 +4,12 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dna_config.dart';
+import 'dna_layout.dart';
+import 'dna_vars.dart';
+import 'layer_graph.dart';
+import 'package_resolution.dart';
+
 // .............................................................................
 /// One layer as the `mustOverride` check sees it.
 class MustOverrideLayer {
@@ -102,3 +108,37 @@ List<MustOverrideViolation> mustOverrideViolations(
   }
   return violations;
 }
+
+// .............................................................................
+/// Name of the project's own layer in the check — always the last one.
+const String mustOverrideSelf = 'self';
+
+/// The resolved [layers] and the project itself, as [mustOverrideViolations]
+/// takes them: [varsFileOf] names a layer's `_vars.json` the way a
+/// developer opens it, [ownVarsOf] says what a layer (or
+/// [mustOverrideSelf]) sets itself. [includeSelf] `false` leaves the
+/// project out — a workspace is exempt.
+List<MustOverrideLayer> mustOverrideLayers({
+  required List<ResolvedLayer> layers,
+  required DnaConfig config,
+  required String Function(ResolvedLayer layer) varsFileOf,
+  required Set<String> Function(String name) ownVarsOf,
+  bool includeSelf = true,
+}) => [
+  for (final layer in layers)
+    MustOverrideLayer(
+      name: layer.name,
+      varsFile: varsFileOf(layer),
+      parents: layer.parents,
+      mustOverride: layer.mustOverride,
+      ownVars: ownVarsOf(layer.name),
+    ),
+  if (includeSelf)
+    MustOverrideLayer(
+      name: mustOverrideSelf,
+      varsFile: '$dnaDirname/$dnaVarsFilename',
+      parents: [for (final l in config.layers) canonicalPackageName(l)],
+      mustOverride: config.mustOverride,
+      ownVars: ownVarsOf(mustOverrideSelf),
+    ),
+];

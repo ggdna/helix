@@ -129,7 +129,10 @@ void main() {
 
     test('parses mustOverride flags', () {
       final r = readDnaConfig(
-        hostWith('{"mustOverride": {"dnaPipeline": true, "dnaOrg": false}}'),
+        hostWith(
+          '{"version": $dnaMustOverrideFormatVersion, '
+          '"mustOverride": {"dnaPipeline": true, "dnaOrg": false}}',
+        ),
         root,
       );
       expect(r.config.mustOverride, {'dnaPipeline': true, 'dnaOrg': false});
@@ -144,8 +147,12 @@ void main() {
         ('{"mustOverride": {"dnaX": "yes"}}', 'must be true or false'),
         ('{"mustOverride": {"dnaX": null}}', 'must be true or false'),
       ]) {
+        final v2 = config.replaceFirst(
+          '{',
+          '{"version": $dnaMustOverrideFormatVersion, ',
+        );
         expect(
-          () => readDnaConfig(hostWith(config), root),
+          () => readDnaConfig(hostWith(v2), root),
           throwsA(
             isA<FormatException>().having(
               (e) => e.message,
@@ -156,6 +163,42 @@ void main() {
           reason: config,
         );
       }
+    });
+
+    test('mustOverride needs format version 2', () {
+      expect(
+        () => readDnaConfig(hostWith('{"mustOverride": {"dnaX": true}}'), root),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('mustOverride needs "version": 2'),
+          ),
+        ),
+      );
+    });
+
+    test('reads every format version up to the latest', () {
+      for (var v = dnaFormatVersion; v <= dnaLatestConfigFormatVersion; v++) {
+        final r = readDnaConfig(
+          hostWith('{"version": $v, "layers": []}'),
+          root,
+        );
+        expect(r.config.layers, isEmpty, reason: 'version $v');
+      }
+      expect(
+        () => readDnaConfig(
+          hostWith('{"version": ${dnaLatestConfigFormatVersion + 1}}'),
+          root,
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('Update gg and helix'),
+          ),
+        ),
+      );
     });
 
     test('rejects a path where a package name belongs', () {

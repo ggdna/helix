@@ -137,7 +137,7 @@ void main() {
             'ds-dna-dart',
             '1.0.0',
             config:
-                '{"version": $dnaFormatVersion, '
+                '{"version": $dnaMustOverrideFormatVersion, '
                 '"layers": ["dna-dart", "@acme/ds-dna", "ds-dna-dart"], '
                 '"mustOverride": {"dnaPipeline": false}}',
           ),

@@ -239,26 +239,17 @@ Future<DnaInstantiationResult> instantiateDna({
   // 2b. Every layer sets what its parents mark `mustOverride`. A workspace
   // is exempt itself: its `dna/` is a throwaway scaffold with no
   // `_vars.json` to put the values in.
-  _requireMustOverrides([
-    for (final layer in graph.layers)
-      MustOverrideLayer(
-        name: layer.name,
-        varsFile:
-            '${_displayRootOf(layer, targetRoot)}/$dnaDirname/'
-            '$dnaVarsFilename',
-        parents: layer.parents,
-        mustOverride: layer.mustOverride,
-        ownVars: ownVars[layer.name]!,
-      ),
-    if (!workspace)
-      MustOverrideLayer(
-        name: 'self',
-        varsFile: '$dnaDirname/$dnaVarsFilename',
-        parents: [for (final l in config.layers) canonicalPackageName(l)],
-        mustOverride: config.mustOverride,
-        ownVars: ownVars['self']!,
-      ),
-  ], configVars: config.vars);
+  _requireMustOverrides(
+    mustOverrideLayers(
+      layers: graph.layers,
+      config: config,
+      varsFileOf: (layer) =>
+          '${_displayRootOf(layer, targetRoot)}/$dnaDirname/$dnaVarsFilename',
+      ownVarsOf: (name) => ownVars[name]!,
+      includeSelf: !workspace,
+    ),
+    configVars: config.vars,
+  );
 
   // The configuration belongs to the developer, and `isDnaContent` is
   // what keeps it out of `merged` — and therefore out of every write and
@@ -654,7 +645,7 @@ void _requireMustOverrides(
     var line =
         '  ${v.layer.varsFile} must set "${v.variable}" '
         '(mustOverride of ${v.requiredBy})';
-    if (v.layer.name == 'self' && configVars[v.variable] != null) {
+    if (v.layer.name == mustOverrideSelf && configVars[v.variable] != null) {
       line +=
           ' — the vars of $dnaConfigPath do not count, move it to '
           '${v.layer.varsFile}';
