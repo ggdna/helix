@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'select_prompt.dart';
+import 'text_prompt.dart';
 
 /// Whether stdin is attached to a terminal.
 typedef HasTerminal = bool Function();
@@ -22,6 +23,19 @@ bool _stdinHasTerminal() => stdin.hasTerminal;
 String? _stdinReadLine() => stdin.readLineSync();
 void _stdoutWrite(String text) => stdout.write(text);
 // coverage:ignore-end
+
+/// Reads one answer through [readLine]. A terminal that cannot be read —
+/// Git Bash on Windows reports one for redirected input, and reading then
+/// fails — counts as nobody to ask, like a closed stdin.
+String? _readAnswer(ReadLine readLine) {
+  try {
+    return readLine();
+  } on StdinException catch (e) {
+    throw SelectPromptUnavailableException(
+      'stdin cannot be read: ${e.message}',
+    );
+  }
+}
 
 /// A [SelectPrompt] that asks on the terminal: a numbered list on stdout,
 /// the answer as a number on stdin. Empty input takes the first option.
@@ -51,7 +65,7 @@ SelectPrompt stdinSelectPrompt({
 
   while (true) {
     write('Choose [1-${options.length}] (1): ');
-    final line = readLine();
+    final line = _readAnswer(readLine);
     if (line == null) {
       throw const SelectPromptUnavailableException('stdin was closed');
     }
@@ -62,5 +76,34 @@ SelectPrompt stdinSelectPrompt({
       return number - 1;
     }
     write('Please enter a number between 1 and ${options.length}.\n');
+  }
+};
+
+/// A [TextPrompt] that asks on the terminal: the question on stdout, the
+/// answer as one line on stdin. An empty answer takes the default, and is
+/// asked again when there is none.
+///
+/// [hasTerminal], [readLine] and [write] replace stdin and stdout in
+/// tests, as for [stdinSelectPrompt].
+TextPrompt stdinTextPrompt({
+  HasTerminal hasTerminal = _stdinHasTerminal,
+  ReadLine readLine = _stdinReadLine,
+  Write write = _stdoutWrite,
+}) => ({required String prompt, String? defaultValue}) async {
+  if (!hasTerminal()) {
+    throw const SelectPromptUnavailableException('stdin is not a terminal');
+  }
+
+  final hint = defaultValue == null ? '' : ' ($defaultValue)';
+  while (true) {
+    write('$prompt$hint: ');
+    final line = _readAnswer(readLine);
+    if (line == null) {
+      throw const SelectPromptUnavailableException('stdin was closed');
+    }
+    final answer = line.trim();
+    if (answer.isNotEmpty) return answer;
+    if (defaultValue != null) return defaultValue;
+    write('Please enter a value.\n');
   }
 };

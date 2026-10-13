@@ -4,8 +4,11 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:io';
+
 import 'package:helix/src/util/select_prompt.dart';
 import 'package:helix/src/util/select_prompt_io.dart';
+import 'package:helix/src/util/text_prompt.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -79,9 +82,100 @@ void main() {
       expect(written.toString(), isEmpty);
     });
 
+    test('throws when the terminal cannot be read', () async {
+      final unreadable = stdinSelectPrompt(
+        hasTerminal: () => true,
+        readLine: () => throw const StdinException('no line mode'),
+        write: written.write,
+      );
+      await expectLater(
+        () => unreadable(prompt: 'Which?', options: options),
+        throwsA(
+          isA<SelectPromptUnavailableException>().having(
+            (e) => e.reason,
+            'reason',
+            'stdin cannot be read: no line mode',
+          ),
+        ),
+      );
+    });
+
     test('throws when stdin ends before an answer', () async {
       await expectLater(
         () => prompt(['x'])(prompt: 'Which?', options: options),
+        throwsA(
+          isA<SelectPromptUnavailableException>().having(
+            (e) => e.reason,
+            'reason',
+            'stdin was closed',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('stdinTextPrompt', () {
+    /// A prompt that answers with [lines], one per read, then end of input.
+    TextPrompt textPrompt(List<String?> lines, {bool hasTerminal = true}) {
+      final answers = [...lines];
+      return stdinTextPrompt(
+        hasTerminal: () => hasTerminal,
+        readLine: () => answers.isEmpty ? null : answers.removeAt(0),
+        write: written.write,
+      );
+    }
+
+    test('defaults to the real stdin and stdout', () {
+      expect(stdinTextPrompt(), isNotNull);
+    });
+
+    test('returns the trimmed answer', () async {
+      expect(await textPrompt([' acme '])(prompt: 'dnaOrg'), 'acme');
+      expect(written.toString(), 'dnaOrg: ');
+    });
+
+    test('shows the default and takes it on empty input', () async {
+      expect(
+        await textPrompt([''])(prompt: 'dnaOrg', defaultValue: 'ggsuite'),
+        'ggsuite',
+      );
+      expect(written.toString(), 'dnaOrg (ggsuite): ');
+    });
+
+    test('asks again on empty input without a default', () async {
+      expect(await textPrompt(['', '  ', 'acme'])(prompt: 'dnaOrg'), 'acme');
+      expect('Please enter a value.'.allMatches('$written'), hasLength(2));
+    });
+
+    test('throws when stdin is not a terminal, without writing', () async {
+      await expectLater(
+        () => textPrompt(['x'], hasTerminal: false)(prompt: 'dnaOrg'),
+        throwsA(
+          isA<SelectPromptUnavailableException>().having(
+            (e) => e.reason,
+            'reason',
+            'stdin is not a terminal',
+          ),
+        ),
+      );
+      expect(written.toString(), isEmpty);
+    });
+
+    test('throws when the terminal cannot be read', () async {
+      final unreadable = stdinTextPrompt(
+        hasTerminal: () => true,
+        readLine: () => throw const StdinException('no line mode'),
+        write: written.write,
+      );
+      await expectLater(
+        () => unreadable(prompt: 'dnaOrg'),
+        throwsA(isA<SelectPromptUnavailableException>()),
+      );
+    });
+
+    test('throws when stdin ends before an answer', () async {
+      await expectLater(
+        () => textPrompt([''])(prompt: 'dnaOrg'),
         throwsA(
           isA<SelectPromptUnavailableException>().having(
             (e) => e.reason,

@@ -11,6 +11,7 @@ import '../engine/run_dna_test.dart';
 import '../util/dna_fs.dart';
 import '../util/dna_fs_io.dart';
 import '../util/git_root.dart';
+import '../util/plain_errors.dart';
 
 /// Builds the DNA of a project: one instantiation plus the verification of
 /// the instances — exactly what the placed test does in a project that has
@@ -77,11 +78,13 @@ class Build extends Command<dynamic> {
       onMoved: quiet ? null : (root) => ggLog(describeRepositoryRoot(root)),
     );
     // `null` is what the placed test passes: the current folder, absolute.
-    await _runner(
-      targetRoot: root == '.' ? null : root,
-      log: ggLog,
-      workspace: argResults!['workspace'] as bool,
-      quiet: quiet,
+    await withPlainFormatErrors(
+      () => _runner(
+        targetRoot: root == '.' ? null : root,
+        log: ggLog,
+        workspace: argResults!['workspace'] as bool,
+        quiet: quiet,
+      ),
     );
   }
 }

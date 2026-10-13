@@ -964,6 +964,144 @@ packages:
       );
     });
 
+    group('mustOverride', () {
+      const guidesConfig = '$root/node_modules/dna-guides/$dnaConfigPath';
+      const dartVars = '$root/node_modules/dna-dart/dna/_vars.json';
+      const dartConfig = '$root/node_modules/dna-dart/$dnaConfigPath';
+      const ownVars = '$root/dna/_vars.json';
+
+      /// dna-guides marks `dnaProjectName` — dna-dart and the project lie
+      /// below it.
+      MemoryDnaHost hostWith(Map<String, String> extra) => makeHost(
+        extra: {
+          guidesConfig:
+              '{"version": $dnaMustOverrideFormatVersion, "layers": [], '
+              '"mustOverride": {"dnaProjectName": true}}',
+          ...extra,
+        },
+      );
+
+      Matcher throwsMissing(List<String> lines) => throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          allOf([startsWith(mustOverrideMessage), ...lines.map(contains)]),
+        ),
+      );
+
+      test('every layer below must set the value, nothing is written', () {
+        final host = hostWith({});
+        expect(
+          () => instantiateDna(
+            host: host,
+            targetRoot: root,
+            baseVersion: '4.0.0',
+          ),
+          throwsMissing([
+            'dna-dart/dna/_vars.json must set "dnaProjectName" '
+                '(mustOverride of dna-guides)',
+            '\n  dna/_vars.json must set "dnaProjectName" '
+                '(mustOverride of dna-guides)',
+          ]),
+        );
+        expect(host.existsFile('$root/LICENSE'), isFalse);
+        expect(host.existsFile('$root/$dnaGeneratedPath'), isFalse);
+      });
+
+      test('passes once every layer below sets it', () async {
+        final host = hostWith({
+          dartVars: '{"dnaProjectName": "dart_project"}',
+          ownVars: '{"dnaProjectName": "my_project"}',
+        });
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/test/dna/dna-test.dart'),
+          '// myProject test wrapper\n',
+        );
+      });
+
+      test('false in a layer frees the layers below it', () async {
+        final host = hostWith({
+          dartConfig:
+              '{"version": $dnaMustOverrideFormatVersion, '
+              '"layers": ["dna-guides"], '
+              '"mustOverride": {"dnaProjectName": false}}',
+          dartVars: '{"dnaProjectName": "dart_project"}',
+        });
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/test/dna/dna-test.dart'),
+          '// dartProject test wrapper\n',
+        );
+      });
+
+      test('the vars of _dna.json do not count — and the error says so', () {
+        final host = hostWith({
+          dartVars: '{"dnaProjectName": "dart_project"}',
+          '$root/$dnaConfigPath':
+              '{"version": $dnaFormatVersion, "layers": ["dna-dart"], '
+              '"vars": {"dnaProjectName": "my_project"}}',
+        });
+        expect(
+          () => instantiateDna(
+            host: host,
+            targetRoot: root,
+            baseVersion: '4.0.0',
+          ),
+          throwsMissing([
+            'dna/_vars.json must set "dnaProjectName" '
+                '(mustOverride of dna-guides) — the vars of $dnaConfigPath '
+                'do not count, move it to dna/_vars.json',
+          ]),
+        );
+      });
+
+      test('null deletes the variable and is no value', () {
+        final host = hostWith({
+          dartVars: '{"dnaProjectName": null}',
+          ownVars: '{"dnaProjectName": "my_project"}',
+        });
+        expect(
+          () => instantiateDna(
+            host: host,
+            targetRoot: root,
+            baseVersion: '4.0.0',
+          ),
+          throwsMissing(['dna-dart/dna/_vars.json must set "dnaProjectName"']),
+        );
+      });
+
+      test('a workspace itself is exempt, its layers are not', () async {
+        final host = hostWith({dartVars: '{"dnaProjectName": "x"}'});
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+          workspace: true,
+        );
+        expect(r.blocked, isFalse);
+
+        // A fresh workspace — the first run removed its dna/ scaffold.
+        expect(
+          () => instantiateDna(
+            host: hostWith({}),
+            targetRoot: root,
+            baseVersion: '4.0.0',
+            workspace: true,
+          ),
+          throwsMissing(['dna-dart/dna/_vars.json must set "dnaProjectName"']),
+        );
+      });
+    });
+
     test('override without target logs a skip message', () async {
       final host = makeHost(
         extra: {

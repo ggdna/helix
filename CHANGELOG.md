@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.0 - 2026-10-13
+
+### Added
+
+- Add mustOverride: layers can require child layers and projects to set a variable in their own dna/_vars.json; init and add ask for the values
+
 ## 1.11.0 - 2026-10-06
 
 ### Changed

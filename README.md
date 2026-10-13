@@ -118,12 +118,15 @@ the config is what names the layers that folder builds on. Run
   "version": 1, // required
   "layers": ["dna_guides", "dna_dart"],
   "vars": { "dnaProjectName": "my_project" },
+  "mustOverride": { "dnaProjectName": true },
   "claude": { "claudeMdInclude": ["doc/conventions"] },
 }
 ```
 
 - `layers` lists package names in application order. A dependency that
   is not listed is not a layer.
+- `mustOverride` names variables the layers below must set themselves
+  and needs `"version": 2` (see [Variables](#variables)).
 
 `dna/` is always hand-authored source. Helix never writes into it — the
 merged result is instantiated into the project root and nowhere else.
@@ -284,6 +287,60 @@ expansion loops until nothing is left to replace, at most 10 times.
 Reference cycles are detected up front and reported with the path that
 closes them (`Cyclic variable reference: dnaA → dnaB → dnaA.`), as is a
 chain deeper than 10 levels.
+
+### Values a layer must set: `mustOverride`
+
+A layer marks variables whose value every layer below it has to set
+explicitly — in `dna/_dna.json`, next to `layers`. The flags need format
+version 2:
+
+```jsonc
+{
+  "version": 2,
+  "layers": [],
+  "mustOverride": { "dnaGitQuickCheckPipelineName": true },
+}
+```
+
+- `true`: every child layer (a layer listing this one in its `layers`)
+  and the project must give the variable a value in its **own**
+  `dna/_vars.json`. `vars` in `dna/_dna.json` and `null` do not count; a
+  value that only reaches the merge through a sibling layer does not
+  either.
+- A layer that does not mention the variable inherits the flag of its
+  parents — one parent passing on `true` is enough.
+- `false` lifts the duty for the layers below. The layer that writes
+  `false` is itself still bound by what it inherits.
+- The declaring layer is never bound by its own flag, so its own placed
+  test needs no value.
+- A `--workspace` build exempts the workspace itself (its `dna/` is a
+  throwaway scaffold); its layers are still checked.
+
+A missing value fails the run before anything is written, naming the
+file to fix and the layer that asks for it:
+
+```text
+Variables marked mustOverride have no value:
+  dna/_vars.json must set "dnaGitQuickCheckPipelineName" (mustOverride of dna-scripts)
+```
+
+`helix init` and `helix add` ask for every value the layers require and
+the project does not set yet, and write the answers into
+`dna/_vars.json` — comments stay. The inherited value is never offered:
+it is exactly what has to be replaced. Only a value the project already
+gives in the `vars` of `dna/_dna.json` is offered as the default. A
+`--workspace` add and a `--quiet` init ask nothing; without a terminal
+they name the variables to set by hand instead.
+
+**Compatibility.** Configs with `"version": 1` stay valid and are read
+as before; only a config using `mustOverride` needs `"version": 2`, and
+`mustOverride` in a version 1 config is an error. The version is what
+enforces a current engine: a helix (or gg) that predates the flags
+rejects a version 2 config instead of ignoring them silently — in a
+consumer as much as in the layer itself, since every layer's config
+is read. A `helix: ^1.12.0` in a layer's `pubspec.yaml` covers only
+its own placed test: helix is a dev dependency there, and dev
+dependencies do not reach the consumers.
 
 ## File naming
 

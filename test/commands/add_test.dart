@@ -13,7 +13,9 @@ import 'package:helix/src/commands/init.dart';
 import 'package:helix/src/engine/run_dna_test.dart' show describeRepositoryRoot;
 import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
+import 'package:helix/src/util/dna_layout.dart';
 import 'package:helix/src/util/process_run.dart';
+import 'package:helix/src/util/text_prompt.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -57,12 +59,14 @@ void main() {
     ProcessRun? processRun,
     Object? buildThrows,
     String? workingDir,
+    TextPrompt? textPrompt,
   }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
       ..addCommand(
         Add(
           ggLog: messages.add,
           host: host,
+          textPrompt: textPrompt,
           workingDir: workingDir ?? '.',
           processRun: processRun ?? fakeRun(),
           dnaTest:
@@ -132,6 +136,20 @@ void main() {
     );
   }
 
+  /// A project with dna_dart installed — both copies of it mark
+  /// `dnaCopyrightHolder` for the projects below.
+  MemoryDnaHost requiringCopyright() {
+    final host = project(installed: ['dna_dart']);
+    for (final copy in ['/cache/dna_dart', '$root/node_modules/dna_dart']) {
+      host.writeString(
+        '$copy/$dnaConfigPath',
+        '{"version": $dnaMustOverrideFormatVersion, '
+            '"mustOverride": {"dnaCopyrightHolder": true}}',
+      );
+    }
+    return host;
+  }
+
   List<String> layersOf(MemoryDnaHost host) =>
       readDnaConfig(host, root).config.layers;
 
@@ -153,6 +171,37 @@ void main() {
         expect(builds, [root]);
         // The engine report reaches the user.
         expect(messages.last, '+ instantiated LICENSE');
+      });
+
+      test('asks for what the new layer requires, then builds', () async {
+        final host = requiringCopyright();
+        final asked = <String>[];
+        await runAdd(
+          host,
+          ['dna_dart'],
+          textPrompt: ({required String prompt, String? defaultValue}) async {
+            asked.add(prompt);
+            expect(builds, isEmpty, reason: 'asked before the build');
+            return 'Acme';
+          },
+        );
+        expect(asked, ['dnaCopyrightHolder (required by dna-dart)']);
+        expect(
+          host.readString('$root/dna/_vars.json'),
+          contains('"dnaCopyrightHolder": "Acme"'),
+        );
+        expect(builds, [root]);
+      });
+
+      test('asks nothing for a --workspace build', () async {
+        final host = requiringCopyright();
+        await runAdd(
+          host,
+          ['dna_dart', '--workspace'],
+          textPrompt: ({required String prompt, String? defaultValue}) =>
+              fail('a workspace is exempt'),
+        );
+        expect(host.existsFile('$root/dna/_vars.json'), isFalse);
       });
 
       test('defaults --workspace to false', () async {

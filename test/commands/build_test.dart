@@ -178,6 +178,22 @@ void main() {
       );
     });
 
+    test('reports a configuration error without the Format prefix', () async {
+      thrown = const FormatException('dna/_vars.json must set dnaX');
+      await expectLater(
+        () => runBuild([]),
+        throwsA(
+          isA<Exception>()
+              .having((e) => e, 'type', isNot(isA<FormatException>()))
+              .having(
+                (e) => e.toString(),
+                'message',
+                'Exception: dna/_vars.json must set dnaX',
+              ),
+        ),
+      );
+    });
+
     test('runs the real engine when no runner is injected', () {
       // The default is `runDnaTest` itself; constructing must not run it.
       expect(Build(ggLog: messages.add).argParser.options, contains('target'));

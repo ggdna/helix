@@ -34,6 +34,7 @@ class DnaConfig {
   const DnaConfig({
     this.layers = const [],
     this.vars = const {},
+    this.mustOverride = const {},
     this.claude = const DnaClaudeConfig(),
   });
 
@@ -44,6 +45,12 @@ class DnaConfig {
 
   /// Raw variable entries (`null` values delete inherited variables).
   final Map<String, Object?> vars;
+
+  /// Variables whose value the layers below this one must set explicitly
+  /// in their own `dna/_vars.json` (`true`), or no longer have to
+  /// (`false`). A variable not listed keeps the flag it inherits from the
+  /// parent layers (see `dna_must_override.dart`).
+  final Map<String, bool> mustOverride;
 
   /// The Claude tool configuration.
   final DnaClaudeConfig claude;
@@ -88,9 +95,9 @@ class DnaConfig {
     throw FormatException('$where must contain a JSON object.');
   }
 
-  _requireFormatVersion(decoded['version'], where);
+  final version = _requireFormatVersion(decoded['version'], where);
 
-  const knownKeys = {'version', 'layers', 'vars', 'claude'};
+  const knownKeys = {'version', 'layers', 'vars', 'mustOverride', 'claude'};
   for (final key in decoded.keys) {
     // "role" is gone: every dna/ is hand-authored source now, and whether a
     // package is used as a layer is decided by the consumer's "layers".
@@ -117,6 +124,7 @@ class DnaConfig {
     config: DnaConfig(
       layers: _parseLayers(decoded['layers'], where),
       vars: _parseVars(decoded['vars'], where, warnings),
+      mustOverride: _parseMustOverride(decoded['mustOverride'], where, version),
       claude: _parseClaude(decoded['claude'], where, warnings),
     ),
     warnings: warnings,
@@ -124,13 +132,22 @@ class DnaConfig {
 }
 
 // .............................................................................
-void _requireFormatVersion(Object? value, String where) {
-  if (value == dnaFormatVersion) return;
+/// Returns the format version of a config, which may be any version from
+/// [dnaFormatVersion] up to [dnaLatestConfigFormatVersion] — older
+/// configs stay readable.
+int _requireFormatVersion(Object? value, String where) {
+  if (value is int &&
+      value >= dnaFormatVersion &&
+      value <= dnaLatestConfigFormatVersion) {
+    return value;
+  }
   throw FormatException(
     value == null
         ? '$where: "version" is missing — add "version": $dnaFormatVersion.'
         : '$where: format version $value is not supported — this helix '
-              'reads version $dnaFormatVersion.',
+              'reads versions $dnaFormatVersion to '
+              '$dnaLatestConfigFormatVersion. Update gg and helix to the '
+              'newest version.',
   );
 }
 
@@ -175,6 +192,40 @@ Map<String, Object?> _parseVars(
   final validated = validateDnaVarEntries(value, sourceLabel: '$where vars');
   warnings.addAll(validated.warnings);
   return validated.entries;
+}
+
+// .............................................................................
+Map<String, bool> _parseMustOverride(Object? value, String where, int version) {
+  if (value == null) return const {};
+  // A helix that reads only version 1 would drop the flags with a mere
+  // "unknown key" warning — the version is what makes it fail instead.
+  if (version < dnaMustOverrideFormatVersion) {
+    throw FormatException(
+      '$where: mustOverride needs "version": '
+      '$dnaMustOverrideFormatVersion — older helix versions would ignore '
+      'it silently.',
+    );
+  }
+  if (value is! Map<String, dynamic>) {
+    throw FormatException('$where: mustOverride must be an object.');
+  }
+  final result = <String, bool>{};
+  for (final entry in value.entries) {
+    if (!dnaVarKeyRe.hasMatch(entry.key)) {
+      throw FormatException(
+        '$where: mustOverride names "${entry.key}", which is no variable — '
+        'variables are camelCase and start with "dna".',
+      );
+    }
+    final flag = entry.value;
+    if (flag is! bool) {
+      throw FormatException(
+        '$where: mustOverride of "${entry.key}" must be true or false.',
+      );
+    }
+    result[entry.key] = flag;
+  }
+  return result;
 }
 
 // .............................................................................

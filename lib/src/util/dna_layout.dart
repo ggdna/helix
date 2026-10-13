@@ -7,8 +7,18 @@
 /// Name of the replica folder every DNA layer ships.
 const String dnaDirname = 'dna';
 
-/// Format version of both `dna/_dna.json` and `dna/_generated.json`.
+/// Format version of both `dna/_dna.json` and `dna/_generated.json` —
+/// the version helix writes.
 const int dnaFormatVersion = 1;
+
+/// The `dna/_dna.json` format that introduced `mustOverride`. A config
+/// using it states this version, so a helix too old to enforce the flags
+/// rejects the config instead of silently ignoring them.
+const int dnaMustOverrideFormatVersion = 2;
+
+/// The newest `dna/_dna.json` format this helix reads. Every version from
+/// [dnaFormatVersion] up to this one is read.
+const int dnaLatestConfigFormatVersion = dnaMustOverrideFormatVersion;
 
 /// Filename of the hand-authored DNA configuration inside `<target>/dna/`
 /// — the only place DNA configuration lives. Private per the `_`

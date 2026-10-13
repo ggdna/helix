@@ -16,6 +16,7 @@ import 'package:helix/src/util/dna_layout.dart';
 import 'package:helix/src/util/package_managers.dart';
 import 'package:helix/src/util/process_run.dart';
 import 'package:helix/src/util/select_prompt.dart';
+import 'package:helix/src/util/text_prompt.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -68,6 +69,7 @@ void main() {
     MemoryDnaHost host, {
     ProcessRun? processRun,
     SelectPrompt? selectPrompt,
+    TextPrompt? textPrompt,
     List<String> args = const [],
   }) async {
     final runner = CommandRunner<dynamic>('test', 'test')
@@ -77,6 +79,7 @@ void main() {
           host: host,
           processRun: processRun ?? fakeRun(),
           selectPrompt: selectPrompt ?? fakePrompt(answer: typescript),
+          textPrompt: textPrompt,
         ),
       );
     await runner.run(['init', '--target', root, ...args]);
@@ -502,6 +505,89 @@ void main() {
         expect(
           messages.any((m) => m.contains('gg dna add <dnaPackage>')),
           isTrue,
+        );
+      });
+    });
+
+    group('mustOverride', () {
+      /// A Dart project with dna_guides installed, which marks
+      /// `dnaCopyrightHolder` for its children.
+      MemoryDnaHost withGuides({String? ownVars}) => MemoryDnaHost(
+        files: {
+          '$root/pubspec.yaml':
+              'name: x\ndependencies:\n  dna_guides: ^1.0.0\n',
+          '$root/.dart_tool/package_config.json':
+              '{"packages": [ '
+              '{"name": "dna_guides", "rootUri": "../../cache/dna_guides"}]}',
+          '/cache/dna_guides/pubspec.yaml':
+              'name: dna_guides\nversion: 1.0.0\n',
+          '/cache/dna_guides/$dnaConfigPath':
+              '{"version": $dnaMustOverrideFormatVersion, '
+              '"mustOverride": {"dnaCopyrightHolder": true}}',
+          '/cache/dna_guides/dna/_vars.json':
+              '{"dnaCopyrightHolder": "ggsuite"}',
+          '$root/dna/_vars.json': ?ownVars,
+        },
+      );
+
+      test('asks for what the pre-filled layers require', () async {
+        final host = withGuides();
+        final asked = <String>[];
+        await runInit(
+          host,
+          textPrompt: ({required String prompt, String? defaultValue}) async {
+            asked.add('$prompt [$defaultValue]');
+            return 'Acme';
+          },
+        );
+        // No default: the inherited "ggsuite" is what must be replaced.
+        expect(asked, ['dnaCopyrightHolder (required by dna-guides) [null]']);
+        expect(
+          host.readString('$root/dna/_vars.json'),
+          '{\n  "dnaCopyrightHolder": "Acme"\n}\n',
+        );
+        expect(
+          messages,
+          contains(cDetail('✓ Set dnaCopyrightHolder in dna/_vars.json')),
+        );
+      });
+
+      test('asks nothing in a --quiet run', () async {
+        final host = withGuides();
+        await runInit(
+          host,
+          args: ['--quiet'],
+          textPrompt: ({required String prompt, String? defaultValue}) =>
+              fail('a quiet run asks nothing'),
+        );
+        expect(host.existsFile('$root/dna/_vars.json'), isFalse);
+      });
+
+      test('a kept broken config does not stop init', () async {
+        final host = withGuides()
+          ..writeString('$root/$dnaConfigPath', '{"version": 99}');
+        await runInit(
+          host,
+          textPrompt: ({required String prompt, String? defaultValue}) =>
+              fail('nothing can be resolved to ask for'),
+        );
+        // The build that follows reports the config.
+        expect(
+          messages,
+          contains(cDetail('✓ Kept existing $root/$dnaConfigPath')),
+        );
+      });
+
+      test('asks nothing when the project sets it already', () async {
+        final host = withGuides(ownVars: '{"dnaCopyrightHolder": "Acme"}');
+        await runInit(
+          host,
+          textPrompt: ({required String prompt, String? defaultValue}) =>
+              fail('nothing to ask'),
+        );
+        expect(
+          host.readString('$root/dna/_vars.json'),
+          '{"dnaCopyrightHolder": "Acme"}',
         );
       });
     });

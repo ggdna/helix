@@ -15,6 +15,7 @@ import '../util/dna_fs.dart';
 import '../util/dna_includes.dart';
 import '../util/dna_layout.dart';
 import '../util/dna_manifest.dart';
+import '../util/dna_must_override.dart';
 import '../util/dna_tree_hash.dart';
 import '../util/dna_vars.dart';
 import '../util/jsonc.dart';
@@ -62,6 +63,10 @@ String _relativeTo(String path, String base) {
 /// Headline of the per-file guard failure.
 const String uncommittedTargetsMessage =
     'Generated files carry invalid changes:';
+
+/// Headline when layers miss values their parents mark `mustOverride`.
+const String mustOverrideMessage =
+    'Variables marked mustOverride have no value:';
 
 /// Headline when DNA files escape a leading dot with `dot_`.
 const String invalidDotEscapesMessage = 'Invalid dot escapes in dna/:';
@@ -211,8 +216,9 @@ Future<DnaInstantiationResult> instantiateDna({
   final merged = <String, Uint8List>{};
   final provenance = <String, String>{};
   var varsChain = <String, Object?>{};
+  final ownVars = <String, Set<String>>{};
   for (final source in sources) {
-    varsChain = _applyLayer(
+    final applied = _applyLayer(
       host: host,
       merged: merged,
       varsChain: varsChain,
@@ -223,7 +229,27 @@ Future<DnaInstantiationResult> instantiateDna({
       messages: messages,
       warnings: warnings,
     );
+    varsChain = applied.chain;
+    ownVars[source.label] = {
+      for (final e in applied.own.entries)
+        if (e.value != null) e.key,
+    };
   }
+
+  // 2b. Every layer sets what its parents mark `mustOverride`. A workspace
+  // is exempt itself: its `dna/` is a throwaway scaffold with no
+  // `_vars.json` to put the values in.
+  _requireMustOverrides(
+    mustOverrideLayers(
+      layers: graph.layers,
+      config: config,
+      varsFileOf: (layer) =>
+          '${_displayRootOf(layer, targetRoot)}/$dnaDirname/$dnaVarsFilename',
+      ownVarsOf: (name) => ownVars[name]!,
+      includeSelf: !workspace,
+    ),
+    configVars: config.vars,
+  );
 
   // The configuration belongs to the developer, and `isDnaContent` is
   // what keeps it out of `merged` — and therefore out of every write and
@@ -605,7 +631,32 @@ Map<String, String> _sourcesFor(
 };
 
 // .............................................................................
-Map<String, Object?> _applyLayer({
+/// Throws when a layer of [layers] misses a value it must set. A value
+/// the project only sets in the `vars` of [configVars] is named as such
+/// — it reaches the substitution, but the duty asks for `_vars.json`.
+void _requireMustOverrides(
+  List<MustOverrideLayer> layers, {
+  required Map<String, Object?> configVars,
+}) {
+  final violations = mustOverrideViolations(layers);
+  if (violations.isEmpty) return;
+  final lines = <String>[mustOverrideMessage];
+  for (final v in violations) {
+    var line =
+        '  ${v.layer.varsFile} must set "${v.variable}" '
+        '(mustOverride of ${v.requiredBy})';
+    if (v.layer.name == mustOverrideSelf && configVars[v.variable] != null) {
+      line +=
+          ' — the vars of $dnaConfigPath do not count, move it to '
+          '${v.layer.varsFile}';
+    }
+    lines.add(line);
+  }
+  throw FormatException(lines.join('\n'));
+}
+
+// .............................................................................
+({Map<String, Object?> chain, Map<String, Object?> own}) _applyLayer({
   required DnaHost host,
   required Map<String, Uint8List> merged,
   required Map<String, Object?> varsChain,
@@ -617,6 +668,7 @@ Map<String, Object?> _applyLayer({
   required List<String> warnings,
 }) {
   var chain = varsChain;
+  var own = const <String, Object?>{};
   final files = host.listFilesRecursive(dnaRoot).where(isDnaContent).toList()
     ..sort();
 
@@ -648,6 +700,7 @@ Map<String, Object?> _applyLayer({
         sourceLabel: '$label:$rel',
       );
       warnings.addAll(parsed.warnings);
+      own = parsed.entries;
       chain = mergeDnaVarEntries(chain, parsed.entries);
       continue;
     }
@@ -735,7 +788,7 @@ Map<String, Object?> _applyLayer({
     provenance[targetRel] = '$displayRoot/$rel';
   }
 
-  return chain;
+  return (chain: chain, own: own);
 }
 
 // .............................................................................
