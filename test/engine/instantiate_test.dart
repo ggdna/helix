@@ -1214,7 +1214,29 @@ packages:
         );
       });
 
-      test('the own dna/ wins over the layer', () async {
+      test('every layer adds its own, in layer order', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/CLAUDE.md':
+                '# Guides\n\n@doc/develop.md\n',
+            layerClaudeMd: '# Dart\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n\n'
+          '# Guides\n\n@doc/develop.md\n\n'
+          '# Dart\n\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('the own dna/ comes last', () async {
         final host = makeHost(
           extra: {
             layerClaudeMd: '# From layer\n',
@@ -1226,9 +1248,75 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n\n'
+          '# From layer\n\n'
+          '# From self\n\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('a text already merged is not repeated', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# Same\n',
+            '$root/dna/CLAUDE.md': '\n# Same\n\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n\n'
+          '# Same\n\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('an empty CLAUDE.md adds nothing, nor is added to', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/CLAUDE.md': '\n',
+            layerClaudeMd: '# Dart\n',
+            '$root/dna/CLAUDE.md': '  \n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '<!-- helix:claude_md:start -->\n\n'
+          '# Dart\n\n'
+          '<!-- helix:claude_md:end -->\n',
+        );
+      });
+
+      test('an override still patches the merged text', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/CLAUDE.md':
+                '# Guides\n\n## @ai Use the AI\n\nAsk first.\n',
+            layerClaudeMd: '# Dart\n',
+            '$root/dna/CLAUDE.overrides.md':
+                '## @ai Use the AI\n\nJust do it.\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
         final claude = host.readString('$root/CLAUDE.md');
-        expect(claude, contains('# From self'));
-        expect(claude, isNot(contains('# From layer')));
+        expect(claude, contains('Just do it.'));
+        expect(claude, isNot(contains('Ask first.')));
+        expect(claude, contains('# Dart'));
       });
 
       test('empties the block once no layer ships one any more', () async {
