@@ -98,7 +98,8 @@ trees.
 
 **Order**: `layers` is the single source of truth — parents before
 children, diamonds deduplicated (first topological position wins), cycles
-are errors. **The last layer wins.**
+are errors. **The last layer wins** — except for `dna/CLAUDE.md`, which
+every layer adds to (see [CLAUDE.md and skills](#claudemd-and-skills)).
 
 ## Configuration: `dna/_dna.json`
 
@@ -356,10 +357,14 @@ the only path rewriting Helix performs).
 - `CLAUDE.md` keeps the managed block between
   `<!-- helix:claude_md:start/end -->`. Content outside the block is
   never touched. The block holds, in this order:
-  - the merged `CLAUDE.md` of the layers, if any ships one under
-    `dna/CLAUDE.md` — merged, rendered and substituted like every other
-    DNA file, the own `dna/` wins as usual. Once no layer ships one any
-    more, the next run empties the block again.
+  - the `CLAUDE.md` of every layer that ships one under `dna/CLAUDE.md`,
+    one after the other in layer order, the own `dna/` last. A later
+    layer adds to the earlier ones instead of replacing them, so a topic
+    layer cannot wipe out the instructions of another; a text already in
+    the merge is not repeated. `CLAUDE.overrides.md` still patches tagged
+    sections of the joined text, and it is rendered and substituted like
+    every other DNA file. Once no layer ships one any more, the next run
+    empties the block again.
   - one `@`-import line per file of `claude.claudeMdInclude` (files or
     folders of human documentation!).
 

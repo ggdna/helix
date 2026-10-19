@@ -713,7 +713,10 @@ void _requireMustOverrides(
       continue;
     }
     final bytes = host.readBytes('$dnaRoot/$rel');
-    merged[rel] = bytes;
+    final earlier = merged[rel];
+    merged[rel] = earlier != null && isClaudeMdTarget(rel)
+        ? _appendClaudeMd(earlier, bytes)
+        : bytes;
     provenance[rel] = '$displayRoot/$rel';
     if (rel.toLowerCase().endsWith('.md')) {
       final text = _decodeText(bytes);
@@ -789,6 +792,22 @@ void _requireMustOverrides(
   }
 
   return (chain: chain, own: own);
+}
+
+// .............................................................................
+/// Appends the `CLAUDE.md` of a later layer to the one merged so far. Every
+/// layer brings its own instructions for the AI, so a topic layer must not
+/// wipe out what another one says: they all land in the managed block, in
+/// layer order. A text the merge already holds — the own `dna/` being a
+/// copy of a listed layer — is not repeated.
+Uint8List _appendClaudeMd(Uint8List earlier, Uint8List later) {
+  final before = _decodeText(earlier);
+  final added = _decodeText(later)?.trim();
+  if (before == null || added == null) return later;
+  if (added.isEmpty || before.contains(added)) return earlier;
+  final kept = before.trimRight();
+  if (kept.isEmpty) return later;
+  return _encodeText('$kept\n\n$added\n');
 }
 
 // .............................................................................

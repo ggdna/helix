@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Join the CLAUDE.md of all layers instead of letting the last one win
+
 ## 1.12.0 - 2026-10-13
 
 ### Added
