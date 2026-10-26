@@ -85,23 +85,66 @@ $claudeMdStartMarker
 $claudeMdEndMarker''');
     });
 
-    test('puts the body before the imports, trimmed', () {
-      expect(buildClaudeMdBlock(['a.md'], body: '\n# Body\n\ntext\n\n'), '''
+    test('no import leaves the markers alone', () {
+      expect(buildClaudeMdBlock([]), '''
 $claudeMdStartMarker
-
-# Body
-
-text
-
-@a.md
-
 $claudeMdEndMarker''');
     });
+  });
 
-    test('a blank body adds no line', () {
-      expect(buildClaudeMdBlock([], body: '  \n'), '''
-$claudeMdStartMarker
-$claudeMdEndMarker''');
+  group('claudeLayerFileName', () {
+    test('turns the bare package name into CLAUDE_<name>.md', () {
+      expect(claudeLayerFileName('dna_gg'), 'CLAUDE_dna_gg.md');
+      expect(claudeLayerFileName('dna-gg'), 'CLAUDE_dna_gg.md');
+      expect(claudeLayerFileName('@ggdna/dna-gg'), 'CLAUDE_dna_gg.md');
+      expect(claudeLayerFileName('Helix'), 'CLAUDE_helix.md');
+    });
+  });
+
+  group('projectPackageName', () {
+    test('reads pubspec.yaml first, then package.json', () {
+      final host = MemoryDnaHost(
+        files: {
+          '$root/pubspec.yaml': 'name: from_pub\n',
+          '$root/package.json': '{"name": "@org/from-npm"}',
+        },
+      );
+      expect(projectPackageName(host, root), 'from_pub');
+      host.deleteFile('$root/pubspec.yaml');
+      expect(projectPackageName(host, root), '@org/from-npm');
+    });
+
+    test('falls back to the folder name', () {
+      final host = MemoryDnaHost(
+        files: {
+          '/w/my-repo/pubspec.yaml': 'name: [unclosed',
+          '/w/my-repo/package.json': '{no json',
+        },
+      );
+      expect(projectPackageName(host, '/w/my-repo'), 'my_repo');
+    });
+  });
+
+  group('rebaseClaudeLayerImports', () {
+    test('prefixes relative imports with ../', () {
+      expect(
+        rebaseClaudeLayerImports('# T\n\n@doc/a.md\n  @b.md\n'),
+        '# T\n\n@../doc/a.md\n  @../b.md\n',
+      );
+    });
+
+    test('keeps absolute, home and non-import lines', () {
+      const text =
+          '@/abs/a.md\n@~/home/b.md\n@license\nsee @doc/a.md\n'
+          '<!--\n@license\n-->\n';
+      expect(rebaseClaudeLayerImports(text), text);
+    });
+
+    test('keeps lines inside fenced code blocks', () {
+      expect(
+        rebaseClaudeLayerImports('```\n@doc/a.md\n```\n@doc/b.md'),
+        '```\n@doc/a.md\n```\n@../doc/b.md',
+      );
     });
   });
 
@@ -152,7 +195,6 @@ $claudeMdEndMarker''');
       host.writeString('$root/CLAUDE.md', first!);
       expect(updatedClaudeMd(host, root, ['a.md']), isNull);
       expect(updatedClaudeMd(host, root, ['b.md']), isNotNull);
-      expect(updatedClaudeMd(host, root, ['a.md'], body: '# B'), isNotNull);
     });
   });
 }

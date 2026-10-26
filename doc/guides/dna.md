@@ -290,9 +290,10 @@ instances are rewritten automatically.
 Only `version` is required. `claude.claudeMdInclude` maintains a managed
 block of `@` imports in the project's `CLAUDE.md` (folders expand to their
 `.md` files) between `<!-- helix:claude_md:start -->` and
-`<!-- helix:claude_md:end -->`. `CLAUDE.md` itself is never a DNA
-instance — only that block is managed; everything outside it belongs to
-the project.
+`<!-- helix:claude_md:end -->`. The same block first imports the
+`.claude/CLAUDE_<layer>.md` file of every layer that ships a
+`dna/CLAUDE.md`. `CLAUDE.md` itself is never a DNA instance — only that
+block is managed; everything outside it belongs to the project.
 
 Helix writes nothing into this file. Its own bookkeeping — the
 resolved layers, their versions and hashes, and the list of instances it

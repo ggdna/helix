@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.0 - 2026-10-26
+
+### Changed
+
+- Write the CLAUDE.md of every layer to .claude/CLAUDE_<layer>.md and import it from the managed block
+
 ## 1.13.0 - 2026-10-19
 
 ### Changed

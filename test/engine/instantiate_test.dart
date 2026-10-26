@@ -1142,8 +1142,17 @@ packages:
 
     group('a CLAUDE.md shipped by a layer', () {
       const layerClaudeMd = '$root/node_modules/dna-dart/dna/CLAUDE.md';
+      const dartFile = '.claude/CLAUDE_dna_dart.md';
+      const guidesFile = '.claude/CLAUDE_dna_guides.md';
+      const selfFile = '.claude/CLAUDE_consumer.md';
 
-      test('lands in the managed block, the rest stays untouched', () async {
+      /// The managed block importing [files], one line each.
+      String block(List<String> files) =>
+          '<!-- helix:claude_md:start -->\n\n'
+          '${files.map((f) => '@$f').join('\n')}\n\n'
+          '<!-- helix:claude_md:end -->\n';
+
+      test('becomes .claude/CLAUDE_<layer>.md, the block imports it', () async {
         final host = makeHost(
           extra: {
             layerClaudeMd: '# Guides for dnaProjectName\n\n@doc/develop.md\n',
@@ -1156,21 +1165,21 @@ packages:
           baseVersion: '4.0.0',
         );
         expect(r.warnings.where((w) => w.contains('forbidden')), isEmpty);
-        expect(r.updated, contains('CLAUDE.md'));
-        final claude = host.readString('$root/CLAUDE.md');
+        expect(r.updated, containsAll(['CLAUDE.md', dartFile]));
         expect(
-          claude,
-          '# My project\n\nHand-written.\n\n'
-          '<!-- helix:claude_md:start -->\n\n'
-          '# Guides for unnamed\n\n@doc/develop.md\n\n'
-          '<!-- helix:claude_md:end -->\n',
+          host.readString('$root/CLAUDE.md'),
+          '# My project\n\nHand-written.\n\n${block([dartFile])}',
         );
-        // No plain instance, the manifest remembers where it came from.
+        // Variables are substituted, the import is rebased onto the root.
+        expect(
+          host.readString('$root/$dartFile'),
+          '# Guides for unnamed\n\n@../doc/develop.md\n',
+        );
+        // A plain instance, the manifest remembers the block came from it.
         final manifest = DnaManifest.read(host, root)!;
-        expect(
-          manifest.instances.map((i) => i.path),
-          isNot(contains('CLAUDE.md')),
-        );
+        final paths = manifest.instances.map((i) => i.path);
+        expect(paths, contains(dartFile));
+        expect(paths, isNot(contains('CLAUDE.md')));
         expect(manifest.claude.claudeMdFromDna, isTrue);
         expect(manifest.claude.claudeMdInclude, isNull);
       });
@@ -1182,12 +1191,7 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        expect(
-          host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# From DNA\n\n'
-          '<!-- helix:claude_md:end -->\n',
-        );
+        expect(host.readString('$root/CLAUDE.md'), block([dartFile]));
       });
 
       test('is followed by the claudeMdInclude imports', () async {
@@ -1207,10 +1211,7 @@ packages:
         );
         expect(
           host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# From DNA\n\n'
-          '@doc/develop.md\n\n'
-          '<!-- helix:claude_md:end -->\n',
+          block([dartFile, 'doc/develop.md']),
         );
       });
 
@@ -1229,14 +1230,16 @@ packages:
         );
         expect(
           host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# Guides\n\n@doc/develop.md\n\n'
-          '# Dart\n\n'
-          '<!-- helix:claude_md:end -->\n',
+          block([guidesFile, dartFile]),
         );
+        expect(
+          host.readString('$root/$guidesFile'),
+          '# Guides\n\n@../doc/develop.md\n',
+        );
+        expect(host.readString('$root/$dartFile'), '# Dart\n');
       });
 
-      test('the own dna/ comes last', () async {
+      test('the own dna/ comes last, filed under the package name', () async {
         final host = makeHost(
           extra: {
             layerClaudeMd: '# From layer\n',
@@ -1248,13 +1251,8 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        expect(
-          host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# From layer\n\n'
-          '# From self\n\n'
-          '<!-- helix:claude_md:end -->\n',
-        );
+        expect(host.readString('$root/CLAUDE.md'), block([dartFile, selfFile]));
+        expect(host.readString('$root/$selfFile'), '# From self\n');
       });
 
       test('a text already merged is not repeated', () async {
@@ -1269,12 +1267,8 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        expect(
-          host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# Same\n\n'
-          '<!-- helix:claude_md:end -->\n',
-        );
+        expect(host.readString('$root/CLAUDE.md'), block([dartFile]));
+        expect(host.existsFile('$root/$selfFile'), isFalse);
       });
 
       test('an empty CLAUDE.md adds nothing, nor is added to', () async {
@@ -1290,15 +1284,12 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        expect(
-          host.readString('$root/CLAUDE.md'),
-          '<!-- helix:claude_md:start -->\n\n'
-          '# Dart\n\n'
-          '<!-- helix:claude_md:end -->\n',
-        );
+        expect(host.readString('$root/CLAUDE.md'), block([dartFile]));
+        expect(host.existsFile('$root/$guidesFile'), isFalse);
+        expect(host.existsFile('$root/$selfFile'), isFalse);
       });
 
-      test('an override still patches the merged text', () async {
+      test('an override patches the layer file that has the tag', () async {
         final host = makeHost(
           extra: {
             '$root/node_modules/dna-guides/dna/CLAUDE.md':
@@ -1308,15 +1299,81 @@ packages:
                 '## @ai Use the AI\n\nJust do it.\n',
           },
         );
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        final guides = host.readString('$root/$guidesFile');
+        expect(guides, contains('Just do it.'));
+        expect(guides, isNot(contains('Ask first.')));
+        expect(host.readString('$root/$dartFile'), '# Dart\n');
+        expect(r.warnings.where((w) => w.contains('not found')), isEmpty);
+        // The developer edits the override, not the layer.
+        host.writeString('$root/$guidesFile', 'hand edited\n');
+        final edited = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(edited.sources[guidesFile], 'dna/CLAUDE.overrides.md');
+      });
+
+      test('an override whose tag no layer file has is reported', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# Dart\n',
+            '$root/dna/CLAUDE.overrides.md': '## @nope Nope\n\nText.\n',
+          },
+        );
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          r.warnings,
+          contains(contains('Tag "nope" not found in CLAUDE.md')),
+        );
+      });
+
+      test('an override without any layer file is skipped', () async {
+        final host = makeHost(
+          extra: {'$root/dna/CLAUDE.overrides.md': '## @ai AI\n\nText.\n'},
+        );
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          r.messages,
+          contains(contains('has no target file "CLAUDE.md"')),
+        );
+        expect(host.existsFile('$root/CLAUDE.md'), isFalse);
+      });
+
+      test('a layer that drops out takes file and import along', () async {
+        const guidesClaudeMd = '$root/node_modules/dna-guides/dna/CLAUDE.md';
+        final host = makeHost(
+          extra: {guidesClaudeMd: '# Guides\n', layerClaudeMd: '# Dart\n'},
+        );
         await instantiateDna(
           host: host,
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        final claude = host.readString('$root/CLAUDE.md');
-        expect(claude, contains('Just do it.'));
-        expect(claude, isNot(contains('Ask first.')));
-        expect(claude, contains('# Dart'));
+        expect(host.existsFile('$root/$guidesFile'), isTrue);
+
+        host.deleteFile(guidesClaudeMd);
+        final r = await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(r.updated, contains('$guidesFile (removed)'));
+        expect(host.existsFile('$root/$guidesFile'), isFalse);
+        expect(host.readString('$root/CLAUDE.md'), block([dartFile]));
       });
 
       test('empties the block once no layer ships one any more', () async {
@@ -1331,7 +1388,7 @@ packages:
           targetRoot: root,
           baseVersion: '4.0.0',
         );
-        expect(host.readString('$root/CLAUDE.md'), contains('# From DNA'));
+        expect(host.readString('$root/CLAUDE.md'), contains('@$dartFile'));
 
         host.deleteFile(layerClaudeMd);
         final r = await instantiateDna(
@@ -1340,12 +1397,14 @@ packages:
           baseVersion: '4.0.0',
         );
         expect(r.updated, contains('CLAUDE.md'));
+        expect(r.updated, contains('$dartFile (removed)'));
         expect(
           host.readString('$root/CLAUDE.md'),
           '# My project\n\n'
           '<!-- helix:claude_md:start -->\n'
           '<!-- helix:claude_md:end -->\n',
         );
+        expect(host.existsDir('$root/.claude'), isFalse);
         expect(DnaManifest.read(host, root)!.claude.claudeMdFromDna, isFalse);
 
         // A third run has nothing left to do.
@@ -1355,6 +1414,28 @@ packages:
           baseVersion: '4.0.0',
         );
         expect(again.updated, isNot(contains('CLAUDE.md')));
+      });
+
+      test('replaces a block of the former written-out form', () async {
+        final host = makeHost(
+          extra: {
+            layerClaudeMd: '# From DNA\n',
+            '$root/CLAUDE.md':
+                '# My project\n\n'
+                '<!-- helix:claude_md:start -->\n\n'
+                '# From DNA\n\n'
+                '<!-- helix:claude_md:end -->\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(
+          host.readString('$root/CLAUDE.md'),
+          '# My project\n\n${block([dartFile])}',
+        );
       });
 
       test('an uncommitted CLAUDE.md blocks the run', () async {
@@ -1526,9 +1607,16 @@ packages:
         baseVersion: '4.0.0',
         workspace: true,
       );
-      final claude = host.readString('$root/CLAUDE.md');
-      expect(claude, contains('Run dart pub upgrade.'));
-      expect(claude, isNot(contains('@doc/develop.md')));
+      // The block only imports the layer file, the layer file carries
+      // the guide itself — no `../` import into a folder never written.
+      expect(
+        host.readString('$root/CLAUDE.md'),
+        contains('@.claude/CLAUDE_dna_dart.md'),
+      );
+      final layer = host.readString('$root/.claude/CLAUDE_dna_dart.md');
+      expect(layer, contains('Run dart pub upgrade.'));
+      expect(layer, isNot(contains('@doc/develop.md')));
+      expect(layer, isNot(contains('@../doc/develop.md')));
     });
 
     test('resolves a helix:include marker inside a skill', () async {
@@ -1557,10 +1645,13 @@ packages:
       expect(DnaManifest.read(host, root), isNull);
     });
 
-    test('a non-workspace build keeps the plain @-import untouched', () async {
+    test('a non-workspace build keeps the @-import, rebased', () async {
       final host = makeWorkspaceHost();
       await instantiateDna(host: host, targetRoot: root, baseVersion: '4.0.0');
-      expect(host.readString('$root/CLAUDE.md'), contains('@doc/develop.md'));
+      expect(
+        host.readString('$root/.claude/CLAUDE_dna_dart.md'),
+        contains('@../doc/develop.md'),
+      );
       expect(host.existsFile('$root/doc/develop.md'), isTrue);
     });
   });

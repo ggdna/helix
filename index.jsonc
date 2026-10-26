@@ -1,0 +1,43 @@
+// @license
+// Copyright (c) ggsuite
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+{
+  // The package name, as declared in pubspec.yaml / package.json.
+  "name": "helix",
+
+  // 1-2 sentence summary about this repo.
+  "summary": "The DNA engine: resolves the DNA packages a project depends on, merges their dna/ folders and instantiates guides, configs, scripts, skills and the managed CLAUDE.md block into the project. pub helix, CLI helix.",
+
+  // 1-3 bullet points: the problem space.
+  "domain": [
+    "DNA layers: resolution, merge order, overrides, variables",
+    "instances: ownership, placed DNA test, backups of local edits",
+    "Claude Code: .claude/CLAUDE_<layer>.md and the managed CLAUDE.md block",
+  ],
+
+  // The repos this one depends on and the repos depending on it.
+  // Keep the reason or the API behind each entry, not just the name.
+  "interfaces": {
+    // "<repo-a>": "why / API"
+    "uses": {
+      "gg_args": "DirCommand base of init, add, build",
+      "gg_console_colors": "colored CLI output",
+      "gg_hash": "hashes of instances and DNA trees",
+      "gg_json": "pretty JSON of the manifests",
+      "gg_log": "GgLog for the commands",
+      "gg_process": "package manager and git calls",
+    },
+
+    // "<repo-b>": "why / API"
+    "usedBy": {
+      "gg": "gg dna: init, add, build",
+      "gg_create_repo": "instantiates the DNA of a new repo",
+      "gg_multi_workspace": "builds the DNA of the workspace root with --workspace",
+      "helix-js": "TypeScript port, keeps the same behavior",
+      "dna_*": "dev dependency: runDnaTest, the placed DNA test",
+    },
+  },
+}

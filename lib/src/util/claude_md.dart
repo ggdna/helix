@@ -4,7 +4,14 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:convert';
+
+import 'package:yaml/yaml.dart';
+
 import 'dna_fs.dart';
+import 'dna_includes.dart';
+import 'package_managers.dart';
+import 'package_resolution.dart';
 
 /// Marker that opens the managed CLAUDE.md block.
 const String claudeMdStartMarker = '<!-- helix:claude_md:start -->';
@@ -18,6 +25,69 @@ const String legacyConventionsStartMarker = '<!-- helix:conventions:start';
 
 /// End marker of the pre-3.0 conventions block.
 const String legacyConventionsEndMarker = '<!-- helix:conventions:end -->';
+
+/// Folder that holds the `CLAUDE_<layer>.md` file of every DNA layer.
+const String claudeLayerDir = '.claude';
+
+// .............................................................................
+/// The file the `CLAUDE.md` of the layer [layerName] is written to:
+/// `CLAUDE_<name>.md` with the bare package name, `-` turned into `_` —
+/// `@ggdna/dna-gg` and `dna_gg` both give `CLAUDE_dna_gg.md`.
+String claudeLayerFileName(String layerName) =>
+    'CLAUDE_${canonicalPackageName(layerName).replaceAll('-', '_')}.md';
+
+// .............................................................................
+/// The name the own `dna/` of [targetRoot] is filed under: the `name` of
+/// `pubspec.yaml`, else that of `package.json`, else the folder name — the
+/// same name the project carries when another project uses it as a layer.
+String projectPackageName(DnaHost host, String targetRoot) {
+  final pubspec = '$targetRoot/pubspec.yaml';
+  if (host.existsFile(pubspec)) {
+    try {
+      final doc = loadYaml(host.readString(pubspec));
+      if (doc is Map && doc['name'] is String) return doc['name'] as String;
+    } on YamlException {
+      // Not our file to validate.
+    }
+  }
+  final packageJson = '$targetRoot/package.json';
+  if (host.existsFile(packageJson)) {
+    try {
+      final doc = jsonDecode(host.readString(packageJson));
+      if (doc is Map && doc['name'] is String) return doc['name'] as String;
+    } on FormatException {
+      // Not our file to validate.
+    }
+  }
+  return dartPackageName(targetRoot);
+}
+
+// .............................................................................
+/// Prefixes every relative `@`-import line of [text] with `../`. A layer's
+/// `CLAUDE.md` is written to [claudeLayerDir], one folder below the root
+/// its imports were written for, and Claude Code resolves an import
+/// relative to the file that holds it. Absolute (`/`) and home (`~`)
+/// paths stay as they are, and so does every line inside a fenced code
+/// block, where Claude Code does not expand imports either.
+String rebaseClaudeLayerImports(String text) {
+  var fence = false;
+  return text
+      .split('\n')
+      .map((line) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+          fence = !fence;
+          return line;
+        }
+        if (fence) return line;
+        final match = atImportRe.firstMatch(trimmed);
+        if (match == null) return line;
+        final path = match.group(1)!;
+        if (path.startsWith('/') || path.startsWith('~')) return line;
+        return line.replaceFirst('@$path', '@../$path');
+      })
+      .join('\n');
+}
 
 // .............................................................................
 /// Expands the `claude_md: include:` entries to the files that get one
@@ -72,24 +142,20 @@ List<String> expandClaudeMdIncludes({
 }
 
 // .............................................................................
-/// Builds the managed block between the markers: first [body] — the
-/// merged `CLAUDE.md` the DNA layers ship, if any — then one `@`-import
-/// line per path. Claude Code expands each import at session start
-/// (relative paths resolve relative to the CLAUDE.md, max four hops deep).
+/// Builds the managed block between the markers: one `@`-import line per
+/// path — the `CLAUDE_<layer>.md` files the DNA layers ship first, then
+/// the `claude_md: include:` entries. Claude Code expands each import at
+/// session start (relative paths resolve relative to the CLAUDE.md, max
+/// four hops deep).
 ///
 /// The content is set off from the markers by blank lines — the form
 /// prettier produces. Without them prettier inserts the blank line after
 /// the start marker itself, the file no longer matches what the engine
 /// wrote, and the next run refuses to touch the "edited" CLAUDE.md.
-String buildClaudeMdBlock(Iterable<String> importPaths, {String? body}) {
-  final trimmedBody = body?.trim();
+String buildClaudeMdBlock(Iterable<String> importPaths) {
   final imports = importPaths.map((path) => '@$path').join('\n');
-  final parts = [
-    if (trimmedBody != null && trimmedBody.isNotEmpty) trimmedBody,
-    if (imports.isNotEmpty) imports,
-  ];
-  if (parts.isEmpty) return '$claudeMdStartMarker\n$claudeMdEndMarker';
-  return '$claudeMdStartMarker\n\n${parts.join('\n\n')}\n\n$claudeMdEndMarker';
+  if (imports.isEmpty) return '$claudeMdStartMarker\n$claudeMdEndMarker';
+  return '$claudeMdStartMarker\n\n$imports\n\n$claudeMdEndMarker';
 }
 
 // .............................................................................
@@ -119,20 +185,18 @@ String upsertClaudeMdBlock(String content, String block) {
 }
 
 // .............................................................................
-/// The updated content of `<targetRoot>/CLAUDE.md` for [body] and
-/// [importPaths], or `null` when the file already carries exactly this
-/// block.
+/// The updated content of `<targetRoot>/CLAUDE.md` for [importPaths], or
+/// `null` when the file already carries exactly this block.
 String? updatedClaudeMd(
   DnaHost host,
   String targetRoot,
-  Iterable<String> importPaths, {
-  String? body,
-}) {
+  Iterable<String> importPaths,
+) {
   final path = '$targetRoot/CLAUDE.md';
   final existing = host.existsFile(path) ? host.readString(path) : '';
   final updated = upsertClaudeMdBlock(
     existing,
-    buildClaudeMdBlock(importPaths, body: body),
+    buildClaudeMdBlock(importPaths),
   );
   return existing == updated ? null : updated;
 }
