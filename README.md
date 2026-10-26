@@ -98,8 +98,8 @@ trees.
 
 **Order**: `layers` is the single source of truth — parents before
 children, diamonds deduplicated (first topological position wins), cycles
-are errors. **The last layer wins** — except for `dna/CLAUDE.md`, which
-every layer adds to (see [CLAUDE.md and skills](#claudemd-and-skills)).
+are errors. **The last layer wins** — except for `dna/CLAUDE.md`, of which
+every layer keeps its own (see [CLAUDE.md and skills](#claudemd-and-skills)).
 
 ## Configuration: `dna/_dna.json`
 
@@ -172,8 +172,9 @@ your layers.
   `dna/_generated.json` (Helix's: layers, hashes, and the project files
   the DNA owns). The effective variables are neither: they are
   content and live in `dna/_vars.json`.
-- Forbidden instance targets: `.git/**`. A `dna/CLAUDE.md` is no plain
-  instance either: its merged content goes into the managed block of the
+- Forbidden instance targets: `.git/**`. A `dna/CLAUDE.md` does not
+  instantiate to the project's `CLAUDE.md`: it becomes
+  `.claude/CLAUDE_<layer>.md`, imported by the managed block of the
   project's `CLAUDE.md` (see below).
 
 ## The placed test: instantiate + verify in one
@@ -354,19 +355,34 @@ the only path rewriting Helix performs).
 
 - Skills are plain instances: `dna/dot-claude/skills/<name>/SKILL.md` →
   `.claude/skills/<name>/SKILL.md`.
+- Every layer that ships a `dna/CLAUDE.md` gets its own instance
+  `.claude/CLAUDE_<layer>.md`, named after the bare package name with
+  `-` turned into `_` (`@ggdna/dna-gg` → `.claude/CLAUDE_dna_gg.md`);
+  the own `dna/` is filed under the project's package name. A topic
+  layer therefore cannot wipe out the instructions of another; an empty
+  file or a text an earlier layer already ships is not repeated. The
+  file is rendered and substituted like every other DNA file, and its
+  relative `@`-imports get a `../`, since Claude Code resolves them
+  relative to `.claude/`. `CLAUDE.overrides.md` patches a tagged section
+  in every layer file that carries it. A layer that drops out takes its
+  file along.
 - `CLAUDE.md` keeps the managed block between
   `<!-- helix:claude_md:start/end -->`. Content outside the block is
-  never touched. The block holds, in this order:
-  - the `CLAUDE.md` of every layer that ships one under `dna/CLAUDE.md`,
-    one after the other in layer order, the own `dna/` last. A later
-    layer adds to the earlier ones instead of replacing them, so a topic
-    layer cannot wipe out the instructions of another; a text already in
-    the merge is not repeated. `CLAUDE.overrides.md` still patches tagged
-    sections of the joined text, and it is rendered and substituted like
-    every other DNA file. Once no layer ships one any more, the next run
-    empties the block again.
-  - one `@`-import line per file of `claude.claudeMdInclude` (files or
-    folders of human documentation!).
+  never touched. The block holds only `@`-import lines, in this order:
+  - one per `.claude/CLAUDE_<layer>.md`, in layer order, the own `dna/`
+    last. Once no layer ships one any more, the next run empties the
+    block again.
+  - one per file of `claude.claudeMdInclude` (files or folders of human
+    documentation!).
+
+  ```markdown
+  <!-- helix:claude_md:start -->
+
+  @.claude/CLAUDE_dna_gg.md
+  @.claude/CLAUDE_dna_dart.md
+
+  <!-- helix:claude_md:end -->
+  ```
 
   All documentation is written for humans — the AI consumes the same
   files.

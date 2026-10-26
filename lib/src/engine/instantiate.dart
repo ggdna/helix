@@ -187,25 +187,38 @@ Future<DnaInstantiationResult> instantiateDna({
   // `display` names the layer the way a developer opens it: the local
   // folder for a localized checkout, the package name for a registry
   // install.
-  final sources = <({String label, String root, String display})>[
-    if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
-      // The engine's built-in base DNA is not a package a developer
-      // opens — point at the `dna/` folder that overrides it instead.
-      (label: 'base', root: baseDnaRoot, display: dnaDirname),
-    for (final layer in graph.layers)
-      (
-        label: layer.name,
-        root: layer.root,
-        display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
-      ),
-    // The repository's own `dna/` is applied unconditionally and always
-    // last — however many layers `_dna.json` declares, and whether or not
-    // one of them happens to be another copy of this same package. Every
-    // `dna/` is hand-authored source, so it is the one layer that must
-    // never lose a conflict, and it must be instantiated even when a
-    // declared layer ships nothing at all.
-    (label: 'self', root: targetRoot, display: dnaDirname),
-  ];
+  // `claude` names the file the layer's `CLAUDE.md` is written to.
+  final sources =
+      <({String label, String root, String display, String claude})>[
+        if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
+          // The engine's built-in base DNA is not a package a developer
+          // opens — point at the `dna/` folder that overrides it instead.
+          (
+            label: 'base',
+            root: baseDnaRoot,
+            display: dnaDirname,
+            claude: claudeLayerFileName('helix'),
+          ),
+        for (final layer in graph.layers)
+          (
+            label: layer.name,
+            root: layer.root,
+            display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
+            claude: claudeLayerFileName(layer.name),
+          ),
+        // The repository's own `dna/` is applied unconditionally and always
+        // last — however many layers `_dna.json` declares, and whether or not
+        // one of them happens to be another copy of this same package. Every
+        // `dna/` is hand-authored source, so it is the one layer that must
+        // never lose a conflict, and it must be instantiated even when a
+        // declared layer ships nothing at all.
+        (
+          label: 'self',
+          root: targetRoot,
+          display: dnaDirname,
+          claude: claudeLayerFileName(projectPackageName(host, targetRoot)),
+        ),
+      ];
   assert(
     sources.last.label == 'self',
     'the own dna/ must stay the last source',
@@ -215,6 +228,9 @@ Future<DnaInstantiationResult> instantiateDna({
   // path last came from.
   final merged = <String, Uint8List>{};
   final provenance = <String, String>{};
+  // The merged keys of the layers' `CLAUDE_<layer>.md` files, in layer
+  // order — the order of the imports in the managed block.
+  final claudeLayerFiles = <String>[];
   var varsChain = <String, Object?>{};
   final ownVars = <String, Set<String>>{};
   for (final source in sources) {
@@ -225,6 +241,10 @@ Future<DnaInstantiationResult> instantiateDna({
       label: source.label,
       dnaRoot: '${source.root}/$dnaDirname',
       displayRoot: source.display,
+      claudeLayerRel:
+          '$dotPrefix${claudeLayerDir.substring(1)}/'
+          '${source.claude}',
+      claudeLayerFiles: claudeLayerFiles,
       provenance: provenance,
       messages: messages,
       warnings: warnings,
@@ -280,7 +300,9 @@ Future<DnaInstantiationResult> instantiateDna({
   // (`.claude/` or `CLAUDE.md`) — there, the imported path is never
   // written as its own file, so the plain import would point at nothing.
   // Everywhere else an `@word` stays untouched, so a copyright header's
-  // bare `@license` line is never mistaken for one.
+  // bare `@license` line is never mistaken for one — except in the
+  // layers' `CLAUDE_<layer>.md` files, whose imports were written for the
+  // root and get the `../` that `.claude/` needs.
   for (final rel in merged.keys.toList()) {
     if (!rel.toLowerCase().endsWith('.md')) continue;
     final text = _decodeText(merged[rel]!);
@@ -288,33 +310,29 @@ Future<DnaInstantiationResult> instantiateDna({
     final instancePath = decodeDotSegments(rel);
     final keptInWorkspace =
         isClaudeMdTarget(instancePath) || instancePath.startsWith('.claude/');
+    final inlineAtImports = workspace && keptInWorkspace;
+    final resolved = resolveIncludes(
+      text,
+      merged,
+      selfLabel: provenance[rel] ?? rel,
+      inlineAtImports: inlineAtImports,
+    );
     merged[rel] = _encodeText(
-      resolveIncludes(
-        text,
-        merged,
-        selfLabel: provenance[rel] ?? rel,
-        inlineAtImports: workspace && keptInWorkspace,
-      ),
+      claudeLayerFiles.contains(rel) && !inlineAtImports
+          ? rebaseClaudeLayerImports(resolved)
+          : resolved,
     );
   }
 
-  // 5. Plan instances.
+  // 5. Plan instances. The layers' `CLAUDE_<layer>.md` files are plain
+  // instances below `.claude/`, the managed block of the project's
+  // CLAUDE.md only imports them (step 8).
   final instancePlan = <String, String>{}; // instance path -> merged rel
-  // The merged CLAUDE.md is no instance: it goes into the managed block
-  // of the project's CLAUDE.md (step 8), the rest of that file belongs
-  // to the project.
-  String? dnaClaudeMd;
-  String? dnaClaudeMdRel;
   for (final rel in merged.keys) {
     if (isPrivatePath(rel)) continue;
     final instancePath = decodeDotSegments(rel);
     if (isForbiddenInstanceTarget(instancePath)) {
       warnings.add('Instance target "$instancePath" is forbidden — skipped.');
-      continue;
-    }
-    if (isClaudeMdTarget(instancePath)) {
-      dnaClaudeMd = _decodeText(merged[rel]!);
-      dnaClaudeMdRel = rel;
       continue;
     }
     // Workspace mode keeps only `.claude/` — every other DNA path stays
@@ -343,8 +361,10 @@ Future<DnaInstantiationResult> instantiateDna({
       '$dnaDirname/${entry.key}': entry.value,
     for (final entry in instancePlan.entries)
       if (provenance[entry.value] != null) entry.key: provenance[entry.value]!,
-    if (dnaClaudeMdRel != null && provenance[dnaClaudeMdRel] != null)
-      'CLAUDE.md': provenance[dnaClaudeMdRel]!,
+    // The block itself was last filled by the last layer's CLAUDE.md.
+    if (claudeLayerFiles.isNotEmpty &&
+        provenance[claudeLayerFiles.last] != null)
+      'CLAUDE.md': provenance[claudeLayerFiles.last]!,
   };
 
   // 7. Reconcile with the current project state.
@@ -414,10 +434,13 @@ Future<DnaInstantiationResult> instantiateDna({
     }
   }
 
-  // 8. CLAUDE.md managed block: the merged CLAUDE.md of the layers, then
-  // the `@`-imports of `claude.claudeMdInclude`. A block that the DNA
-  // filled last time is emptied once no layer ships a CLAUDE.md any more,
-  // so the project does not keep stale layer content.
+  // 8. CLAUDE.md managed block: one `@`-import per `CLAUDE_<layer>.md`,
+  // in layer order, then the `@`-imports of `claude.claudeMdInclude`. A
+  // block that the DNA filled last time is emptied once no layer ships a
+  // CLAUDE.md any more, so the project does not keep stale imports.
+  final layerImports = [
+    for (final rel in claudeLayerFiles) decodeDotSegments(rel),
+  ];
   String? claudeMdContent;
   List<String>? claudeImports;
   final claudeMdWasFromDna = previous?.claude.claudeMdFromDna ?? false;
@@ -432,13 +455,11 @@ Future<DnaInstantiationResult> instantiateDna({
       },
     );
   }
-  if (claudeImports != null || dnaClaudeMd != null || claudeMdWasFromDna) {
-    claudeMdContent = updatedClaudeMd(
-      host,
-      targetRoot,
-      claudeImports ?? const [],
-      body: dnaClaudeMd,
-    );
+  if (claudeImports != null || layerImports.isNotEmpty || claudeMdWasFromDna) {
+    claudeMdContent = updatedClaudeMd(host, targetRoot, [
+      ...layerImports,
+      ...?claudeImports,
+    ]);
   }
 
   // 9. New manifest.
@@ -474,7 +495,7 @@ Future<DnaInstantiationResult> instantiateDna({
     ],
     claude: DnaManifestClaude(
       claudeMdInclude: claudeImports,
-      claudeMdFromDna: dnaClaudeMd != null,
+      claudeMdFromDna: layerImports.isNotEmpty,
     ),
     baseVersion: baseVersion,
     baseHash: baseDnaRoot == null
@@ -663,6 +684,8 @@ void _requireMustOverrides(
   required String label,
   required String dnaRoot,
   required String displayRoot,
+  required String claudeLayerRel,
+  required List<String> claudeLayerFiles,
   required Map<String, String> provenance,
   required List<String> messages,
   required List<String> warnings,
@@ -713,10 +736,17 @@ void _requireMustOverrides(
       continue;
     }
     final bytes = host.readBytes('$dnaRoot/$rel');
-    final earlier = merged[rel];
-    merged[rel] = earlier != null && isClaudeMdTarget(rel)
-        ? _appendClaudeMd(earlier, bytes)
-        : bytes;
+    if (isClaudeMdTarget(rel)) {
+      final added = _addClaudeLayerFile(
+        merged: merged,
+        claudeLayerFiles: claudeLayerFiles,
+        rel: claudeLayerRel,
+        bytes: bytes,
+      );
+      if (added) provenance[claudeLayerRel] = '$displayRoot/$rel';
+      continue;
+    }
+    merged[rel] = bytes;
     provenance[rel] = '$displayRoot/$rel';
     if (rel.toLowerCase().endsWith('.md')) {
       final text = _decodeText(bytes);
@@ -745,6 +775,19 @@ void _requireMustOverrides(
   for (final rel in mdOverrides..sort()) {
     final target = rel.substring(0, rel.length - overridesFileSuffix.length);
     final targetRel = '$target.md';
+    if (isClaudeMdTarget(targetRel)) {
+      _overrideClaudeLayerFiles(
+        merged: merged,
+        claudeLayerFiles: claudeLayerFiles,
+        parsed: parseTagFile(host.readString('$dnaRoot/$rel')),
+        label: '$label:$rel',
+        source: '$displayRoot/$rel',
+        provenance: provenance,
+        messages: messages,
+        warnings: warnings,
+      );
+      continue;
+    }
     final targetBytes = merged[targetRel];
     if (targetBytes == null) {
       messages.add('$label: "$rel" has no target file "$targetRel" — skipped.');
@@ -795,19 +838,69 @@ void _requireMustOverrides(
 }
 
 // .............................................................................
-/// Appends the `CLAUDE.md` of a later layer to the one merged so far. Every
-/// layer brings its own instructions for the AI, so a topic layer must not
-/// wipe out what another one says: they all land in the managed block, in
-/// layer order. A text the merge already holds — the own `dna/` being a
-/// copy of a listed layer — is not repeated.
-Uint8List _appendClaudeMd(Uint8List earlier, Uint8List later) {
-  final before = _decodeText(earlier);
-  final added = _decodeText(later)?.trim();
-  if (before == null || added == null) return later;
-  if (added.isEmpty || before.contains(added)) return earlier;
-  final kept = before.trimRight();
-  if (kept.isEmpty) return later;
-  return _encodeText('$kept\n\n$added\n');
+/// Files the `CLAUDE.md` of a layer as its own `CLAUDE_<layer>.md` at
+/// [rel]. Every layer brings its own instructions for the AI, so a topic
+/// layer must not wipe out what another one says: each one gets a file
+/// and an import in the managed block, in layer order. An empty file adds
+/// nothing, and a text an earlier layer already ships — the own `dna/`
+/// being a copy of a listed layer — is not repeated. A later layer of the
+/// same name replaces the earlier one in place. Returns whether the file
+/// was filed.
+bool _addClaudeLayerFile({
+  required Map<String, Uint8List> merged,
+  required List<String> claudeLayerFiles,
+  required String rel,
+  required Uint8List bytes,
+}) {
+  final text = _decodeText(bytes)?.trim();
+  if (text == null || text.isEmpty) return false;
+  final repeated = claudeLayerFiles.any(
+    (earlier) =>
+        earlier != rel && _decodeText(merged[earlier]!)?.trim() == text,
+  );
+  if (repeated) return false;
+  merged[rel] = bytes;
+  if (!claudeLayerFiles.contains(rel)) claudeLayerFiles.add(rel);
+  return true;
+}
+
+// .............................................................................
+/// Applies a `CLAUDE.overrides.md` to the `CLAUDE_<layer>.md` files merged
+/// so far: each block replaces its `@tag` in every file that carries it.
+/// A block no file carries is reported the way any missing tag is.
+void _overrideClaudeLayerFiles({
+  required Map<String, Uint8List> merged,
+  required List<String> claudeLayerFiles,
+  required TagFileParseResult parsed,
+  required String label,
+  required String source,
+  required Map<String, String> provenance,
+  required List<String> messages,
+  required List<String> warnings,
+}) {
+  warnings.addAll(parsed.warnings.map((w) => '$label: $w'));
+  if (claudeLayerFiles.isEmpty) {
+    messages.add('$label has no target file "CLAUDE.md" — skipped.');
+    return;
+  }
+  for (final block in parsed.blocks) {
+    var found = false;
+    for (final rel in claudeLayerFiles) {
+      final text = _decodeText(merged[rel]!);
+      if (text == null) continue;
+      final applied = applyTagBlocks(text, [block], fileLabel: 'CLAUDE.md');
+      if (applied.warnings.any((w) => w.contains('not found'))) continue;
+      found = true;
+      warnings.addAll(applied.warnings.map((w) => '$label: $w'));
+      merged[rel] = _encodeText(applied.content);
+      provenance[rel] = source;
+    }
+    if (!found) {
+      warnings.add(
+        '$label: Tag "${block.tag}" not found in CLAUDE.md — skipped.',
+      );
+    }
+  }
 }
 
 // .............................................................................
