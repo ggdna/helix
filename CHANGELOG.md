@@ -1,12 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.15.2 - 2026-11-15
 
 ### Changed
 
 - Pass checkDna as a tear-off in the placed Dart check
-
-The placed test/dna/dna_test.dart no longer triggers unnecessary_lambdas
 
 ## 1.15.1 - 2026-11-15
 
