@@ -181,6 +181,35 @@ Run dart pub upgrade.
   });
 
   group('instantiateDna — end to end', () {
+    test('checkOnly reports modified and pending, writes nothing', () async {
+      final host = makeHost(
+        extra: {'$root/node_modules/dna-dart/dna/CLAUDE.md': '# Dart\n'},
+      );
+      Future<DnaInstantiationResult> run({bool checkOnly = false}) =>
+          instantiateDna(
+            host: host,
+            targetRoot: root,
+            baseVersion: '1.0.0',
+            checkOnly: checkOnly,
+          );
+
+      final fresh = await run(checkOnly: true);
+      expect(fresh.pending, contains('LICENSE'));
+      expect(fresh.pending, contains(dnaGeneratedPath));
+      expect(fresh.pending, contains('CLAUDE.md'));
+      expect(fresh.modified, isEmpty);
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+
+      await run();
+      host.writeString('$root/LICENSE', 'changed by hand\n');
+      final changed = await run(checkOnly: true);
+      expect(changed.modified, ['LICENSE']);
+      expect(changed.pending, isEmpty);
+      expect(changed.sources['LICENSE'], contains('dna-guides'));
+      expect(changed.committed, isFalse);
+      expect(host.readString('$root/LICENSE'), 'changed by hand\n');
+    });
+
     test('merges layers, renders, substitutes, instantiates', () async {
       final host = makeHost(
         extra: {

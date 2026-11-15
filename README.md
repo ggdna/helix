@@ -33,10 +33,10 @@ every test run that they always match the generated originals.
      there (pnpm, yarn, npm),
    - places `dna/_dna.json`, with `layers` pre-filled from the DNA
      packages you already have installed,
-   - places the wrapper test: `test/dna/dna_test.dart` when the project
-     declares `test`, `test/dna/dna.spec.ts` when it declares `vitest`.
-     Without a test framework nothing is placed — `helix build` runs the
-     same instantiation from the command line.
+   - places the DNA check: `test/dna/dna_test.dart` in a Dart project
+     (a `pubspec.yaml`) that declares `test`, `test/dna/dna.spec.ts` in a
+     TypeScript project that declares `vitest`. An existing check is
+     replaced. Without a test framework nothing is placed.
 
 2. Add the DNA packages you want:
 
@@ -62,10 +62,14 @@ every test run that they always match the generated originals.
    Declaring the dependency by hand and listing it under `layers`
    yourself does the same thing — followed by `helix build`.
 
-3. Run your tests — or `helix build`, which performs exactly the same run
-   for a project without a test framework. The first run instantiates the
-   DNA and commits what it generated as `#gg: generated DNA`. From now on
-   every test run keeps the project in sync.
+3. Run `helix build`. It instantiates the DNA and commits what it
+   generated as `#gg: generated DNA`. From now on every test run checks
+   that the generated files are unchanged — the check writes nothing.
+
+4. Later, `helix upgrade` brings the project to the installed layers:
+   it places the newest DNA check — the Dart check in a Dart project, the
+   vitest check in a TypeScript project, removing a check of the other
+   language that helix placed — and then runs `helix build`.
 
    `helix build` and `helix add` work on the root of the repository the
    current folder lies in, so they can be run from any subfolder. Outside
@@ -177,11 +181,22 @@ your layers.
   `.claude/CLAUDE_<layer>.md`, imported by the managed block of the
   project's `CLAUDE.md` (see below).
 
-## The placed test: instantiate + verify in one
+## The placed check: verify, write nothing
 
-Every test run executes Helix (Dart: in-process via the `helix`
-dev-dependency; TypeScript: via the npm package `@tssuite/helix-js`,
-Helix compiled to WebAssembly with node callbacks injected):
+Every test run checks the DNA with `checkDna` (Dart: in-process via the
+`helix` dev-dependency; TypeScript: via the npm package
+`@tssuite/helix-js`, Helix compiled to WebAssembly). It plans the same
+run as `helix build` and writes, backs up and commits nothing:
+
+- **Generated file changed by hand** → fails, naming the DNA file the
+  edit belongs in (headline: _Generated DNA files were changed by hand:_)
+- **DNA updates outstanding** → reported with `gg dna build`, passes
+- **`dot_` escape in `dna/`** → fails with the `dot-` rename
+
+## The build: instantiate + verify in one
+
+`helix build`, `helix add` and `helix upgrade` run the instantiation
+(`runDnaTest`):
 
 - **Instance changed locally** → the DNA content wins. The local content
   is copied to a fresh folder below the system temp directory (never into
@@ -392,7 +407,8 @@ the only path rewriting Helix performs).
 ```dart
 import 'package:helix/helix.dart';
 
-await runDnaTest();                  // what the placed test calls
+await checkDna();                    // what the placed check calls
+await runDnaTest();                  // what helix build runs
 final result = instantiateDna(       // programmatic access
   host: IoDnaHost(),
   targetRoot: '.',

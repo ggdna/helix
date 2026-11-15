@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add checkDna and helix upgrade
+
+checkDna: proves generated files are unchanged, writes nothing
+instantiateDna(checkOnly): plans the run, reports modified and pending
+The placed DNA check calls checkDna, Dart or vitest by project
+helix init replaces the check; helix upgrade places it and builds
+
 ## 1.14.0 - 2026-10-26
 
 ### Changed

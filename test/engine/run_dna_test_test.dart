@@ -274,6 +274,22 @@ void main() {
       expect(log.any((m) => m.contains('Could not commit')), isTrue);
       expect(File('$target/dna/_generated.json').existsSync(), isTrue);
     });
+
+    test('checkDna reads through the default IoDnaHost', () async {
+      // A Windows path with backslashes, as Directory.current returns it.
+      final target = '${tmp.path}/project'.replaceAll('/', r'\');
+      final emptyBase = '${tmp.path}/base';
+      Directory(emptyBase).createSync(recursive: true);
+      File('$target/pubspec.yaml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('name: consumer\n');
+
+      await checkDna(targetRoot: target, baseDnaRoot: emptyBase, log: log.add);
+      // A never built project has the manifest outstanding; nothing is
+      // written.
+      expect(log.single, contains('dna/_generated.json'));
+      expect(File('$target/dna/_generated.json').existsSync(), isFalse);
+    });
   });
 
   group('describeDnaSources', () {
@@ -352,6 +368,124 @@ void main() {
         expect(text, contains(message));
         expect(text, isNot(message), reason: 'nothing was colored');
       }
+    });
+  });
+
+  /// [makeHost] after one instantiation, with its commit forgotten.
+  Future<MemoryDnaHost> instantiated() async {
+    final host = makeHost();
+    await runDnaTest(
+      targetRoot: root,
+      host: host,
+      baseDnaRoot: '/no-base',
+      log: (_) {},
+    );
+    host.commits.clear();
+    return host;
+  }
+
+  Future<void> check(MemoryDnaHost host) => checkDna(
+    targetRoot: root,
+    host: host,
+    baseDnaRoot: '/no-base',
+    log: log.add,
+  );
+
+  /// The project files of [host], without the installed layers.
+  Map<String, String> projectFiles(MemoryDnaHost host) => {
+    for (final path in host.listFilesRecursive(root))
+      if (!path.startsWith('node_modules'))
+        path: host.readString('$root/$path'),
+  };
+
+  group('checkDna', () {
+    test('passes silently on an unchanged project', () async {
+      final host = await instantiated();
+      await check(host);
+      expect(log, isEmpty);
+      expect(host.commits, isEmpty);
+    });
+
+    test('fails on a changed generated file and writes nothing', () async {
+      final host = await instantiated();
+      host.writeString('$root/doc/hello.md', '# Changed\n');
+      final before = projectFiles(host);
+
+      await expectLater(
+        () => check(host),
+        throwsA(
+          isA<Exception>().having(
+            (e) => '$e',
+            'message',
+            allOf(
+              contains(modifiedDnaMessage),
+              contains('doc/hello.md'),
+              contains('a-dna/dna/doc/hello.md'),
+            ),
+          ),
+        ),
+      );
+      // The hand edit stays; nothing is backed up or committed.
+      expect(projectFiles(host), before);
+      expect(host.commits, isEmpty);
+    });
+
+    test('fails on a changed file the DNA no longer produces', () async {
+      final host = await instantiated();
+      host
+        ..writeString('$root/doc/hello.md', '# Changed\n')
+        ..deleteFile('$root/node_modules/a-dna/dna/doc/hello.md');
+      await expectLater(
+        () => check(host),
+        throwsA(
+          isA<Exception>().having(
+            (e) => '$e',
+            'message',
+            allOf(contains(modifiedDnaMessage), contains('doc/hello.md')),
+          ),
+        ),
+      );
+      expect(host.readString('$root/doc/hello.md'), '# Changed\n');
+    });
+
+    test('reports DNA updates without failing or writing', () async {
+      final host = await instantiated();
+      host.writeString(
+        '$root/node_modules/a-dna/dna/doc/hello.md',
+        '# Hello again\n',
+      );
+      await check(host);
+      expect(host.readString('$root/doc/hello.md'), '# Hello\n');
+      expect(host.commits, isEmpty);
+      expect(log.single, contains('doc/hello.md'));
+      expect(log.single, contains('gg dna build'));
+    });
+
+    test('reports a never instantiated project as updates', () async {
+      final host = makeHost();
+      await check(host);
+      expect(host.existsFile('$root/LICENSE'), isFalse);
+      expect(log.single, contains('LICENSE'));
+    });
+
+    test('fails on dot_ escapes in dna/', () async {
+      final host = makeHost(extra: {'$root/dna/dot_vscode/tasks.json': '{}\n'});
+      await expectLater(
+        () => check(host),
+        throwsA(
+          isA<Exception>().having(
+            (e) => '$e',
+            'message',
+            contains(invalidDotEscapesMessage),
+          ),
+        ),
+      );
+    });
+
+    test('writes and removes its own base DNA', () async {
+      final host = await instantiated();
+      await checkDna(targetRoot: root, host: host, log: log.add);
+      expect(host.existsDir('/tmp'), isFalse);
     });
   });
 }

@@ -92,7 +92,18 @@ class DnaInstantiationResult {
     this.sources = const {},
     this.committed = false,
     this.commitError,
+    this.modified = const [],
+    this.pending = const [],
   });
+
+  /// Generated files whose content was changed by hand: the content no
+  /// longer matches the hash the manifest recorded for it. Filled by a
+  /// `checkOnly` run, which writes nothing.
+  final List<String> modified;
+
+  /// Project paths a `checkOnly` run would write or delete because the
+  /// DNA produces something new — a DNA update, not a local change.
+  final List<String> pending;
 
   /// Progress and adoption log lines.
   final List<String> messages;
@@ -158,12 +169,17 @@ class DnaInstantiationResult {
 /// would otherwise point at a file this run never writes are inlined the
 /// same way `<!-- helix:include:… -->` always is (see
 /// [resolveIncludes]).
+/// [checkOnly] plans the run and writes, deletes and commits nothing: the
+/// result names the hand-changed generated files in
+/// [DnaInstantiationResult.modified] and the outstanding DNA updates in
+/// [DnaInstantiationResult.pending].
 Future<DnaInstantiationResult> instantiateDna({
   required DnaHost host,
   required String targetRoot,
   String? baseDnaRoot,
   required String baseVersion,
   bool workspace = false,
+  bool checkOnly = false,
 }) async {
   final messages = <String>[];
   final warnings = <String>[];
@@ -418,6 +434,8 @@ Future<DnaInstantiationResult> instantiateDna({
   }
 
   final instanceDeletes = <String>[];
+  // Instances the DNA dropped that carry local changes: left in place.
+  final droppedModified = <String>[];
   for (final entry in previousHashes.entries) {
     final path = entry.key;
     if (instanceBytes.containsKey(path)) continue;
@@ -427,6 +445,7 @@ Future<DnaInstantiationResult> instantiateDna({
       instanceDeletes.add(path);
       messages.add('- removed $path (no longer produced by the DNA)');
     } else {
+      droppedModified.add(path);
       warnings.add(
         '$path was modified locally and is no longer produced by the '
         'DNA — left in place, remove manually.',
@@ -519,6 +538,21 @@ Future<DnaInstantiationResult> instantiateDna({
       claudeMdContent != null ||
       generatedChanged ||
       workspaceCleanupPending;
+  if (checkOnly) {
+    final pending = <String>{
+      ...instanceWrites,
+      ...instanceDeletes,
+      if (claudeMdContent != null) 'CLAUDE.md',
+      if (generatedChanged) dnaGeneratedPath,
+    }..removeAll(backedUp);
+    final modified = [...backedUp, ...droppedModified]..sort();
+    return DnaInstantiationResult(
+      warnings: warnings,
+      modified: modified,
+      pending: pending.toList()..sort(),
+      sources: _sourcesFor(modified, pathSources),
+    );
+  }
   if (!hasChanges) {
     return DnaInstantiationResult(messages: messages, warnings: warnings);
   }

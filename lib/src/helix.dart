@@ -10,6 +10,7 @@ import 'package:gg_log/gg_log.dart';
 import 'commands/add.dart';
 import 'commands/build.dart';
 import 'commands/init.dart';
+import 'commands/upgrade.dart';
 import 'util/select_prompt.dart';
 import 'util/text_prompt.dart';
 
@@ -30,6 +31,7 @@ class Helix extends Command<dynamic> {
       Init(ggLog: ggLog, selectPrompt: selectPrompt, textPrompt: textPrompt),
     );
     addSubcommand(Build(ggLog: ggLog));
+    addSubcommand(Upgrade(ggLog: ggLog));
   }
 
   /// The log function
