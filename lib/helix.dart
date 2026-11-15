@@ -6,6 +6,7 @@
 
 library;
 
+export 'src/engine/dna_check_wrapper.dart';
 export 'src/engine/instantiate.dart';
 export 'src/engine/run_dna_test.dart';
 export 'src/helix.dart';

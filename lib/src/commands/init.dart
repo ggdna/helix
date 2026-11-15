@@ -9,6 +9,7 @@ import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:gg_log/gg_log.dart';
 
 import '../engine/ask_must_overrides.dart';
+import '../engine/dna_check_wrapper.dart';
 import '../engine/run_dna_test.dart';
 import '../util/dna_config.dart';
 import '../util/dna_fs.dart';
@@ -24,42 +25,6 @@ import '../util/process_run_io.dart';
 import '../util/select_prompt.dart';
 import '../util/select_prompt_io.dart';
 import '../util/text_prompt.dart';
-
-/// Content of the placed Dart wrapper test.
-const String dartWrapperTest = '''
-// Placed by `helix init` — instantiates and verifies this project's DNA
-// on every test run. The logic lives in the helix dev-dependency and is
-// updated through normal dependency updates.
-
-import 'package:helix/helix.dart';
-import 'package:test/test.dart';
-
-void main() {
-  test(
-    'dna is instantiated and unmodified',
-    () => runDnaTest(),
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
-}
-''';
-
-/// Content of the placed vitest wrapper spec.
-const String tsWrapperTest = '''
-// Placed by `helix init` — instantiates and verifies this project's DNA
-// on every test run. The logic lives in the @tssuite/helix-js
-// dev-dependency and is updated through normal dependency updates.
-
-import { runDnaTest } from '@tssuite/helix-js';
-import { test } from 'vitest';
-
-test(
-  'dna is instantiated and unmodified',
-  async () => {
-    await runDnaTest();
-  },
-  120000,
-);
-''';
 
 /// Skeleton written to `dna/_dna.json` when it does not exist yet, with
 /// [layers] pre-filled from the DNA packages the project has installed.
@@ -176,13 +141,17 @@ class Init extends Command<dynamic> {
     );
     _place('$root/$dnaConfigPath', dnaConfigSkeleton(layers));
 
-    // Without a test framework no wrapper is placed — that is a project
-    // shape, not a problem: `helix build` runs the same instantiation.
-    if (isDart && declaresPubDependency(_host, root, dartTestPackage)) {
-      _place('$root/test/dna/dna_test.dart', dartWrapperTest);
-    }
-    if (isNode && declaresNodeDependency(_host, root, nodeTestPackage)) {
-      _place('$root/test/dna/dna.spec.ts', tsWrapperTest);
+    // The DNA check is always replaced, so an older check that also
+    // wrote the DNA gives way. Without a test framework none is placed —
+    // `helix build` instantiates the DNA either way.
+    final check = placeDnaCheck(_host, root);
+    if (!_quiet) {
+      for (final path in check.placed) {
+        ggLog(cDetail('✓ Placed $root/$path'));
+      }
+      for (final path in check.removed) {
+        ggLog(cDetail('✓ Removed $root/$path'));
+      }
     }
 
     // The suggested layers may ask for values only the project can give.

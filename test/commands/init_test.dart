@@ -17,6 +17,7 @@ import 'package:helix/src/util/package_managers.dart';
 import 'package:helix/src/util/process_run.dart';
 import 'package:helix/src/util/select_prompt.dart';
 import 'package:helix/src/util/text_prompt.dart';
+import 'package:helix/src/engine/dna_check_wrapper.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -352,7 +353,7 @@ void main() {
         await runInit(host);
         expect(
           host.readString('$root/test/dna/dna_test.dart'),
-          contains('runDnaTest'),
+          contains('checkDna()'),
         );
         expect(host.existsFile('$root/test/dna/dna.spec.ts'), isFalse);
       });
@@ -367,16 +368,21 @@ void main() {
         expect(host.existsFile('$root/test/dna/dna_test.dart'), isFalse);
       });
 
-      test('places both wrappers in hybrid projects', () async {
+      test('places the Dart check only in hybrid projects', () async {
         final host = MemoryDnaHost(
           files: {
             '$root/pubspec.yaml': dartProject,
             '$root/package.json': nodeProject,
+            '$root/test/dna/dna.spec.ts': tsWrapperTest,
           },
         );
         await runInit(host);
         expect(host.existsFile('$root/test/dna/dna_test.dart'), isTrue);
-        expect(host.existsFile('$root/test/dna/dna.spec.ts'), isTrue);
+        expect(host.existsFile('$root/test/dna/dna.spec.ts'), isFalse);
+        expect(
+          messages,
+          contains(contains('Removed $root/test/dna/dna.spec.ts')),
+        );
       });
 
       test(
@@ -395,20 +401,23 @@ void main() {
         },
       );
 
-      test('is idempotent and keeps existing files', () async {
+      test('keeps the config and replaces the DNA check', () async {
         final host = MemoryDnaHost(
           files: {
             '$root/pubspec.yaml': dartProject,
-            '$root/test/dna/dna_test.dart': '// custom',
+            '$root/test/dna/dna_test.dart': '// older check',
             '$root/$dnaConfigPath': '// custom config',
           },
         );
         await runInit(host);
-        expect(host.readString('$root/test/dna/dna_test.dart'), '// custom');
+        expect(
+          host.readString('$root/test/dna/dna_test.dart'),
+          dartWrapperTest,
+        );
         expect(host.readString('$root/$dnaConfigPath'), '// custom config');
         expect(
           messages.where((m) => m.contains('✓ Kept existing')),
-          hasLength(2),
+          hasLength(1),
         );
       });
     });

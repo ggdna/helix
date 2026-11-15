@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.0 - 2026-11-15
+
+### Added
+
+- Add checkDna and helix upgrade
+
 ## 1.14.0 - 2026-10-26
 
 ### Changed

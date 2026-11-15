@@ -119,6 +119,68 @@ Future<void> _runDnaTest({
 }
 
 // .............................................................................
+/// Headline of a failed [checkDna]: generated files were changed by hand.
+const String modifiedDnaMessage = 'Generated DNA files were changed by hand:';
+
+// .............................................................................
+/// Entry point for the placed DNA check (`test/dna/dna_test.dart`): proves
+/// that the files the DNA generated are unchanged, and changes nothing —
+/// it writes no file, makes no backup and commits nothing.
+///
+/// - a generated file whose content no longer matches its recorded hash
+///   → throws, naming the DNA file each edit belongs in
+/// - a `dot_`-escaped path in `dna/` → throws, naming the `dot-` rename
+/// - outstanding DNA updates (a newer layer, a changed `dna/`) → reported
+///   with the command that applies them, not a failure
+Future<void> checkDna({
+  String? targetRoot,
+  DnaHost? host,
+  String? baseDnaRoot,
+  void Function(String message)? log,
+}) async {
+  final effectiveHost = host ?? IoDnaHost();
+  final root = (targetRoot ?? Directory.current.path).replaceAll(r'\', '/');
+  final base = baseDnaRoot ?? materializeBaseDna(effectiveHost);
+  final emit = log ?? print; // coverage:ignore-line
+
+  try {
+    final invalidEscapes = invalidDotEscapes(effectiveHost, root);
+    if (invalidEscapes.isNotEmpty) {
+      throw Exception(
+        '\n${cError(invalidDotEscapesMessage)}\n'
+        '${describeInvalidDotEscapes(invalidEscapes)}',
+      );
+    }
+
+    final result = await instantiateDna(
+      host: effectiveHost,
+      targetRoot: root,
+      baseDnaRoot: base,
+      baseVersion: helixVersion,
+      checkOnly: true,
+    );
+
+    if (result.pending.isNotEmpty) {
+      emit(
+        '${cDetail('The DNA has updates for')} '
+        '${result.pending.map(cCmd).join(', ')}${cDetail('.')} '
+        '${cAction('Apply them with')} ${cCmd('gg dna build')}.',
+      );
+    }
+    if (result.modified.isNotEmpty) {
+      throw Exception(
+        '\n${cError(modifiedDnaMessage)}\n'
+        '${describeDnaSources(result.modified, result.sources)}\n'
+        '${cAction('Then restore the generated files with')} '
+        '${cCmd('git checkout -- <file>')}.',
+      );
+    }
+  } finally {
+    if (baseDnaRoot == null) effectiveHost.deleteDir(base);
+  }
+}
+
+// .............................................................................
 /// Signature of [runDnaTest] — the seam that lets the commands calling it
 /// be tested without a project on disk.
 typedef DnaTestRunner = Future<void> Function({
