@@ -75,13 +75,7 @@ Future<void> _runDnaTest({
 }) async {
   final effectiveHost = host;
 
-  final invalidEscapes = invalidDotEscapes(effectiveHost, root);
-  if (invalidEscapes.isNotEmpty) {
-    throw Exception(
-      '\n${cError(invalidDotEscapesMessage)}\n'
-      '${describeInvalidDotEscapes(invalidEscapes)}',
-    );
-  }
+  _requireValidDotEscapes(effectiveHost, root);
 
   final result = await instantiateDna(
     host: effectiveHost,
@@ -119,6 +113,18 @@ Future<void> _runDnaTest({
 }
 
 // .............................................................................
+/// Throws when a path below `<root>/dna/` escapes a leading dot with
+/// `dot_` instead of `dot-`, naming the rename for each one.
+void _requireValidDotEscapes(DnaHost host, String root) {
+  final invalidEscapes = invalidDotEscapes(host, root);
+  if (invalidEscapes.isEmpty) return;
+  throw Exception(
+    '\n${cError(invalidDotEscapesMessage)}\n'
+    '${describeInvalidDotEscapes(invalidEscapes)}',
+  );
+}
+
+// .............................................................................
 /// Headline of a failed [checkDna]: generated files were changed by hand.
 const String modifiedDnaMessage = 'Generated DNA files were changed by hand:';
 
@@ -144,13 +150,7 @@ Future<void> checkDna({
   final emit = log ?? print; // coverage:ignore-line
 
   try {
-    final invalidEscapes = invalidDotEscapes(effectiveHost, root);
-    if (invalidEscapes.isNotEmpty) {
-      throw Exception(
-        '\n${cError(invalidDotEscapesMessage)}\n'
-        '${describeInvalidDotEscapes(invalidEscapes)}',
-      );
-    }
+    _requireValidDotEscapes(effectiveHost, root);
 
     final result = await instantiateDna(
       host: effectiveHost,

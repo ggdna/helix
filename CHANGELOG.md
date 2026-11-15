@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Share the dot_ escape check of runDnaTest and checkDna
+
 ## 1.15.0 - 2026-11-15
 
 ### Added
