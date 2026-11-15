@@ -353,7 +353,7 @@ void main() {
         await runInit(host);
         expect(
           host.readString('$root/test/dna/dna_test.dart'),
-          contains('checkDna()'),
+          contains('    checkDna,\n'),
         );
         expect(host.existsFile('$root/test/dna/dna.spec.ts'), isFalse);
       });
