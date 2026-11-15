@@ -19,7 +19,8 @@ void main() {
       final result = placeDnaCheck(host, root);
       expect(result.placed, [dartDnaCheckPath]);
       expect(host.readString('$root/$dartDnaCheckPath'), dartWrapperTest);
-      expect(dartWrapperTest, contains('checkDna()'));
+      expect(dartWrapperTest, contains('    checkDna,\n'));
+      expect(dartWrapperTest, isNot(contains('() => checkDna()')));
       expect(dartWrapperTest, isNot(contains('runDnaTest')));
     });
 
