@@ -93,13 +93,18 @@ class DnaManifestInstance {
 /// The Claude section of the manifest.
 class DnaManifestClaude {
   /// Creates the record.
-  const DnaManifestClaude({this.claudeMdInclude, this.claudeMdFromDna = false});
+  const DnaManifestClaude({
+    this.claudeMdInclude,
+    this.claudeMdFromDna = false,
+    this.blockHash,
+  });
 
   /// Reads the section from decoded JSON.
   factory DnaManifestClaude.fromJson(Map<String, dynamic> json) =>
       DnaManifestClaude(
         claudeMdInclude: (json['claudeMdInclude'] as List?)?.cast<String>(),
         claudeMdFromDna: json['claudeMdFromDna'] == true,
+        blockHash: json['blockHash'] as String?,
       );
 
   /// The configured CLAUDE.md includes at instantiation time.
@@ -110,10 +115,15 @@ class DnaManifestClaude {
   /// ships one any more.
   final bool claudeMdFromDna;
 
+  /// Hash of the managed block of `CLAUDE.md` as it was written, markers
+  /// included; `null` when the project has no managed block.
+  final String? blockHash;
+
   /// JSON representation.
   Map<String, dynamic> toJson() => {
     'claudeMdInclude': claudeMdInclude,
     'claudeMdFromDna': claudeMdFromDna,
+    'blockHash': blockHash,
   };
 }
 
@@ -134,6 +144,7 @@ class DnaManifest {
     this.claude = const DnaManifestClaude(),
     required this.baseVersion,
     this.baseHash,
+    this.configHash,
   });
 
   /// The resolved layers in application order.
@@ -151,6 +162,11 @@ class DnaManifest {
   /// Hash of helix's own base DNA at instantiation time.
   final String? baseHash;
 
+  /// Hash of `dna/_dna.json` at instantiation time. The hash of the `self`
+  /// layer leaves the configuration out, so a changed layer order or a
+  /// changed variable shows here.
+  final String? configHash;
+
   /// JSON representation of `dna/_generated.json`.
   Map<String, dynamic> toJson() => {
     'version': dnaFormatVersion,
@@ -158,6 +174,7 @@ class DnaManifest {
     'claude': claude.toJson(),
     'baseVersion': baseVersion,
     'baseHash': baseHash,
+    'configHash': configHash,
     'instances': instances.map((i) => i.toJson()).toList(),
   };
 
@@ -209,6 +226,7 @@ class DnaManifest {
           : const DnaManifestClaude(),
       baseVersion: decoded['baseVersion'] as String? ?? 'unknown',
       baseHash: decoded['baseHash'] as String?,
+      configHash: decoded['configHash'] as String?,
     );
   }
 

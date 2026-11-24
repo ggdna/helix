@@ -66,6 +66,12 @@ void main() {
     });
   });
 
+  group('normalizeEolText', () {
+    test('turns CRLF into LF and keeps a lone CR', () {
+      expect(normalizeEolText('a\r\nb\rc\n'), 'a\nb\rc\n');
+    });
+  });
+
   group('normalizeEol', () {
     test('keeps content without carriage returns untouched', () {
       final bytes = _bytes('plain');

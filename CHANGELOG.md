@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.0 - 2026-11-24
+
+### Changed
+
+- Fail checkDna on every hand edit of generated files
+- Keep a test from writing files into the repository
+- Tell hand edits from DNA updates in more cases
+
 ## 1.15.2 - 2026-11-15
 
 ### Changed

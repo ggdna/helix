@@ -46,6 +46,10 @@ String? hashTree(DnaHost host, String dir) {
   return toHex64(fnv1(perFile));
 }
 
+/// [text] with CRLF line endings normalized to LF — the text form of
+/// [normalizeEol].
+String normalizeEolText(String text) => text.replaceAll('\r\n', '\n');
+
 // .............................................................................
 /// Replaces every `\r\n` byte pair with `\n`.
 Uint8List normalizeEol(Uint8List bytes) {

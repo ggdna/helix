@@ -34,9 +34,10 @@ every test run that they always match the generated originals.
    - places `dna/_dna.json`, with `layers` pre-filled from the DNA
      packages you already have installed,
    - places the DNA check: `test/dna/dna_test.dart` in a Dart project
-     (a `pubspec.yaml`) that declares `test`, `test/dna/dna.spec.ts` in a
-     TypeScript project that declares `vitest`. An existing check is
-     replaced. Without a test framework nothing is placed.
+     (a `pubspec.yaml`) that declares `test` or `flutter_test`,
+     `test/dna/dna.spec.ts` in a TypeScript project that declares
+     `vitest`. An existing check is replaced. Without a test framework
+     nothing is placed.
 
 2. Add the DNA packages you want:
 
@@ -188,10 +189,28 @@ Every test run checks the DNA with `checkDna` (Dart: in-process via the
 `@tssuite/helix-js`, Helix compiled to WebAssembly). It plans the same
 run as `helix build` and writes, backs up and commits nothing:
 
-- **Generated file changed by hand** → fails, naming the DNA file the
-  edit belongs in (headline: _Generated DNA files were changed by hand:_)
-- **DNA updates outstanding** → reported with `gg dna build`, passes
+- **Generated file changed or deleted by hand** → fails, naming the DNA
+  file the edit belongs in and the `git checkout` that restores it
+  (headline: _Generated DNA files were changed or deleted by hand:_).
+  This covers every instance, the managed block of `CLAUDE.md` and
+  `dna/_generated.json` itself
+- **DNA updates outstanding** (a newer helix, a changed layer, a changed
+  `dna/` or `dna/_dna.json`) → reported with `gg dna build`, passes
 - **`dot_` escape in `dna/`** → fails with the `dot-` rename
+
+How it tells the two apart: `dna/_generated.json` records the helix
+version, the content hash of every layer and of `dna/_dna.json`, and the
+hash of every instance and of the managed `CLAUDE.md` block. While helix,
+the layers and the configuration hash as recorded, the DNA is unchanged —
+the project must then match the DNA output exactly, and any difference
+was made by hand, even one whose hash was edited into the manifest too.
+After a DNA update, a file still matching its recorded hash is an update
+to apply; one that no longer does was changed by hand.
+
+The check is placed only where it can run: the project declares the engine
+(`helix`, or `@tssuite/helix-js`) and its test framework (`test` or
+`flutter_test`, or `vitest`). Where the engine is gone, a check helix
+placed is removed again.
 
 ## The build: instantiate + verify in one
 

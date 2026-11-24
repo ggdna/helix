@@ -34,7 +34,8 @@ void main() {
   MemoryDnaHost dartRepo() => MemoryDnaHost(
     files: {
       '/repo/.git/HEAD': 'ref: refs/heads/main',
-      '/repo/pubspec.yaml': 'name: p\ndev_dependencies:\n  test: ^1.0.0\n',
+      '/repo/pubspec.yaml':
+          'name: p\ndev_dependencies:\n  helix: ^1.0.0\n  test: ^1.0.0\n',
       '/repo/test/dna/dna_test.dart': '// Placed by `helix init` — old\n',
     },
   );
