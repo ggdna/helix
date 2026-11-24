@@ -35,6 +35,28 @@ void main() {
 }
 ''';
 
+/// Content of the placed Dart check in a Flutter project, which tests
+/// with `flutter_test` instead of `test`.
+const String flutterWrapperTest = '''
+// Placed by `helix init` and `helix upgrade` — checks on every test run
+// that the files this project's DNA generated are unchanged. It writes
+// nothing; `gg dna build` applies DNA updates.
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:helix/helix.dart';
+
+void main() {
+  test(
+    'generated dna files are unchanged',
+    checkDna,
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+}
+''';
+
+/// The Flutter test package the placed Flutter check imports.
+const String flutterTestPackage = 'flutter_test';
+
 /// Content of the placed vitest check.
 const String tsWrapperTest = '''
 // Placed by `helix init` and `helix upgrade` — checks on every test run
@@ -60,10 +82,13 @@ typedef DnaCheckPlacement = ({List<String> placed, List<String> removed});
 /// Places the DNA check of the project in [root], replacing an older one.
 ///
 /// A project with a `pubspec.yaml` is a Dart project and gets the Dart
-/// check; one with only a `package.json` gets the vitest check. A check of
-/// the other language that helix placed earlier is removed. No check is
-/// placed without the test framework (`test` or `vitest`) — that is a
-/// project shape, not a problem.
+/// check — the Flutter variant when it tests with `flutter_test` only; one
+/// with only a `package.json` gets the vitest check. The check runs the
+/// engine the project depends on, so it is placed only where the project
+/// declares it (`helix`, or `@tssuite/helix-js`) next to its test framework
+/// (`test` or `flutter_test`, or `vitest`) — anything else is a project
+/// shape, not a problem. A check helix placed earlier that no longer fits
+/// the project is removed.
 DnaCheckPlacement placeDnaCheck(DnaHost host, String root) {
   final placed = <String>[];
   final removed = <String>[];
@@ -85,16 +110,28 @@ DnaCheckPlacement placeDnaCheck(DnaHost host, String root) {
     removed.add(path);
   }
 
+  bool declaresPub(String package) =>
+      declaresPubDependency(host, root, package);
+  bool declaresNode(String package) =>
+      declaresNodeDependency(host, root, package);
+
   if (isDart) {
-    if (declaresPubDependency(host, root, dartTestPackage)) {
-      place(dartDnaCheckPath, dartWrapperTest);
-    }
+    final content = !declaresPub(helixPubPackage)
+        ? null
+        : declaresPub(dartTestPackage)
+        ? dartWrapperTest
+        : declaresPub(flutterTestPackage)
+        ? flutterWrapperTest
+        : null;
+    content == null
+        ? remove(dartDnaCheckPath)
+        : place(dartDnaCheckPath, content);
     remove(tsDnaCheckPath);
   }
   if (isNode) {
-    if (declaresNodeDependency(host, root, nodeTestPackage)) {
-      place(tsDnaCheckPath, tsWrapperTest);
-    }
+    declaresNode(helixNodePackage) && declaresNode(nodeTestPackage)
+        ? place(tsDnaCheckPath, tsWrapperTest)
+        : remove(tsDnaCheckPath);
     remove(dartDnaCheckPath);
   }
   return (placed: placed, removed: removed);

@@ -4,11 +4,13 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:gg_console_colors/gg_console_colors.dart' show ggColorsEnabled;
 import 'package:helix/helix.dart';
 import 'package:helix/src/util/dna_layout.dart';
+import 'package:helix/src/util/dna_tree_hash.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -480,6 +482,182 @@ void main() {
           ),
         ),
       );
+    });
+
+    group('fails on hand edits while the DNA is unchanged:', () {
+      /// The manifest of [host], changed by [edit] and written back.
+      void editManifest(
+        MemoryDnaHost host,
+        void Function(Map<String, dynamic> manifest) edit,
+      ) {
+        const path = '$root/dna/_generated.json';
+        final manifest =
+            jsonDecode(host.readString(path)) as Map<String, dynamic>;
+        edit(manifest);
+        host.writeString(path, jsonEncode(manifest));
+      }
+
+      /// Sets the recorded hash of [path] to the hash of [content].
+      void recordHash(MemoryDnaHost host, String path, String content) =>
+          editManifest(host, (manifest) {
+            for (final i in manifest['instances'] as List) {
+              final instance = i as Map<String, dynamic>;
+              if (instance['path'] == path) {
+                instance['hash'] = hashFileBytes(utf8.encode(content));
+              }
+            }
+          });
+
+      Matcher failsWith(List<String> parts) => throwsA(
+        isA<Exception>().having(
+          (e) => '$e',
+          'message',
+          allOf([contains(modifiedDnaMessage), ...parts.map(contains)]),
+        ),
+      );
+
+      test('a deleted generated file', () async {
+        final host = await instantiated();
+        host.deleteFile('$root/doc/hello.md');
+        await expectLater(
+          () => check(host),
+          failsWith([
+            'Restore',
+            'git checkout -- doc/hello.md',
+            'a-dna/dna/doc/hello.md',
+          ]),
+        );
+        expect(host.existsFile('$root/doc/hello.md'), isFalse);
+      });
+
+      test('a changed file whose recorded hash was edited too', () async {
+        final host = await instantiated();
+        host.writeString('$root/doc/hello.md', '# Changed\n');
+        recordHash(host, 'doc/hello.md', '# Changed\n');
+        await expectLater(
+          () => check(host),
+          failsWith(['doc/hello.md', 'a-dna/dna/doc/hello.md']),
+        );
+      });
+
+      test('an edited manifest', () async {
+        final host = await instantiated();
+        recordHash(host, 'doc/hello.md', 'something else');
+        await expectLater(
+          () => check(host),
+          failsWith(['git checkout -- dna/_generated.json']),
+        );
+      });
+
+      test('an edited managed CLAUDE.md block', () async {
+        final host = makeHost(
+          extra: {'$root/node_modules/a-dna/dna/CLAUDE.md': 'Be brief.\n'},
+        );
+        await runDnaTest(
+          targetRoot: root,
+          host: host,
+          baseDnaRoot: '/no-base',
+          log: (_) {},
+        );
+        final claudeMd = host.readString('$root/CLAUDE.md');
+        expect(claudeMd, contains('@.claude/CLAUDE_a_dna.md'));
+        host.writeString(
+          '$root/CLAUDE.md',
+          claudeMd.replaceFirst('@.claude', 'Own line\n@.claude'),
+        );
+        await expectLater(
+          () => check(host),
+          failsWith(['git checkout -- CLAUDE.md']),
+        );
+      });
+
+      test('a removed managed CLAUDE.md block', () async {
+        final host = makeHost(
+          extra: {'$root/node_modules/a-dna/dna/CLAUDE.md': 'Be brief.\n'},
+        );
+        await runDnaTest(
+          targetRoot: root,
+          host: host,
+          baseDnaRoot: '/no-base',
+          log: (_) {},
+        );
+        host.writeString('$root/CLAUDE.md', '# Own text only\n');
+        await expectLater(() => check(host), failsWith(['CLAUDE.md']));
+      });
+
+      test('an edit in a managed block nothing fills', () async {
+        final host = makeHost(
+          extra: {
+            '$root/CLAUDE.md':
+                '# P\n\n<!-- helix:claude_md:start -->\n'
+                '<!-- helix:claude_md:end -->\n',
+          },
+        );
+        await runDnaTest(
+          targetRoot: root,
+          host: host,
+          baseDnaRoot: '/no-base',
+          log: (_) {},
+        );
+        host.writeString(
+          '$root/CLAUDE.md',
+          '# P\n\n<!-- helix:claude_md:start -->\nOwn line\n'
+              '<!-- helix:claude_md:end -->\n',
+        );
+        await expectLater(() => check(host), failsWith(['CLAUDE.md']));
+      });
+    });
+
+    test('passes on text outside the managed CLAUDE.md block', () async {
+      final host = makeHost(
+        extra: {'$root/node_modules/a-dna/dna/CLAUDE.md': 'Be brief.\n'},
+      );
+      await runDnaTest(
+        targetRoot: root,
+        host: host,
+        baseDnaRoot: '/no-base',
+        log: (_) {},
+      );
+      host.writeString(
+        '$root/CLAUDE.md',
+        '# Own text\n\n${host.readString('$root/CLAUDE.md')}\nMore.\n',
+      );
+      await check(host);
+      expect(log, isEmpty);
+    });
+
+    test('reports a changed configuration as an update', () async {
+      final host = await instantiated();
+      host.writeString(
+        '$root/dna/_dna.json',
+        '{"version": 1, "layers": ["a-dna"], '
+            '"claude": {"claudeMdInclude": ["doc/hello.md"]}}',
+      );
+      await check(host);
+      expect(log.single, contains('CLAUDE.md'));
+      expect(log.single, contains('gg dna build'));
+    });
+
+    test('reports a file at its recorded hash as an update after a new '
+        'helix', () async {
+      final host = await instantiated();
+      // What an older helix generated and recorded, before an upgrade.
+      host.writeString('$root/doc/hello.md', '# Old hello\n');
+      const path = '$root/dna/_generated.json';
+      final manifest =
+          jsonDecode(host.readString(path)) as Map<String, dynamic>;
+      manifest['baseVersion'] = '0.0.1';
+      for (final i in manifest['instances'] as List) {
+        final instance = i as Map<String, dynamic>;
+        if (instance['path'] == 'doc/hello.md') {
+          instance['hash'] = hashFileBytes(utf8.encode('# Old hello\n'));
+        }
+      }
+      host.writeString(path, jsonEncode(manifest));
+
+      await check(host);
+      expect(log.single, contains('doc/hello.md'));
+      expect(log.single, contains('gg dna build'));
     });
 
     test('writes and removes its own base DNA', () async {

@@ -125,19 +125,22 @@ void _requireValidDotEscapes(DnaHost host, String root) {
 }
 
 // .............................................................................
-/// Headline of a failed [checkDna]: generated files were changed by hand.
-const String modifiedDnaMessage = 'Generated DNA files were changed by hand:';
+/// Headline of a failed [checkDna]: generated files were changed or
+/// deleted by hand.
+const String modifiedDnaMessage =
+    'Generated DNA files were changed or deleted by hand:';
 
 // .............................................................................
 /// Entry point for the placed DNA check (`test/dna/dna_test.dart`): proves
 /// that the files the DNA generated are unchanged, and changes nothing —
 /// it writes no file, makes no backup and commits nothing.
 ///
-/// - a generated file whose content no longer matches its recorded hash
-///   → throws, naming the DNA file each edit belongs in
+/// - a generated file changed or deleted by hand — the managed block of
+///   `CLAUDE.md` and `dna/_generated.json` included → throws, naming the
+///   DNA file each edit belongs in
 /// - a `dot_`-escaped path in `dna/` → throws, naming the `dot-` rename
-/// - outstanding DNA updates (a newer layer, a changed `dna/`) → reported
-///   with the command that applies them, not a failure
+/// - outstanding DNA updates (a newer helix or layer, a changed `dna/`)
+///   → reported with the command that applies them, not a failure
 Future<void> checkDna({
   String? targetRoot,
   DnaHost? host,
@@ -170,15 +173,40 @@ Future<void> checkDna({
     if (result.modified.isNotEmpty) {
       throw Exception(
         '\n${cError(modifiedDnaMessage)}\n'
-        '${describeDnaSources(result.modified, result.sources)}\n'
-        '${cAction('Then restore the generated files with')} '
-        '${cCmd('git checkout -- <file>')}.',
+        '${describeHandEdits(result.modified, result.missing, result.sources)}',
       );
     }
   } finally {
     if (baseDnaRoot == null) effectiveHost.deleteDir(base);
   }
 }
+
+// .............................................................................
+/// Renders one instruction per path a [checkDna] found changed or deleted
+/// by hand: a changed file's edits belong in its DNA source, a deleted
+/// file comes back from git — and to drop it for good, it is removed from
+/// its DNA source. A path without a DNA source is restored only.
+String describeHandEdits(
+  List<String> paths,
+  List<String> missing,
+  Map<String, String> sources,
+) => [
+  for (final path in paths)
+    switch ((missing.contains(path), sources[path])) {
+      (true, final String source) =>
+        '${cAction('Restore')} ${cCmd(path)} ${cAction('with')} '
+            '${cCmd('git checkout -- $path')}${cAction(', or remove it from')} '
+            '${cCmd(source)} ${cAction('to drop it')}.',
+      (false, final String source) =>
+        '${cAction('Move edits from')} ${cCmd(path)} '
+            '${cAction('to')} ${cCmd(source)}'
+            '${cAction(', then restore it with')} '
+            '${cCmd('git checkout -- $path')}.',
+      (_, null) =>
+        '${cAction('Restore')} ${cCmd(path)} ${cAction('with')} '
+            '${cCmd('git checkout -- $path')}.',
+    },
+].join('\n');
 
 // .............................................................................
 /// Signature of [runDnaTest] — the seam that lets the commands calling it
