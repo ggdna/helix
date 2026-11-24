@@ -278,8 +278,12 @@ void main() {
     });
 
     test('checkDna reads through the default IoDnaHost', () async {
-      // A Windows path with backslashes, as Directory.current returns it.
-      final target = '${tmp.path}/project'.replaceAll('/', r'\');
+      // A Windows path with backslashes, as Directory.current returns it
+      // there. Elsewhere a backslash is part of a file name.
+      final project = '${tmp.path}/project';
+      final target = Platform.isWindows
+          ? project.replaceAll('/', r'\')
+          : project;
       final emptyBase = '${tmp.path}/base';
       Directory(emptyBase).createSync(recursive: true);
       File('$target/pubspec.yaml')

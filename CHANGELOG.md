@@ -5,11 +5,9 @@
 ### Changed
 
 - Fail checkDna on every hand edit of generated files
+- Keep a test from writing files into the repository
 
-Deleted instances, the managed CLAUDE.md block and dna/_generated.json count as hand edits
-While helix, the layers and dna/_dna.json hash as recorded, any difference to the DNA output fails
-Record the hash of dna/_dna.json and of the CLAUDE.md block in the manifest
-Place the DNA check only where helix or helix-js is declared; Flutter projects get a flutter_test variant
+Use the backslash path of the checkDna IoDnaHost test on Windows only
 
 ## 1.15.2 - 2026-11-15
 
