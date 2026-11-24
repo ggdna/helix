@@ -97,6 +97,29 @@ void main() {
       expect(placeDnaCheck(node, root).placed, isEmpty);
     });
 
+    test('names the dependency a check lacks', () {
+      String? missing(Map<String, String> files) =>
+          placeDnaCheck(MemoryDnaHost(files: files), root).missing;
+      expect(missing({'$root/pubspec.yaml': pubspec}), isNull);
+      expect(missing({'$root/pubspec.yaml': 'name: p\n'}), 'helix');
+      expect(
+        missing({
+          '$root/pubspec.yaml': 'name: p\ndev_dependencies:\n  helix: ^1.0.0\n',
+        }),
+        'test',
+      );
+      expect(missing({'$root/package.json': packageJson}), isNull);
+      expect(missing({'$root/package.json': '{}'}), '@tssuite/helix-js');
+      expect(
+        missing({
+          '$root/package.json':
+              '{"devDependencies": {"@tssuite/helix-js": "^0.6.0"}}',
+        }),
+        'vitest',
+      );
+      expect(missing({}), isNull);
+    });
+
     test('places nothing without helix', () {
       final dart = MemoryDnaHost(
         files: {

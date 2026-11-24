@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:helix/src/engine/instantiate.dart';
+import 'package:helix/src/util/claude_md.dart';
 import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:helix/src/util/dna_fs_io.dart';
@@ -323,11 +324,7 @@ Run dart pub upgrade.
         final claudeMd = host.readString('$root/CLAUDE.md');
         final edited = claudeMd.replaceFirst('@.claude', 'mine\n@.claude');
         host.writeString('$root/CLAUDE.md', edited);
-        final block = edited.substring(
-          edited.indexOf('<!-- helix:claude_md:start -->'),
-          edited.indexOf('<!-- helix:claude_md:end -->') +
-              '<!-- helix:claude_md:end -->'.length,
-        );
+        final block = claudeMdBlockOf(edited)!;
         editManifest((m) {
           (m['claude'] as Map<String, dynamic>)['blockHash'] = hashFileBytes(
             Uint8List.fromList(utf8.encode(block)),
@@ -367,6 +364,82 @@ Run dart pub upgrade.
         final r = await run(checkOnly: true);
         expect(r.modified, isEmpty);
         expect(r.pending, contains('LICENSE'));
+      });
+
+      test('a CRLF checkout of unchanged files is clean', () async {
+        for (final path in ['LICENSE', 'CLAUDE.md']) {
+          final text = host.readString('$root/$path');
+          host.writeString(
+            '$root/$path',
+            text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'),
+          );
+        }
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, isEmpty);
+      });
+
+      test('a deleted CLAUDE.md is modified and missing', () async {
+        host.deleteFile('$root/CLAUDE.md');
+        final r = await run(checkOnly: true);
+        expect(r.modified, ['CLAUDE.md']);
+        expect(r.missing, ['CLAUDE.md']);
+      });
+
+      test(
+        'a deleted CLAUDE.md with a block nothing fills is missing',
+        () async {
+          host = makeHost(
+            extra: {
+              '$root/CLAUDE.md':
+                  '<!-- helix:claude_md:start -->\n'
+                  '<!-- helix:claude_md:end -->\n',
+            },
+          );
+          await run();
+          host.deleteFile('$root/CLAUDE.md');
+          final r = await run(checkOnly: true);
+          expect(r.modified, ['CLAUDE.md']);
+          expect(r.missing, ['CLAUDE.md']);
+
+          // A build brings the block back.
+          await run();
+          expect(
+            claudeMdBlockOf(host.readString('$root/CLAUDE.md')),
+            isNotNull,
+          );
+        },
+      );
+
+      test('a new file in an included folder is pending', () async {
+        host
+          ..writeString('$root/notes/a.md', '# A\n')
+          ..writeString(
+            '$root/$dnaConfigPath',
+            '{"version": $dnaFormatVersion, "layers": ["dna-dart"], '
+                '"claude": {"claudeMdInclude": ["notes"]}}',
+          );
+        await run();
+        host.writeString('$root/notes/b.md', '# B\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, containsAll(['CLAUDE.md', dnaGeneratedPath]));
+      });
+
+      test('a deleted manifest is modified and missing', () async {
+        host
+          ..deleteFile('$root/$dnaGeneratedPath')
+          ..uncommitted.add(dnaGeneratedPath);
+        final r = await run(checkOnly: true);
+        expect(r.modified, contains(dnaGeneratedPath));
+        expect(r.missing, [dnaGeneratedPath]);
+      });
+
+      test('a never built project outside a repository is pending', () async {
+        host = _FailingGitHost(makeHost());
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains(dnaGeneratedPath));
       });
 
       test('a manifest from another layer set is not the same DNA', () async {
@@ -1853,4 +1926,18 @@ packages:
       expect(host.existsFile('$root/doc/develop.md'), isTrue);
     });
   });
+}
+
+/// A [MemoryDnaHost] without a repository: asking git fails.
+class _FailingGitHost extends MemoryDnaHost {
+  _FailingGitHost(MemoryDnaHost from)
+    : super(
+        files: {
+          for (final e in from.files.entries) e.key: utf8.decode(e.value),
+        },
+      );
+
+  @override
+  Future<Set<String>> uncommittedPaths(String repoRoot) =>
+      Future.error(StateError('not a git repository'));
 }

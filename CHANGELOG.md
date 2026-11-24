@@ -6,8 +6,14 @@
 
 - Fail checkDna on every hand edit of generated files
 - Keep a test from writing files into the repository
+- Tell hand edits from DNA updates in more cases
 
-Use the backslash path of the checkDna IoDnaHost test on Windows only
+A CRLF checkout of unchanged files passes
+A new file in a claudeMdInclude folder is a pending update
+A deleted dna/_generated.json or CLAUDE.md fails as deleted
+placeDnaCheck names the dependency a check lacks
+Read CLAUDE.md and hash the base DNA once per run
+A CLAUDE.md block the manifest recorded stays owned when it is removed
 
 ## 1.15.2 - 2026-11-15
 

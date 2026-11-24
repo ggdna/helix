@@ -430,6 +430,12 @@ Future<DnaInstantiationResult> instantiateDna({
       }
       continue;
     }
+    // A checkout with CRLF line endings holds the same content: nothing
+    // to check. A build still writes the DNA's own line endings.
+    if (checkOnly &&
+        _bytesEqual(normalizeEol(currentBytes), normalizeEol(newBytes))) {
+      continue;
+    }
     final ownedHash = previousHashes[path];
     if (ownedHash == null) {
       instanceWrites.add(path);
@@ -491,28 +497,32 @@ Future<DnaInstantiationResult> instantiateDna({
       },
     );
   }
-  // A block that is already there is owned by the DNA too, even when
-  // nothing fills it: a hand edit in it is reverted like any other.
+  // A block that is already there, or that the manifest recorded, is
+  // owned by the DNA too, even when nothing fills it: a hand edit in it,
+  // or its removal, is reverted like any other.
   final claudeMdPath = '$targetRoot/CLAUDE.md';
-  final currentBlock = host.existsFile(claudeMdPath)
-      ? claudeMdBlockOf(host.readString(claudeMdPath))
-      : null;
+  final existingClaudeMd = host.existsFile(claudeMdPath)
+      ? host.readString(claudeMdPath)
+      : '';
+  final currentBlock = claudeMdBlockOf(existingClaudeMd);
   final blockManaged =
       claudeImports != null ||
       layerImports.isNotEmpty ||
       claudeMdWasFromDna ||
-      currentBlock != null;
+      currentBlock != null ||
+      previous?.claude.blockHash != null;
   final expectedBlock = blockManaged
       ? buildClaudeMdBlock([...layerImports, ...?claudeImports])
       : null;
-  if (blockManaged) {
-    claudeMdContent = updatedClaudeMd(host, targetRoot, [
-      ...layerImports,
-      ...?claudeImports,
-    ]);
+  if (expectedBlock != null) {
+    final updated = upsertClaudeMdBlock(existingClaudeMd, expectedBlock);
+    if (updated != existingClaudeMd) claudeMdContent = updated;
   }
 
   // 9. New manifest.
+  final baseHash = baseDnaRoot == null
+      ? null
+      : hashTree(host, '$baseDnaRoot/$dnaDirname');
   final manifest = DnaManifest(
     layers: [
       if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
@@ -520,7 +530,7 @@ Future<DnaInstantiationResult> instantiateDna({
           name: 'base',
           package: 'helix',
           resolvedVersion: baseVersion,
-          hash: hashTree(host, '$baseDnaRoot/$dnaDirname'),
+          hash: baseHash,
         ),
       for (final layer in graph.layers)
         DnaManifestLayer(
@@ -549,9 +559,7 @@ Future<DnaInstantiationResult> instantiateDna({
       blockHash: expectedBlock == null ? null : _hashText(expectedBlock),
     ),
     baseVersion: baseVersion,
-    baseHash: baseDnaRoot == null
-        ? null
-        : hashTree(host, '$baseDnaRoot/$dnaDirname'),
+    baseHash: baseHash,
     configHash: _configHash(host, targetRoot),
   );
   final generatedJson = encodeJsonPretty(manifest.toJson());
@@ -573,15 +581,32 @@ Future<DnaInstantiationResult> instantiateDna({
       workspaceCleanupPending;
   if (checkOnly) {
     final dnaUnchanged = _sameDna(previous, manifest);
+    // The block is built from the layers, the configuration and — for a
+    // folder in `claudeMdInclude` — the project's own files. Only while
+    // none of them changed must it match the block recorded last time.
+    final blockInputsUnchanged =
+        dnaUnchanged &&
+        _sameBlockInputs(previous!, manifest, claudeImports: claudeImports);
     final claudeMdModified =
-        claudeMdContent != null &&
+        currentBlock != expectedBlock &&
         _blockChangedByHand(
           current: currentBlock,
           recordedHash: previous?.claude.blockHash,
-          dnaUnchanged: dnaUnchanged,
+          inputsUnchanged: blockInputsUnchanged,
         );
+    final manifestMissing =
+        previous == null &&
+        host.existsFile('$targetRoot/$dnaConfigPath') &&
+        (await _uncommittedOrNone(host, targetRoot)).contains(dnaGeneratedPath);
     final manifestModified =
-        dnaUnchanged && generatedChanged && !_sameRecords(previous!, manifest);
+        manifestMissing ||
+        (dnaUnchanged &&
+            generatedChanged &&
+            _recordsChanged(
+              previous!,
+              manifest,
+              blockInputsUnchanged: blockInputsUnchanged,
+            ));
     final modified = <String>{
       ...backedUp,
       ...droppedModified,
@@ -590,16 +615,22 @@ Future<DnaInstantiationResult> instantiateDna({
       if (claudeMdModified) 'CLAUDE.md',
       if (manifestModified) dnaGeneratedPath,
     }.toList()..sort();
+    final claudeMdPending =
+        claudeMdContent != null &&
+        normalizeEolText(claudeMdContent) != normalizeEolText(existingClaudeMd);
     final pending = <String>{
       ...instanceWrites,
       ...instanceDeletes,
-      if (claudeMdContent != null) 'CLAUDE.md',
+      if (claudeMdPending) 'CLAUDE.md',
       if (generatedChanged) dnaGeneratedPath,
     }..removeAll(modified);
     return DnaInstantiationResult(
       warnings: warnings,
       modified: modified,
-      missing: [...missingOwned]..sort(),
+      missing: [
+        for (final path in modified)
+          if (!host.existsFile('$targetRoot/$path')) path,
+      ],
       pending: pending.toList()..sort(),
       sources: _sourcesFor(modified, pathSources),
     );
@@ -745,31 +776,69 @@ bool _sameDna(DnaManifest? previous, DnaManifest current) {
 }
 
 // .............................................................................
-/// Whether [previous] records the same instances and the same `CLAUDE.md`
-/// settings as [current] — a manifest built from the same DNA must.
-bool _sameRecords(DnaManifest previous, DnaManifest current) {
-  String records(DnaManifest m) => jsonEncode({
-    'instances': m.instances.map((i) => i.toJson()).toList(),
-    'claude': m.claude.toJson(),
-  });
-  return records(previous) == records(current);
+/// Whether the managed block of [current] is built from the same imports
+/// as the one [previous] recorded: the same expanded `claudeMdInclude`
+/// ([claudeImports]) and the same `CLAUDE_<layer>.md` files.
+bool _sameBlockInputs(
+  DnaManifest previous,
+  DnaManifest current, {
+  required List<String>? claudeImports,
+}) {
+  String layerFiles(DnaManifest m) => m.instances
+      .map((i) => i.path)
+      .where((path) => path.startsWith('$claudeLayerDir/CLAUDE_'))
+      .join(',');
+  return (previous.claude.claudeMdInclude ?? const []).join(',') ==
+          (claudeImports ?? const []).join(',') &&
+      layerFiles(previous) == layerFiles(current);
+}
+
+// .............................................................................
+/// Whether [previous], built from the same DNA as [current], records other
+/// hashes than the DNA produces: for a path both list, or — while its
+/// imports are unchanged — for the managed `CLAUDE.md` block. Paths may
+/// come and go (a renamed package renames its `CLAUDE_<layer>.md`), a
+/// hash of the same DNA output may not change.
+bool _recordsChanged(
+  DnaManifest previous,
+  DnaManifest current, {
+  required bool blockInputsUnchanged,
+}) {
+  final hashes = {for (final i in current.instances) i.path: i.hash};
+  final instanceChanged = previous.instances.any(
+    (i) => hashes.containsKey(i.path) && hashes[i.path] != i.hash,
+  );
+  final blockChanged =
+      blockInputsUnchanged &&
+      previous.claude.blockHash != current.claude.blockHash;
+  return instanceChanged || blockChanged;
 }
 
 // .............................................................................
 /// Whether the managed block of `CLAUDE.md`, which differs from what the
 /// DNA produces, was changed by hand. A block still matching
-/// [recordedHash] is a pending DNA update — unless the DNA is unchanged.
+/// [recordedHash] is a pending update — unless its inputs are unchanged.
 /// Without a recorded hash the block was never checked before and counts
 /// as pending.
 bool _blockChangedByHand({
   required String? current,
   required String? recordedHash,
-  required bool dnaUnchanged,
+  required bool inputsUnchanged,
 }) {
   if (recordedHash == null) return false;
   if (current == null) return true;
   if (_hashText(current) != recordedHash) return true;
-  return dnaUnchanged;
+  return inputsUnchanged;
+}
+
+// .............................................................................
+/// The paths of [root] with uncommitted work; none outside a repository.
+Future<Set<String>> _uncommittedOrNone(DnaHost host, String root) async {
+  try {
+    return await host.uncommittedPaths(root);
+  } on Object {
+    return const {};
+  }
 }
 
 // .............................................................................
@@ -778,7 +847,7 @@ String _hashText(String text) => hashFileBytes(_encodeText(text));
 // .............................................................................
 /// Hash of `dna/_dna.json` of [targetRoot]; `null` without one.
 String? _configHash(DnaHost host, String targetRoot) {
-  final path = '$targetRoot/$dnaDirname/$dnaConfigFilename';
+  final path = '$targetRoot/$dnaConfigPath';
   return host.existsFile(path) ? hashFileBytes(host.readBytes(path)) : null;
 }
 

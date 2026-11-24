@@ -192,21 +192,23 @@ String describeHandEdits(
   Map<String, String> sources,
 ) => [
   for (final path in paths)
-    switch ((missing.contains(path), sources[path])) {
-      (true, final String source) =>
-        '${cAction('Restore')} ${cCmd(path)} ${cAction('with')} '
-            '${cCmd('git checkout -- $path')}${cAction(', or remove it from')} '
-            '${cCmd(source)} ${cAction('to drop it')}.',
-      (false, final String source) =>
-        '${cAction('Move edits from')} ${cCmd(path)} '
-            '${cAction('to')} ${cCmd(source)}'
-            '${cAction(', then restore it with')} '
-            '${cCmd('git checkout -- $path')}.',
-      (_, null) =>
-        '${cAction('Restore')} ${cCmd(path)} ${cAction('with')} '
-            '${cCmd('git checkout -- $path')}.',
-    },
+    _describeHandEdit(path, missing.contains(path), sources[path]),
 ].join('\n');
+
+String _describeHandEdit(String path, bool deleted, String? source) {
+  final restore =
+      '${cAction('Restore')} ${cCmd(path)} ${cAction('with')} '
+      '${cCmd('git checkout -- $path')}';
+  if (source == null) return '$restore.';
+  if (deleted) {
+    return '$restore${cAction(', or remove it from')} ${cCmd(source)} '
+        '${cAction('to drop it')}.';
+  }
+  return '${cAction('Move edits from')} ${cCmd(path)} '
+      '${cAction('to')} ${cCmd(source)}'
+      '${cAction(', then restore it with')} '
+      '${cCmd('git checkout -- $path')}.';
+}
 
 // .............................................................................
 /// Signature of [runDnaTest] — the seam that lets the commands calling it

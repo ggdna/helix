@@ -75,8 +75,14 @@ test(
 );
 ''';
 
-/// The checks [placeDnaCheck] wrote and removed, project-relative.
-typedef DnaCheckPlacement = ({List<String> placed, List<String> removed});
+/// The checks [placeDnaCheck] wrote and removed, project-relative, and the
+/// dependency the project lacks for a check — `null` when it has a check
+/// or has no manifest at all.
+typedef DnaCheckPlacement = ({
+  List<String> placed,
+  List<String> removed,
+  String? missing,
+});
 
 // .............................................................................
 /// Places the DNA check of the project in [root], replacing an older one.
@@ -110,29 +116,39 @@ DnaCheckPlacement placeDnaCheck(DnaHost host, String root) {
     removed.add(path);
   }
 
-  bool declaresPub(String package) =>
-      declaresPubDependency(host, root, package);
-  bool declaresNode(String package) =>
-      declaresNodeDependency(host, root, package);
-
+  String? missing;
   if (isDart) {
-    final content = !declaresPub(helixPubPackage)
-        ? null
-        : declaresPub(dartTestPackage)
-        ? dartWrapperTest
-        : declaresPub(flutterTestPackage)
-        ? flutterWrapperTest
-        : null;
-    content == null
-        ? remove(dartDnaCheckPath)
-        : place(dartDnaCheckPath, content);
+    final String? content;
+    if (declaresPubDependency(host, root, dartTestPackage)) {
+      content = dartWrapperTest;
+    } else if (declaresPubDependency(host, root, flutterTestPackage)) {
+      content = flutterWrapperTest;
+    } else {
+      content = null;
+    }
+    if (!declaresPubDependency(host, root, helixPubPackage)) {
+      missing = helixPubPackage;
+    } else if (content == null) {
+      missing = dartTestPackage;
+    }
+    if (missing == null) {
+      place(dartDnaCheckPath, content!);
+    } else {
+      remove(dartDnaCheckPath);
+    }
     remove(tsDnaCheckPath);
-  }
-  if (isNode) {
-    declaresNode(helixNodePackage) && declaresNode(nodeTestPackage)
-        ? place(tsDnaCheckPath, tsWrapperTest)
-        : remove(tsDnaCheckPath);
+  } else if (isNode) {
+    if (!declaresNodeDependency(host, root, helixNodePackage)) {
+      missing = helixNodePackage;
+    } else if (!declaresNodeDependency(host, root, nodeTestPackage)) {
+      missing = nodeTestPackage;
+    }
+    if (missing == null) {
+      place(tsDnaCheckPath, tsWrapperTest);
+    } else {
+      remove(tsDnaCheckPath);
+    }
     remove(dartDnaCheckPath);
   }
-  return (placed: placed, removed: removed);
+  return (placed: placed, removed: removed, missing: missing);
 }

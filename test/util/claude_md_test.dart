@@ -187,17 +187,6 @@ $claudeMdEndMarker''');
     });
   });
 
-  group('updatedClaudeMd', () {
-    test('returns new content when changed, null when unchanged', () {
-      final host = MemoryDnaHost();
-      final first = updatedClaudeMd(host, root, ['a.md']);
-      expect(first, isNotNull);
-      host.writeString('$root/CLAUDE.md', first!);
-      expect(updatedClaudeMd(host, root, ['a.md']), isNull);
-      expect(updatedClaudeMd(host, root, ['b.md']), isNotNull);
-    });
-  });
-
   group('claudeMdBlockOf', () {
     test('returns the block with its markers, line endings as \\n', () {
       expect(

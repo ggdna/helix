@@ -10,6 +10,7 @@ import 'package:yaml/yaml.dart';
 
 import 'dna_fs.dart';
 import 'dna_includes.dart';
+import 'dna_tree_hash.dart';
 import 'package_managers.dart';
 import 'package_resolution.dart';
 
@@ -188,29 +189,12 @@ String upsertClaudeMdBlock(String content, String block) {
 /// The managed block of [content], both markers included and line endings
 /// normalized to `\n`; `null` when [content] has no complete block.
 String? claudeMdBlockOf(String content) {
-  final normalized = content.replaceAll('\r\n', '\n');
+  final normalized = normalizeEolText(content);
   final start = normalized.indexOf(claudeMdStartMarker);
   if (start == -1) return null;
   final end = normalized.indexOf(claudeMdEndMarker, start);
   if (end == -1) return null;
   return normalized.substring(start, end + claudeMdEndMarker.length);
-}
-
-// .............................................................................
-/// The updated content of `<targetRoot>/CLAUDE.md` for [importPaths], or
-/// `null` when the file already carries exactly this block.
-String? updatedClaudeMd(
-  DnaHost host,
-  String targetRoot,
-  Iterable<String> importPaths,
-) {
-  final path = '$targetRoot/CLAUDE.md';
-  final existing = host.existsFile(path) ? host.readString(path) : '';
-  final updated = upsertClaudeMdBlock(
-    existing,
-    buildClaudeMdBlock(importPaths),
-  );
-  return existing == updated ? null : updated;
 }
 
 // .............................................................................
