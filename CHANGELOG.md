@@ -1,19 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.16.0 - 2026-11-24
 
 ### Changed
 
 - Fail checkDna on every hand edit of generated files
 - Keep a test from writing files into the repository
 - Tell hand edits from DNA updates in more cases
-
-A CRLF checkout of unchanged files passes
-A new file in a claudeMdInclude folder is a pending update
-A deleted dna/_generated.json or CLAUDE.md fails as deleted
-placeDnaCheck names the dependency a check lacks
-Read CLAUDE.md and hash the base DNA once per run
-A CLAUDE.md block the manifest recorded stays owned when it is removed
 
 ## 1.15.2 - 2026-11-15
 
