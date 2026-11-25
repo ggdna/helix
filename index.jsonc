@@ -13,7 +13,7 @@
 
   // 1-3 bullet points: the problem space.
   "domain": [
-    "DNA layers: resolution, merge order, overrides, variables",
+    "DNA layers: resolution, merge order, overrides, variables, ignore files joined across layers",
     "instances: ownership, placed DNA check (checkDna: fails on hand-changed or deleted instances, CLAUDE.md block, manifest; writes nothing), backups of local edits",
     "Claude Code: .claude/CLAUDE_<layer>.md and the managed CLAUDE.md block",
   ],
