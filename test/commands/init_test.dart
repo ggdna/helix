@@ -4,6 +4,8 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
+import 'dart:convert';
+
 import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart' show cH2;
 import 'package:helix/helix.dart' show cAction, cCmd, cDetail;
@@ -66,6 +68,34 @@ void main() {
         return ProcessRunResult(exitCode: exitCode, stderr: stderr);
       };
 
+  /// What adding the engine as dev dependency writes to the manifest of
+  /// [host], for a [fakeRun] that stands in for the package manager.
+  void Function(String, List<String>) addsHelixTo(
+    MemoryDnaHost host,
+  ) => (executable, args) {
+    if (args.contains('dev:helix')) {
+      const path = '$root/pubspec.yaml';
+      final pubspec = host.readString(path);
+      host.writeString(
+        path,
+        pubspec.contains('dev_dependencies:')
+            ? pubspec.replaceFirst(
+                'dev_dependencies:',
+                'dev_dependencies:\n  helix: any',
+              )
+            : '$pubspec\ndev_dependencies:\n  helix: any\n',
+      );
+    }
+    if (args.contains('@tssuite/helix-js')) {
+      const path = '$root/package.json';
+      final json = jsonDecode(host.readString(path)) as Map<String, dynamic>;
+      (json['devDependencies'] ??= <String, dynamic>{}) as Map<String, dynamic>;
+      (json['devDependencies'] as Map<String, dynamic>)['@tssuite/helix-js'] =
+          '*';
+      host.writeString(path, jsonEncode(json));
+    }
+  };
+
   Future<void> runInit(
     MemoryDnaHost host, {
     ProcessRun? processRun,
@@ -78,7 +108,7 @@ void main() {
         Init(
           ggLog: messages.add,
           host: host,
-          processRun: processRun ?? fakeRun(),
+          processRun: processRun ?? fakeRun(onRun: addsHelixTo(host)),
           selectPrompt: selectPrompt ?? fakePrompt(answer: typescript),
           textPrompt: textPrompt,
         ),
@@ -128,7 +158,11 @@ void main() {
 
       test('writes a pubspec.yaml when Dart is chosen', () async {
         final host = MemoryDnaHost();
-        await runInit(host, selectPrompt: fakePrompt(answer: dart));
+        await runInit(
+          host,
+          processRun: fakeRun(),
+          selectPrompt: fakePrompt(answer: dart),
+        );
         expect(host.readString('$root/pubspec.yaml'), pubspecSkeleton('p'));
         expect(host.existsFile('$root/package.json'), isFalse);
         expect(messages, contains(cDetail('✓ Created pubspec.yaml (p)')));

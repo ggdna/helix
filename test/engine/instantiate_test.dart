@@ -9,11 +9,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:helix/src/engine/instantiate.dart';
+import 'package:helix/src/util/claude_md.dart';
 import 'package:helix/src/util/dna_config.dart';
 import 'package:helix/src/util/dna_fs.dart';
 import 'package:helix/src/util/dna_fs_io.dart';
 import 'package:helix/src/util/dna_layout.dart';
 import 'package:helix/src/util/dna_manifest.dart';
+import 'package:helix/src/util/dna_tree_hash.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -208,6 +210,246 @@ Run dart pub upgrade.
       expect(changed.sources['LICENSE'], contains('dna-guides'));
       expect(changed.committed, isFalse);
       expect(host.readString('$root/LICENSE'), 'changed by hand\n');
+    });
+
+    group('checkOnly tells hand edits from DNA updates:', () {
+      late MemoryDnaHost host;
+
+      Future<DnaInstantiationResult> run({
+        bool checkOnly = false,
+        String baseVersion = '1.0.0',
+      }) => instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: baseVersion,
+        checkOnly: checkOnly,
+      );
+
+      /// Changes the manifest of [host] with [edit].
+      void editManifest(void Function(Map<String, dynamic> manifest) edit) {
+        const path = '$root/$dnaGeneratedPath';
+        final manifest =
+            jsonDecode(host.readString(path)) as Map<String, dynamic>;
+        edit(manifest);
+        host.writeString(path, jsonEncode(manifest));
+      }
+
+      /// Records [content] as the generated content of [path].
+      void recordHash(String path, String content) => editManifest((m) {
+        for (final i in m['instances'] as List) {
+          final instance = i as Map<String, dynamic>;
+          if (instance['path'] == path) {
+            instance['hash'] = hashFileBytes(
+              Uint8List.fromList(utf8.encode(content)),
+            );
+          }
+        }
+      });
+
+      setUp(() async {
+        host = makeHost(
+          extra: {'$root/node_modules/dna-dart/dna/CLAUDE.md': '# Dart\n'},
+        );
+        await run();
+      });
+
+      test('an unchanged project is clean', () async {
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, isEmpty);
+      });
+
+      test('a deleted instance is modified and missing', () async {
+        host.deleteFile('$root/LICENSE');
+        final r = await run(checkOnly: true);
+        expect(r.modified, ['LICENSE']);
+        expect(r.missing, ['LICENSE']);
+        expect(r.pending, isEmpty);
+      });
+
+      test('a changed instance with its hash edited in is modified', () async {
+        host.writeString('$root/LICENSE', 'changed by hand\n');
+        recordHash('LICENSE', 'changed by hand\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, contains('LICENSE'));
+        expect(r.missing, isEmpty);
+      });
+
+      test('the same file after a new helix is pending', () async {
+        host.writeString('$root/LICENSE', 'older\n');
+        recordHash('LICENSE', 'older\n');
+        final r = await run(checkOnly: true, baseVersion: '2.0.0');
+        expect(r.modified, isEmpty);
+        expect(r.pending, containsAll(['LICENSE', dnaGeneratedPath]));
+      });
+
+      test('an edited manifest is modified', () async {
+        recordHash('LICENSE', 'something else');
+        final r = await run(checkOnly: true);
+        expect(r.modified, [dnaGeneratedPath]);
+      });
+
+      test('a manifest of the same DNA with other versions is pending', () {
+        editManifest((m) {
+          for (final l in m['layers'] as List) {
+            (l as Map<String, dynamic>)['resolvedVersion'] = '0.0.0';
+          }
+        });
+        return run(checkOnly: true).then((r) {
+          expect(r.modified, isEmpty);
+          expect(r.pending, [dnaGeneratedPath]);
+        });
+      });
+
+      test('an edited CLAUDE.md block is modified', () async {
+        final claudeMd = host.readString('$root/CLAUDE.md');
+        host.writeString(
+          '$root/CLAUDE.md',
+          claudeMd.replaceFirst('@.claude', 'mine\n@.claude'),
+        );
+        final r = await run(checkOnly: true);
+        expect(r.modified, ['CLAUDE.md']);
+      });
+
+      test('a removed CLAUDE.md block is modified', () async {
+        host.writeString('$root/CLAUDE.md', '# Mine\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, ['CLAUDE.md']);
+      });
+
+      test('a block still as recorded but from an unchanged DNA is '
+          'modified', () async {
+        // Recorded and current block agree, the DNA wants another one —
+        // only an edited manifest gets there while the DNA is unchanged.
+        final claudeMd = host.readString('$root/CLAUDE.md');
+        final edited = claudeMd.replaceFirst('@.claude', 'mine\n@.claude');
+        host.writeString('$root/CLAUDE.md', edited);
+        final block = claudeMdBlockOf(edited)!;
+        editManifest((m) {
+          (m['claude'] as Map<String, dynamic>)['blockHash'] = hashFileBytes(
+            Uint8List.fromList(utf8.encode(block)),
+          );
+        });
+        final r = await run(checkOnly: true);
+        expect(r.modified, containsAll(['CLAUDE.md', dnaGeneratedPath]));
+      });
+
+      test('a block changed by the configuration is pending', () async {
+        host.writeString(
+          '$root/$dnaConfigPath',
+          '{"version": $dnaFormatVersion, "layers": ["dna-dart"], '
+              '"claude": {"claudeMdInclude": ["LICENSE"]}}',
+        );
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains('CLAUDE.md'));
+      });
+
+      test('a block without a recorded hash is pending', () async {
+        editManifest((m) {
+          m['baseVersion'] = '0.1.0';
+          (m['claude'] as Map<String, dynamic>)['blockHash'] = null;
+        });
+        host.writeString('$root/CLAUDE.md', '# Mine\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains('CLAUDE.md'));
+      });
+
+      test('a manifest without a configuration hash is never the same '
+          'DNA', () async {
+        editManifest((m) => m['configHash'] = null);
+        host.writeString('$root/LICENSE', 'older\n');
+        recordHash('LICENSE', 'older\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains('LICENSE'));
+      });
+
+      test('a CRLF checkout of unchanged files is clean', () async {
+        for (final path in ['LICENSE', 'CLAUDE.md']) {
+          final text = host.readString('$root/$path');
+          host.writeString(
+            '$root/$path',
+            text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'),
+          );
+        }
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, isEmpty);
+      });
+
+      test('a deleted CLAUDE.md is modified and missing', () async {
+        host.deleteFile('$root/CLAUDE.md');
+        final r = await run(checkOnly: true);
+        expect(r.modified, ['CLAUDE.md']);
+        expect(r.missing, ['CLAUDE.md']);
+      });
+
+      test(
+        'a deleted CLAUDE.md with a block nothing fills is missing',
+        () async {
+          host = makeHost(
+            extra: {
+              '$root/CLAUDE.md':
+                  '<!-- helix:claude_md:start -->\n'
+                  '<!-- helix:claude_md:end -->\n',
+            },
+          );
+          await run();
+          host.deleteFile('$root/CLAUDE.md');
+          final r = await run(checkOnly: true);
+          expect(r.modified, ['CLAUDE.md']);
+          expect(r.missing, ['CLAUDE.md']);
+
+          // A build brings the block back.
+          await run();
+          expect(
+            claudeMdBlockOf(host.readString('$root/CLAUDE.md')),
+            isNotNull,
+          );
+        },
+      );
+
+      test('a new file in an included folder is pending', () async {
+        host
+          ..writeString('$root/notes/a.md', '# A\n')
+          ..writeString(
+            '$root/$dnaConfigPath',
+            '{"version": $dnaFormatVersion, "layers": ["dna-dart"], '
+                '"claude": {"claudeMdInclude": ["notes"]}}',
+          );
+        await run();
+        host.writeString('$root/notes/b.md', '# B\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, containsAll(['CLAUDE.md', dnaGeneratedPath]));
+      });
+
+      test('a deleted manifest is modified and missing', () async {
+        host
+          ..deleteFile('$root/$dnaGeneratedPath')
+          ..uncommitted.add(dnaGeneratedPath);
+        final r = await run(checkOnly: true);
+        expect(r.modified, contains(dnaGeneratedPath));
+        expect(r.missing, [dnaGeneratedPath]);
+      });
+
+      test('a never built project outside a repository is pending', () async {
+        host = _FailingGitHost(makeHost());
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains(dnaGeneratedPath));
+      });
+
+      test('a manifest from another layer set is not the same DNA', () async {
+        editManifest((m) => (m['layers'] as List).removeLast());
+        host.writeString('$root/LICENSE', 'older\n');
+        recordHash('LICENSE', 'older\n');
+        final r = await run(checkOnly: true);
+        expect(r.modified, isEmpty);
+        expect(r.pending, contains('LICENSE'));
+      });
     });
 
     test('merges layers, renders, substitutes, instantiates', () async {
@@ -1762,4 +2004,18 @@ packages:
       expect(host.existsFile('$root/doc/develop.md'), isTrue);
     });
   });
+}
+
+/// A [MemoryDnaHost] without a repository: asking git fails.
+class _FailingGitHost extends MemoryDnaHost {
+  _FailingGitHost(MemoryDnaHost from)
+    : super(
+        files: {
+          for (final e in from.files.entries) e.key: utf8.decode(e.value),
+        },
+      );
+
+  @override
+  Future<Set<String>> uncommittedPaths(String repoRoot) =>
+      Future.error(StateError('not a git repository'));
 }
