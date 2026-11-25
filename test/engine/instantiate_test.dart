@@ -1813,6 +1813,147 @@ packages:
       expect(host.readBytes('$root/doc/legacy.txt'), latin1);
     });
 
+    group('ignore files', () {
+      Future<DnaInstantiationResult> run(
+        MemoryDnaHost host, {
+        bool checkOnly = false,
+      }) => instantiateDna(
+        host: host,
+        targetRoot: root,
+        baseVersion: '4',
+        checkOnly: checkOnly,
+      );
+
+      test('join the lines of every layer instead of replacing', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/dot-pubignore':
+                '/doc/guides/\n/doc/templates/\n',
+            '$root/node_modules/dna-dart/dna/dot-pubignore':
+                '/doc/guides/\n/scripts/\n',
+            '$root/node_modules/dna-dart/dna/dot-prettierignore': 'build/\n',
+            '$root/dna/dot-pubignore': '# own\n/tool/\n',
+            '$root/.gitignore': '.dart_tool/\ncoverage\n/scripts/\n',
+          },
+        );
+        await run(host);
+
+        expect(
+          host.readString('$root/.pubignore'),
+          '# .gitignore\n.dart_tool/\ncoverage\n/scripts/\n'
+          '\n'
+          '# dna-guides\n/doc/guides/\n/doc/templates/\n'
+          '\n'
+          '# consumer\n# own\n/tool/\n',
+        );
+        // Only a root .pubignore starts with the .gitignore.
+        expect(
+          host.readString('$root/.prettierignore'),
+          '# dna-dart\nbuild/\n',
+        );
+
+        // A hand edit is reported with the last contributor as the file
+        // to edit instead.
+        host
+          ..writeString('$root/.pubignore', 'hand edited\n')
+          ..writeString('$root/.prettierignore', 'hand edited\n');
+        final r = await run(host);
+        expect(r.backedUp, containsAll(['.pubignore', '.prettierignore']));
+        expect(r.sources['.pubignore'], 'dna/dot-pubignore');
+        expect(r.sources['.prettierignore'], 'dna-dart/dna/dot-prettierignore');
+      });
+
+      test('a second run changes nothing', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/dot-pubignore': '/doc/guides/\n',
+            '$root/.gitignore': 'build\n',
+          },
+        );
+        await run(host);
+        final first = host.readString('$root/.pubignore');
+        final r = await run(host);
+        expect(host.readString('$root/.pubignore'), first);
+        expect(r.messages.where((m) => m.contains('.pubignore')), isEmpty);
+      });
+
+      test('a changed .gitignore is a DNA update, not a hand edit', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/dot-pubignore': '/doc/guides/\n',
+            '$root/.gitignore': 'build\n',
+          },
+        );
+        await run(host);
+        host.writeString('$root/.gitignore', 'build\n*.log\n');
+        final check = await run(host, checkOnly: true);
+        expect(check.modified, isNot(contains('.pubignore')));
+        expect(check.pending, contains('.pubignore'));
+        await run(host);
+        expect(host.readString('$root/.pubignore'), contains('*.log'));
+      });
+
+      test(
+        'a generated .gitignore feeds the .pubignore of the same run',
+        () async {
+          final host = makeHost(
+            extra: {
+              '$root/node_modules/dna-guides/dna/dot-gitignore': '/cache/\n',
+              '$root/node_modules/dna-dart/dna/dot-pubignore': '/doc/\n',
+              '$root/.gitignore': 'stale\n',
+            },
+          );
+          await run(host);
+          expect(
+            host.readString('$root/.pubignore'),
+            '# .gitignore\n# dna-guides\n/cache/\n\n# dna-dart\n/doc/\n',
+          );
+        },
+      );
+
+      test('escaped and literal names join into one file', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/.npmignore': '/a\n',
+            '$root/node_modules/dna-dart/dna/dot-npmignore': '/b\n',
+          },
+        );
+        await run(host);
+        expect(
+          host.readString('$root/.npmignore'),
+          '# dna-guides\n/a\n\n# dna-dart\n/b\n',
+        );
+      });
+
+      test('an ignore file that is no UTF-8 text is skipped', () async {
+        final host = makeHost(
+          extra: {'$root/node_modules/dna-dart/dna/dot-npmignore': '/b\n'},
+        );
+        host.writeBytes(
+          '$root/node_modules/dna-guides/dna/dot-npmignore',
+          Uint8List.fromList([0x2F, 0xE4, 0x0A]),
+        );
+        final r = await run(host);
+        expect(host.readString('$root/.npmignore'), '# dna-dart\n/b\n');
+        expect(r.warnings.any((w) => w.contains('not UTF-8')), isTrue);
+      });
+
+      test('without a .gitignore, without any pattern', () async {
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/dot-pubignore': '/doc/guides/\n',
+            '$root/node_modules/dna-dart/dna/dot-npmignore': '# nothing\n',
+          },
+        );
+        await run(host);
+        expect(
+          host.readString('$root/.pubignore'),
+          '# dna-guides\n/doc/guides/\n',
+        );
+        expect(host.existsFile('$root/.npmignore'), isFalse);
+      });
+    });
+
     test('base DNA of helix itself is layer 0', () async {
       final host = makeHost(
         extra: {'/gg/dna/doc/base-doc.md': '# From helix base\n'},

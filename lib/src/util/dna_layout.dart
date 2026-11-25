@@ -63,6 +63,14 @@ String _decodeDotSegment(String segment) => segment.startsWith(dotPrefix)
     ? '.${segment.substring(dotPrefix.length)}'
     : segment;
 
+/// The inverse of [decodeDotSegments]: `.vscode/settings.json` becomes
+/// `dot-vscode/settings.json`.
+String encodeDotSegments(String relPosix) =>
+    relPosix.split('/').map(_encodeDotSegment).join('/');
+
+String _encodeDotSegment(String segment) =>
+    segment.startsWith('.') ? '$dotPrefix${segment.substring(1)}' : segment;
+
 // .............................................................................
 /// The misspelled dot escape: `dot_vscode` instead of `dot-vscode`.
 const String invalidDotPrefix = 'dot_';

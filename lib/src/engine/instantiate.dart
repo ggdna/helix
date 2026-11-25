@@ -18,6 +18,7 @@ import '../util/dna_manifest.dart';
 import '../util/dna_must_override.dart';
 import '../util/dna_tree_hash.dart';
 import '../util/dna_vars.dart';
+import '../util/ignore_files.dart';
 import '../util/jsonc.dart';
 import '../util/layer_graph.dart';
 import '../util/md_tags.dart';
@@ -213,38 +214,33 @@ Future<DnaInstantiationResult> instantiateDna({
   // `display` names the layer the way a developer opens it: the local
   // folder for a localized checkout, the package name for a registry
   // install.
-  // `claude` names the file the layer's `CLAUDE.md` is written to.
-  final sources =
-      <({String label, String root, String display, String claude})>[
-        if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
-          // The engine's built-in base DNA is not a package a developer
-          // opens — point at the `dna/` folder that overrides it instead.
-          (
-            label: 'base',
-            root: baseDnaRoot,
-            display: dnaDirname,
-            claude: claudeLayerFileName('helix'),
-          ),
-        for (final layer in graph.layers)
-          (
-            label: layer.name,
-            root: layer.root,
-            display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
-            claude: claudeLayerFileName(layer.name),
-          ),
-        // The repository's own `dna/` is applied unconditionally and always
-        // last — however many layers `_dna.json` declares, and whether or not
-        // one of them happens to be another copy of this same package. Every
-        // `dna/` is hand-authored source, so it is the one layer that must
-        // never lose a conflict, and it must be instantiated even when a
-        // declared layer ships nothing at all.
-        (
-          label: 'self',
-          root: targetRoot,
-          display: dnaDirname,
-          claude: claudeLayerFileName(projectPackageName(host, targetRoot)),
-        ),
-      ];
+  // `name` is the package the layer is published as; it names the
+  // layer's `CLAUDE_<name>.md` and its section of every ignore file.
+  final sources = <({String label, String root, String display, String name})>[
+    if (baseDnaRoot != null && host.existsDir('$baseDnaRoot/$dnaDirname'))
+      // The engine's built-in base DNA is not a package a developer
+      // opens — point at the `dna/` folder that overrides it instead.
+      (label: 'base', root: baseDnaRoot, display: dnaDirname, name: 'helix'),
+    for (final layer in graph.layers)
+      (
+        label: layer.name,
+        root: layer.root,
+        display: '${_displayRootOf(layer, targetRoot)}/$dnaDirname',
+        name: layer.name,
+      ),
+    // The repository's own `dna/` is applied unconditionally and always
+    // last — however many layers `_dna.json` declares, and whether or not
+    // one of them happens to be another copy of this same package. Every
+    // `dna/` is hand-authored source, so it is the one layer that must
+    // never lose a conflict, and it must be instantiated even when a
+    // declared layer ships nothing at all.
+    (
+      label: 'self',
+      root: targetRoot,
+      display: dnaDirname,
+      name: projectPackageName(host, targetRoot),
+    ),
+  ];
   assert(
     sources.last.label == 'self',
     'the own dna/ must stay the last source',
@@ -259,6 +255,9 @@ Future<DnaInstantiationResult> instantiateDna({
   final claudeLayerFiles = <String>[];
   var varsChain = <String, Object?>{};
   final ownVars = <String, Set<String>>{};
+  // The contributions of every layer to each ignore file, in layer order —
+  // ignore files are joined, not replaced (see [mergeIgnoreSections]).
+  final ignoreSections = <String, List<IgnoreSection>>{};
   for (final source in sources) {
     final applied = _applyLayer(
       host: host,
@@ -269,8 +268,10 @@ Future<DnaInstantiationResult> instantiateDna({
       displayRoot: source.display,
       claudeLayerRel:
           '$dotPrefix${claudeLayerDir.substring(1)}/'
-          '${source.claude}',
+          '${claudeLayerFileName(source.name)}',
       claudeLayerFiles: claudeLayerFiles,
+      ignoreSections: ignoreSections,
+      layerName: source.name,
       provenance: provenance,
       messages: messages,
       warnings: warnings,
@@ -280,6 +281,38 @@ Future<DnaInstantiationResult> instantiateDna({
       for (final e in applied.own.entries)
         if (e.value != null) e.key,
     };
+  }
+
+  // 2a. Join the ignore files. Comments only: no file at all rather than
+  // an empty one.
+  void joinIgnoreFile(String rel, List<IgnoreSection> sections) {
+    final text = mergeIgnoreSections(sections);
+    if (text.isNotEmpty) merged[rel] = _encodeText(text);
+  }
+
+  final pubignoreRel = encodeDotSegments(pubignoreFileName);
+  final pubignoreSections = ignoreSections.remove(pubignoreRel);
+  ignoreSections.forEach(joinIgnoreFile);
+  // A `.pubignore` at the root replaces the `.gitignore` for `dart pub
+  // publish`, so it starts with the project's `.gitignore` — otherwise
+  // everything git ignores would be published. A `.gitignore` the DNA
+  // generates is covered by the layer hashes; one read from disk is an
+  // input of its own, recorded so a later edit is no hand edit.
+  String? gitignoreHash;
+  if (pubignoreSections != null) {
+    final generated = merged[encodeDotSegments(gitignoreFileName)];
+    final onDisk = '$targetRoot/$gitignoreFileName';
+    String? gitignore;
+    if (generated != null) {
+      gitignore = _decodeText(generated);
+    } else if (host.existsFile(onDisk)) {
+      gitignore = host.readString(onDisk);
+      gitignoreHash = _hashText(gitignore);
+    }
+    joinIgnoreFile(pubignoreRel, [
+      if (gitignore != null) (name: gitignoreFileName, text: gitignore),
+      ...pubignoreSections,
+    ]);
   }
 
   // 2b. Every layer sets what its parents mark `mustOverride`. A workspace
@@ -561,6 +594,7 @@ Future<DnaInstantiationResult> instantiateDna({
     baseVersion: baseVersion,
     baseHash: baseHash,
     configHash: _configHash(host, targetRoot),
+    gitignoreHash: gitignoreHash,
   );
   final generatedJson = encodeJsonPretty(manifest.toJson());
   final generatedPath = '$targetRoot/$dnaGeneratedPath';
@@ -767,7 +801,8 @@ bool _sameDna(DnaManifest? previous, DnaManifest current) {
   if (previous == null) return false;
   if (previous.baseVersion != current.baseVersion) return false;
   if (previous.configHash == null ||
-      previous.configHash != current.configHash) {
+      previous.configHash != current.configHash ||
+      previous.gitignoreHash != current.gitignoreHash) {
     return false;
   }
   String layers(DnaManifest m) =>
@@ -895,6 +930,8 @@ void _requireMustOverrides(
   required String displayRoot,
   required String claudeLayerRel,
   required List<String> claudeLayerFiles,
+  required Map<String, List<IgnoreSection>> ignoreSections,
+  required String layerName,
   required Map<String, String> provenance,
   required List<String> messages,
   required List<String> warnings,
@@ -953,6 +990,25 @@ void _requireMustOverrides(
         bytes: bytes,
       );
       if (added) provenance[claudeLayerRel] = '$displayRoot/$rel';
+      continue;
+    }
+    if (isIgnoreFile(rel)) {
+      final text = _decodeText(bytes);
+      if (text == null) {
+        warnings.add(
+          '$label:$rel is not UTF-8 text — an ignore file is joined line '
+          'by line, so it was skipped.',
+        );
+        continue;
+      }
+      // Keyed by the escaped path, so `dot-npmignore` and a literal
+      // `.npmignore` join into the same file.
+      final key = encodeDotSegments(decodeDotSegments(rel));
+      ignoreSections.putIfAbsent(key, () => []).add((
+        name: layerName,
+        text: text,
+      ));
+      provenance[key] = '$displayRoot/$rel';
       continue;
     }
     merged[rel] = bytes;

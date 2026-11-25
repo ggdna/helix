@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.17.0 - 2026-11-25
+
+### Changed
+
+- Join ignore files across layers instead of replacing: one `# <layer>`
+section per layer, duplicates left out
+- Start a root `.pubignore` with the project's `.gitignore`
+- Name ignore files in the index domain
+
+### Removed
+
+- Keep ignore-file joins exact; tidy the join code
+
 ## 1.16.0 - 2026-11-24
 
 ### Changed
