@@ -166,6 +166,39 @@ A sidecar `settings.overrides.json` merges into `settings.json`:
 
 JSONC (comments, trailing commas) is tolerated in DNA JSON files.
 
+### Ignore files: joined, never replaced
+
+Every file whose name starts with a dot and ends with `ignore`
+(`.gitignore`, `.pubignore`, `.npmignore`, `.prettierignore`, …) is joined
+across all layers instead of being replaced. Each layer lists only the
+paths it ships itself; the project receives all of them:
+
+```gitignore
+# dna_guides: dna/dot-pubignore
+/doc/guides/
+# dna_scripts: dna/dot-pubignore
+/doc/guides/
+/scripts/
+```
+
+```gitignore
+# instance: .pubignore
+# dna_guides
+/doc/guides/
+
+# dna_scripts
+/scripts/
+```
+
+- every layer gets a `# <layer>` section, in layer order; the own `dna/`
+  comes last
+- a pattern an earlier section already holds is left out; a section left
+  without a pattern of its own is dropped
+- a `.pubignore` at the root starts with the project's `.gitignore` as
+  section `# .gitignore`: `dart pub publish` reads the `.pubignore`
+  *instead of* the `.gitignore`, so everything git ignores would otherwise
+  be published
+
 ## Variables
 
 Layers define variables in `dna/_vars.json` — camelCase keys that

@@ -18,6 +18,7 @@ import '../util/dna_manifest.dart';
 import '../util/dna_must_override.dart';
 import '../util/dna_tree_hash.dart';
 import '../util/dna_vars.dart';
+import '../util/ignore_files.dart';
 import '../util/jsonc.dart';
 import '../util/layer_graph.dart';
 import '../util/md_tags.dart';
@@ -249,6 +250,10 @@ Future<DnaInstantiationResult> instantiateDna({
   final claudeLayerFiles = <String>[];
   var varsChain = <String, Object?>{};
   final ownVars = <String, Set<String>>{};
+  // The contributions of every layer to each ignore file, in layer order —
+  // ignore files are joined, not replaced (see [mergeIgnoreSections]).
+  final ignoreSections = <String, List<IgnoreSection>>{};
+  final ownName = projectPackageName(host, targetRoot);
   for (final source in sources) {
     final applied = _applyLayer(
       host: host,
@@ -261,6 +266,12 @@ Future<DnaInstantiationResult> instantiateDna({
           '$dotPrefix${claudeLayerDir.substring(1)}/'
           '${source.claude}',
       claudeLayerFiles: claudeLayerFiles,
+      ignoreSections: ignoreSections,
+      ignoreSectionName: switch (source.label) {
+        'self' => ownName,
+        'base' => 'helix',
+        final name => name,
+      },
       provenance: provenance,
       messages: messages,
       warnings: warnings,
@@ -270,6 +281,23 @@ Future<DnaInstantiationResult> instantiateDna({
       for (final e in applied.own.entries)
         if (e.value != null) e.key,
     };
+  }
+
+  // 2a. Join the ignore files. A `.pubignore` at the root replaces the
+  // `.gitignore` for `dart pub publish`, so it starts with the project's
+  // `.gitignore` — otherwise everything git ignores would be published.
+  for (final MapEntry(key: rel, value: sections) in ignoreSections.entries) {
+    final gitignore = '$targetRoot/$gitignoreFileName';
+    final withGitignore =
+        decodeDotSegments(rel) == pubignoreFileName &&
+        host.existsFile(gitignore);
+    final text = mergeIgnoreSections([
+      if (withGitignore)
+        (name: gitignoreFileName, text: host.readString(gitignore)),
+      ...sections,
+    ]);
+    // Comments only: no file at all rather than an empty one.
+    if (text.isNotEmpty) merged[rel] = _encodeText(text);
   }
 
   // 2b. Every layer sets what its parents mark `mustOverride`. A workspace
@@ -720,6 +748,8 @@ void _requireMustOverrides(
   required String displayRoot,
   required String claudeLayerRel,
   required List<String> claudeLayerFiles,
+  required Map<String, List<IgnoreSection>> ignoreSections,
+  required String ignoreSectionName,
   required Map<String, String> provenance,
   required List<String> messages,
   required List<String> warnings,
@@ -778,6 +808,15 @@ void _requireMustOverrides(
         bytes: bytes,
       );
       if (added) provenance[claudeLayerRel] = '$displayRoot/$rel';
+      continue;
+    }
+    final ignoreText = isIgnoreFile(rel) ? _decodeText(bytes) : null;
+    if (ignoreText != null) {
+      ignoreSections.putIfAbsent(rel, () => []).add((
+        name: ignoreSectionName,
+        text: ignoreText,
+      ));
+      provenance[rel] = '$displayRoot/$rel';
       continue;
     }
     merged[rel] = bytes;

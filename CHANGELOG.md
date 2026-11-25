@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Join ignore files across layers instead of replacing
+
+Every *ignore file gets one # <layer> section per layer, duplicates are left out
+A root .pubignore starts with the project .gitignore
+
 ## 1.15.2 - 2026-11-15
 
 ### Changed

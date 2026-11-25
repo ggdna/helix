@@ -265,6 +265,32 @@ patched files are re-emitted comment-free, untouched files are copied
 byte-identical. YAML supports whole-file replacement only —
 `X.overrides.yaml` is an error.
 
+## Ignore files
+
+A file whose name starts with a dot and ends with `ignore` is never
+replaced by a later layer: Helix joins the lines of every layer into one
+file, one `# <layer>` section per layer in layer order, the own `dna/`
+last. A pattern an earlier section already holds is left out.
+
+```gitignore
+# dna_readme: dna/dot-pubignore
+/doc/guides/
+/scripts/
+# instance: .pubignore
+# .gitignore
+.dart_tool/
+coverage
+
+# dna_readme
+/doc/guides/
+/scripts/
+```
+
+A root `.pubignore` starts with the project's `.gitignore`: `dart pub
+publish` reads the `.pubignore` instead of the `.gitignore`, so without it
+everything git ignores would be published. Never list `/dna/` — a package
+used as a layer is read from its published `dna/` folder.
+
 ## Variables
 
 Defined in `dna/_vars.json` (camelCase keys that **must** start with
