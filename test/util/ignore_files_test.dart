@@ -10,20 +10,28 @@ import 'package:test/test.dart';
 void main() {
   group('isIgnoreFile', () {
     test('accepts escaped and literal ignore files at any depth', () {
-      expect(isIgnoreFile('dot-pubignore'), isTrue);
-      expect(isIgnoreFile('dot-gitignore'), isTrue);
-      expect(isIgnoreFile('dot-prettierignore'), isTrue);
-      expect(isIgnoreFile('.npmignore'), isTrue);
-      expect(isIgnoreFile('example/dot-pubignore'), isTrue);
+      for (final path in [
+        'dot-pubignore',
+        'dot-gitignore',
+        'dot-prettierignore',
+        '.npmignore',
+        'example/dot-pubignore',
+      ]) {
+        expect(isIgnoreFile(path), isTrue, reason: path);
+      }
     });
 
     test('rejects other files', () {
-      expect(isIgnoreFile('dot-ignore'), isFalse);
-      expect(isIgnoreFile('pubignore'), isFalse);
-      expect(isIgnoreFile('doc/ignore'), isFalse);
-      expect(isIgnoreFile('dot-pubignore.md'), isFalse);
-      expect(isIgnoreFile('dot-pubignore/file'), isFalse);
-      expect(isIgnoreFile('doc/guides/ignore-guide.md'), isFalse);
+      for (final path in [
+        'dot-ignore',
+        'pubignore',
+        'doc/ignore',
+        'dot-pubignore.md',
+        'dot-pubignore/file',
+        'doc/guides/ignore-guide.md',
+      ]) {
+        expect(isIgnoreFile(path), isFalse, reason: path);
+      }
     });
   });
 
@@ -67,6 +75,23 @@ void main() {
     test('is empty without any pattern', () {
       expect(mergeIgnoreSections([]), '');
       expect(mergeIgnoreSections([(name: 'a', text: '# x\n\n')]), '');
+    });
+
+    test('keeps a repetition that follows a negation', () {
+      final merged = mergeIgnoreSections([
+        (name: 'a', text: 'doc/\n'),
+        (name: 'b', text: '!doc/api/\n'),
+        (name: 'c', text: 'doc/\n!doc/api/\n'),
+      ]);
+      expect(merged, '# a\ndoc/\n\n# b\n!doc/api/\n\n# c\ndoc/\n!doc/api/\n');
+    });
+
+    test('leading and escaped trailing spaces belong to the pattern', () {
+      final merged = mergeIgnoreSections([
+        (name: 'a', text: 'foo\nbar\\ \n'),
+        (name: 'b', text: ' foo\nfoo  \nbar\\ \nbar\n'),
+      ]);
+      expect(merged, '# a\nfoo\nbar\\ \n\n# b\n foo\nbar\n');
     });
 
     test('reads CRLF line endings', () {

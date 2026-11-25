@@ -4,10 +4,19 @@
 
 ### Changed
 
-- Join ignore files across layers instead of replacing
+- Join ignore files across layers instead of replacing: one `# <layer>`
+section per layer, duplicates left out
+- Start a root `.pubignore` with the project's `.gitignore`
 
-Every *ignore file gets one # <layer> section per layer, duplicates are left out
-A root .pubignore starts with the project .gitignore
+### Removed
+
+- Keep ignore-file joins exact; tidy the join code
+
+A repetition after a negation is kept; leading spaces belong to a pattern
+dot-escaped and literal ignore files join into one file; non-UTF-8 ones are skipped with a warning
+A root .pubignore uses the .gitignore the DNA generates; a .gitignore read from disk is recorded in the manifest
+Add encodeDotSegments; remove a stray test file
+
 ## 1.16.0 - 2026-11-24
 
 ### Changed

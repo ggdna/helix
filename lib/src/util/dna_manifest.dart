@@ -145,6 +145,7 @@ class DnaManifest {
     required this.baseVersion,
     this.baseHash,
     this.configHash,
+    this.gitignoreHash,
   });
 
   /// The resolved layers in application order.
@@ -167,6 +168,11 @@ class DnaManifest {
   /// changed variable shows here.
   final String? configHash;
 
+  /// Hash of the project's `.gitignore` when a root `.pubignore` was built
+  /// from it, otherwise `null`. The `.pubignore` changes with the
+  /// `.gitignore` although no layer changed.
+  final String? gitignoreHash;
+
   /// JSON representation of `dna/_generated.json`.
   Map<String, dynamic> toJson() => {
     'version': dnaFormatVersion,
@@ -175,6 +181,9 @@ class DnaManifest {
     'baseVersion': baseVersion,
     'baseHash': baseHash,
     'configHash': configHash,
+    // Only when set: the manifests of every project without a root
+    // `.pubignore` stay byte-identical.
+    if (gitignoreHash != null) 'gitignoreHash': gitignoreHash,
     'instances': instances.map((i) => i.toJson()).toList(),
   };
 
@@ -227,6 +236,7 @@ class DnaManifest {
       baseVersion: decoded['baseVersion'] as String? ?? 'unknown',
       baseHash: decoded['baseHash'] as String?,
       configHash: decoded['configHash'] as String?,
+      gitignoreHash: decoded['gitignoreHash'] as String?,
     );
   }
 

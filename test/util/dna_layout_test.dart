@@ -18,6 +18,17 @@ void main() {
     });
   });
 
+  group('encodeDotSegments', () {
+    test('escapes every leading dot and inverts decodeDotSegments', () {
+      expect(encodeDotSegments('.vscode/.settings'), 'dot-vscode/dot-settings');
+      expect(encodeDotSegments('doc/guide.md'), 'doc/guide.md');
+      expect(
+        decodeDotSegments(encodeDotSegments('.claude/skills/x.md')),
+        '.claude/skills/x.md',
+      );
+    });
+  });
+
   group('decodeDotSegments', () {
     test('every dot- segment becomes a leading dot', () {
       expect(

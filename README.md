@@ -291,19 +291,34 @@ replaced by a later layer: Helix joins the lines of every layer into one
 file, one `# <layer>` section per layer in layer order, the own `dna/`
 last. A pattern an earlier section already holds is left out.
 
+`dna/dot-pubignore` of a layer `dna_readme` and of a layer `dna_scripts`
+listed after it:
+
 ```gitignore
-# dna_readme: dna/dot-pubignore
+/doc/guides/
+/doc/templates/
+/scripts/
+```
+
+```gitignore
 /doc/guides/
 /scripts/
-# instance: .pubignore
+```
+
+The project's `.pubignore`:
+
+```gitignore
 # .gitignore
 .dart_tool/
 coverage
 
 # dna_readme
 /doc/guides/
+/doc/templates/
 /scripts/
 ```
+
+`dna_scripts` adds nothing new, so it gets no section.
 
 A root `.pubignore` starts with the project's `.gitignore`: `dart pub
 publish` reads the `.pubignore` instead of the `.gitignore`, so without it
