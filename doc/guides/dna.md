@@ -147,6 +147,21 @@ useful when the replacement heading should differ from the tag. Either
 way the whole tagged section is replaced — there is no appending, so a
 higher layer repeats the part of the section it wants to keep.
 
+**A layer tags every section.** A package published as a layer sets
+`"isLayer": true` in its `dna/_dna.json`. Helix then fails the build and
+the placed check on every heading of its own `dna/` markdown that has no
+`@tag` — only the title (a `#` heading as the first heading of the file)
+is exempt, since a layer replaces a whole file anyway. Front matter,
+code fences, HTML comments and `X.overrides.md` files are not checked.
+The flag changes nothing else: a package still becomes a layer by being
+listed in the `layers` of its consumer, and the consumer never checks
+the tags of its layers.
+
+```text
+dna/_dna.json sets "isLayer": true, so every section of the layer needs a tag that higher layers can override:
+  dna/doc/guide.md line 5: section "## Setup" has no tag — write it as "## @tag Setup".
+```
+
 Markers survive from layer to layer — so even higher layers can override
 again — and are stripped from the final instances. Fenced and inline code
 are never touched, so documentation can show the syntax literally.
@@ -311,7 +326,7 @@ instances are rewritten automatically.
 ```jsonc
 {
   "version": 1,                 // required
-  "role": "project",            // "dna" for DNA repositories
+  "isLayer": true,              // published as a layer: tag every section
   "layers": ["dna_guides"],       // package names, in application order
   "vars": { "dnaProjectName": "my-project" },
   "mustOverride": { "dnaProjectName": true }, // needs "version": 2

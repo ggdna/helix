@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Require a tag on every section of a layer that sets isLayer
+
 ## 1.17.0 - 2026-11-25
 
 ### Changed

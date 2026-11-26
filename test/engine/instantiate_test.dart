@@ -1235,6 +1235,94 @@ packages:
       );
     });
 
+    group('isLayer', () {
+      const ownConfig = '$root/$dnaConfigPath';
+      const ownGuide = '$root/dna/doc/guide.md';
+
+      MemoryDnaHost hostWith(String guide, {bool isLayer = true}) => makeHost(
+        extra: {
+          ownConfig:
+              '{"version": $dnaFormatVersion, "layers": ["dna-dart"], '
+              '"isLayer": $isLayer}',
+          ownGuide: guide,
+        },
+      );
+
+      test('fails on an untagged section, nothing is written', () {
+        final host = hostWith('# Guide\n\n## @a A\n\n### B\n');
+        expect(
+          () => instantiateDna(
+            host: host,
+            targetRoot: root,
+            baseVersion: '4.0.0',
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              allOf([
+                contains('"isLayer": true'),
+                contains('dna/doc/guide.md line 5: section "### B"'),
+                isNot(contains('# Guide')),
+              ]),
+            ),
+          ),
+        );
+        expect(host.existsFile('$root/$dnaGeneratedPath'), isFalse);
+      });
+
+      test('passes once every section is tagged', () async {
+        final host = hostWith('# Guide\n\n## @a A\n\n### @b B\n');
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(host.readString('$root/doc/guide.md'), contains('### B'));
+      });
+
+      test('leaves projects alone', () async {
+        final host = hostWith('# Guide\n\n## A\n', isLayer: false);
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(host.existsFile('$root/doc/guide.md'), isTrue);
+      });
+
+      test('does not check the layers a project consumes', () async {
+        // dna-guides ships "# Develop" with only tagged sections; an
+        // untagged one below a consumed layer is the layer's business.
+        final host = makeHost(
+          extra: {
+            '$root/node_modules/dna-guides/dna/doc/untagged.md': '## A\n',
+          },
+        );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(host.existsFile('$root/doc/untagged.md'), isTrue);
+      });
+
+      test('skips override files', () async {
+        final host = hostWith('# Guide\n\n## @a A\n')
+          ..writeString(
+            '$root/dna/doc/develop.overrides.md',
+            '<!-- @update -->\n## Update\n\nRun pnpm update.\n'
+                '<!-- @update -->\n',
+          );
+        await instantiateDna(
+          host: host,
+          targetRoot: root,
+          baseVersion: '4.0.0',
+        );
+        expect(host.readString('$root/doc/develop.md'), contains('pnpm'));
+      });
+    });
+
     group('mustOverride', () {
       const guidesConfig = '$root/node_modules/dna-guides/$dnaConfigPath';
       const dartVars = '$root/node_modules/dna-dart/dna/_vars.json';
