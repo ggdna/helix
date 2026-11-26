@@ -282,6 +282,36 @@ void main() {
     });
   });
 
+  group('findUntaggedSections', () {
+    test('reports untagged headings, the title is exempt', () {
+      final findings = findUntaggedSections(
+        '# Title\n\n## @a A\n\n## B\n\n### @c C\n\n# Second\n',
+      );
+      expect(findings, [
+        'line 5: section "## B" has no tag — write it as "## @tag B".',
+        'line 9: section "# Second" has no tag — write it as "# @tag Second".',
+      ]);
+    });
+
+    test('a first heading below level 1 is no title', () {
+      expect(findUntaggedSections('## A\n'), hasLength(1));
+    });
+
+    test('skips front matter, fences and HTML comments', () {
+      const source =
+          '---\nname: x\n# not a heading\n---\n'
+          '<!--\n# license\n-->\n'
+          '# Title\n'
+          '```bash\n# comment\n```\n'
+          '## @a A\n';
+      expect(findUntaggedSections(source), isEmpty);
+    });
+
+    test('accepts a tag without a title', () {
+      expect(findUntaggedSections('# T\n## @a\n'), isEmpty);
+    });
+  });
+
   group('renderMarkers', () {
     test('renders the applied sample to clean markdown (golden)', () {
       final rendered = renderMarkers(_sample('applied.expected.md'));

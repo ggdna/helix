@@ -36,6 +36,7 @@ class DnaConfig {
     this.vars = const {},
     this.mustOverride = const {},
     this.claude = const DnaClaudeConfig(),
+    this.isLayer = false,
   });
 
   /// The DNA layers in application order, named by the package name they
@@ -54,6 +55,13 @@ class DnaConfig {
 
   /// The Claude tool configuration.
   final DnaClaudeConfig claude;
+
+  /// Whether this package is published as a DNA layer for others to build
+  /// on. Its own `dna/` then has to tag every markdown section (see
+  /// `findUntaggedSections`), so a higher layer can override each one.
+  /// Consumers never read the flag: a package still becomes a layer by
+  /// being listed in their `layers`.
+  final bool isLayer;
 }
 
 // .............................................................................
@@ -97,7 +105,14 @@ class DnaConfig {
 
   final version = _requireFormatVersion(decoded['version'], where);
 
-  const knownKeys = {'version', 'layers', 'vars', 'mustOverride', 'claude'};
+  const knownKeys = {
+    'version',
+    'layers',
+    'vars',
+    'mustOverride',
+    'claude',
+    'isLayer',
+  };
   for (final key in decoded.keys) {
     // "role" is gone: every dna/ is hand-authored source now, and whether a
     // package is used as a layer is decided by the consumer's "layers".
@@ -126,6 +141,7 @@ class DnaConfig {
       vars: _parseVars(decoded['vars'], where, warnings),
       mustOverride: _parseMustOverride(decoded['mustOverride'], where, version),
       claude: _parseClaude(decoded['claude'], where, warnings),
+      isLayer: _parseIsLayer(decoded['isLayer'], where),
     ),
     warnings: warnings,
   );
@@ -149,6 +165,15 @@ int _requireFormatVersion(Object? value, String where) {
               '$dnaLatestConfigFormatVersion. Update gg and helix to the '
               'newest version.',
   );
+}
+
+// .............................................................................
+bool _parseIsLayer(Object? value, String where) {
+  if (value == null) return false;
+  if (value is! bool) {
+    throw FormatException('$where: isLayer must be true or false.');
+  }
+  return value;
 }
 
 // .............................................................................

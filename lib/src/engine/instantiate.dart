@@ -336,6 +336,12 @@ Future<DnaInstantiationResult> instantiateDna({
   // runs byte-identical, which is what would break first if that
   // exclusion ever went away.
 
+  // 2c. A package published as a layer tags every section of its own
+  // markdown, so each one stays overridable for the layers above it.
+  if (config.isLayer && !workspace) {
+    _requireTaggedSections(host, '$targetRoot/$dnaDirname');
+  }
+
   // 3. Render markdown markers.
   for (final rel in merged.keys.toList()) {
     if (!rel.toLowerCase().endsWith('.md')) continue;
@@ -894,6 +900,33 @@ Map<String, String> _sourcesFor(
   for (final path in paths)
     if (pathSources[path] != null) path: pathSources[path]!,
 };
+
+// .............................................................................
+/// Throws when a markdown file below [dnaRoot] has a section without
+/// `@tag` — see [findUntaggedSections]. Override files are exempt: their
+/// blocks already name the tag they replace.
+void _requireTaggedSections(DnaHost host, String dnaRoot) {
+  final files = host.listFilesRecursive(dnaRoot).where(isDnaContent).toList()
+    ..sort();
+  final lines = <String>[];
+  for (final rel in files) {
+    if (!rel.toLowerCase().endsWith('.md')) continue;
+    if (rel.endsWith(overridesFileSuffix)) continue;
+    final text = _decodeText(host.readBytes('$dnaRoot/$rel'));
+    if (text == null) continue;
+    for (final finding in findUntaggedSections(text)) {
+      lines.add('  $dnaDirname/$rel $finding');
+    }
+  }
+  if (lines.isEmpty) return;
+  throw FormatException(
+    [
+      '$dnaConfigPath sets "isLayer": true, so every section of the layer '
+          'needs a tag that higher layers can override:',
+      ...lines,
+    ].join('\n'),
+  );
+}
 
 // .............................................................................
 /// Throws when a layer of [layers] misses a value it must set. A value

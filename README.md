@@ -126,6 +126,7 @@ the config is what names the layers that folder builds on. Run
   "vars": { "dnaProjectName": "my_project" },
   "mustOverride": { "dnaProjectName": true },
   "claude": { "claudeMdInclude": ["doc/conventions"] },
+  "isLayer": true,
 }
 ```
 
@@ -133,11 +134,15 @@ the config is what names the layers that folder builds on. Run
   is not listed is not a layer.
 - `mustOverride` names variables the layers below must set themselves
   and needs `"version": 2` (see [Variables](#variables)).
+- `isLayer: true` marks a package published as a layer: every section of
+  its own `dna/` markdown must then carry a tag (see
+  [Markdown overrides](#markdown-overrides)).
 
 `dna/` is always hand-authored source. Helix never writes into it — the
 merged result is instantiated into the project root and nowhere else.
 Every package carrying a `dna/_dna.json` can therefore be used as a
 layer; no flag permits or forbids it, the consumer decides by listing it.
+`isLayer` only makes the package check its own tags.
 
 The repo's own `dna/` is applied unconditionally and always last — with
 an empty `layers`, with one layer, with a whole tree of them, and even
@@ -254,6 +259,12 @@ A higher layer ships `X.overrides.md` next to the same path with
 heading-form or `<!-- @tag --> … <!-- @tag -->` blocks. Markers survive
 layer application; the final render strips them. Content in code fences
 and inline code is immune.
+
+A layer tags **every** section: with `"isLayer": true` in its
+`dna/_dna.json`, the build and the placed check fail on each heading of
+its own `dna/` markdown without `@tag`. The title — a `#` heading as the
+first heading of the file — is exempt; front matter, code fences, HTML
+comments and `X.overrides.md` files are skipped.
 
 There are no string placeholders — a single value that differs per
 project is a variable in `dna/_vars.json`, not a marker. The retired

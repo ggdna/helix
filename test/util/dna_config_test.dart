@@ -165,6 +165,23 @@ void main() {
       }
     });
 
+    test('reads isLayer, false by default', () {
+      expect(readDnaConfig(hostWith('{}'), root).config.isLayer, isFalse);
+      final r = readDnaConfig(hostWith('{"isLayer": true}'), root);
+      expect(r.config.isLayer, isTrue);
+      expect(r.warnings, isEmpty);
+      expect(
+        () => readDnaConfig(hostWith('{"isLayer": "yes"}'), root),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('isLayer must be true or false'),
+          ),
+        ),
+      );
+    });
+
     test('mustOverride needs format version 2', () {
       expect(
         () => readDnaConfig(hostWith('{"mustOverride": {"dnaX": true}}'), root),

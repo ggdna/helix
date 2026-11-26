@@ -300,6 +300,53 @@ List<String> detectLegacyMarkers(String content) {
   return findings;
 }
 
+// .............................................................................
+/// Reports every heading of [content] that carries no `@tag`, so no higher
+/// layer could override its section. The title — a level-1 heading as the
+/// first heading of the file — is exempt: it spans the whole file, which a
+/// layer replaces as a whole instead. Front matter, fenced code and
+/// headings inside HTML comments are skipped. Returns one message per
+/// finding, prefixed with the 1-based line number.
+List<String> findUntaggedSections(String content) {
+  final doc = _Doc(content);
+  final lines = doc.lines;
+  final fenced = _fenceMask(lines);
+  final findings = <String>[];
+
+  var start = 0;
+  if (lines.isNotEmpty && lines.first.trim() == '---') {
+    final end = lines.indexWhere((l) => l.trim() == '---', 1);
+    if (end > 0) start = end + 1;
+  }
+
+  var inComment = false;
+  var isFirstHeading = true;
+  for (var i = start; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    final line = lines[i];
+    if (inComment) {
+      if (line.contains('-->')) inComment = false;
+      continue;
+    }
+    final open = line.lastIndexOf('<!--');
+    if (open >= 0 && !line.substring(open).contains('-->')) {
+      inComment = true;
+      continue;
+    }
+    final heading = _headingRe.firstMatch(line);
+    if (heading == null) continue;
+    final isTitle = isFirstHeading && heading.group(1)!.length == 1;
+    isFirstHeading = false;
+    if (isTitle || _taggedHeadingRe.hasMatch(line)) continue;
+    findings.add(
+      'line ${i + 1}: section "${line.trim()}" has no tag — write it as '
+      '"${heading.group(1)} @tag ${(heading.group(2) ?? '').trim()}".',
+    );
+  }
+
+  return findings;
+}
+
 // =============================================================================
 // Private
 // =============================================================================
