@@ -8,7 +8,7 @@ description: Initialize a new CLAUDE.md file with codebase documentation. Detect
 Analyze the current repository and produce a CLAUDE.md tailored to it.
 This skill is aware of the **DNA layout** used by `helix` consumers:
 guides shipped by DNA layers are instantiated at `doc/guides/`,
-conventions at `doc/conventions/`, and CLAUDE.md may contain a **managed
+conventions at `doc/en/conventions/`, and CLAUDE.md may contain a **managed
 import block** (between `<!-- helix:claude_md:start -->` and
 `<!-- helix:claude_md:end -->`) that is maintained by the DNA test and
 must be preserved verbatim.

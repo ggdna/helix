@@ -1,6 +1,6 @@
 ---
 name: review
-description: Runs a complete review of the current branch. First pulls the tooling green (dependency tightening, static analysis, formatting, tests including coverage and the placed DNA test), offering fixes interactively, then performs an LLM review against the conventions in `doc/conventions/`, plus checks for redundant/unclear code, wrong documentation, performance, and security. Findings are output as a structured report; every fix proposal is confirmed individually before being applied. Use this skill when the user says something like "review", "check my branch", "is this mergeable", "code review", or "check before merging".
+description: Runs a complete review of the current branch. First pulls the tooling green (dependency tightening, static analysis, formatting, tests including coverage and the placed DNA test), offering fixes interactively, then performs an LLM review against the conventions in `doc/en/conventions/`, plus checks for redundant/unclear code, wrong documentation, performance, and security. Findings are output as a structured report; every fix proposal is confirmed individually before being applied. Use this skill when the user says something like "review", "check my branch", "is this mergeable", "code review", or "check before merging".
 ---
 
 # Code Review
@@ -140,7 +140,7 @@ update command) or skip with a note in the report.
     then rerun.
 - **Coverage**: if the test output reports a coverage value and it is
   below **100 %**, record that as a blocker (see
-  `doc/conventions/test-conventions.md`). Locate the uncovered lines and
+  `doc/en/conventions/test-conventions.md`). Locate the uncovered lines and
   treat them as a finding in phase 2.
 
 ### 1.4 Phase 1 wrap-up
@@ -174,9 +174,9 @@ Procedure per changed file:
 
 Load and reference explicitly:
 
-- `doc/conventions/code-conventions.md`
-- `doc/conventions/test-conventions.md`
-- `doc/conventions/documentation-conventions.md`
+- `doc/en/conventions/code-conventions.md`
+- `doc/en/conventions/test-conventions.md`
+- `doc/en/conventions/documentation-conventions.md`
 
 Every convention violation is backed by a quote from the convention
 file — that protects against taste-based findings.
