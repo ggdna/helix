@@ -125,7 +125,7 @@ the config is what names the layers that folder builds on. Run
   "layers": ["dna_guides", "dna_dart"],
   "vars": { "dnaProjectName": "my_project" },
   "mustOverride": { "dnaProjectName": true },
-  "claude": { "claudeMdInclude": ["doc/conventions"] },
+  "claude": { "claudeMdInclude": ["doc/en/conventions"] },
   "isLayer": true,
 }
 ```

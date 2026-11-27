@@ -43,7 +43,7 @@ String dnaConfigSkeleton(List<String> layers) {
   "layers": [$list]
 
   // "vars": { "dnaProjectName": "my-project" },
-  // "claude": { "claudeMdInclude": ["doc/conventions"] }
+  // "claude": { "claudeMdInclude": ["doc/en/conventions"] }
 }
 ''';
 }
